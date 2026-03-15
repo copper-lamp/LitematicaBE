@@ -1,0 +1,12 @@
+{
+    "entry": "index.js",
+    "author": "LitematicaBE",
+    "name": "LitematicaBE",
+    "type": "lse-nodejs",
+    "dependencies": [
+        {
+            "name": "legacy-script-engine-nodejs"
+        }
+    ],
+    "version": "2.0.0"
+}
