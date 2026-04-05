@@ -1,4 +1,4 @@
-// Litematica BE v2.0.0 - Minecraft Bedrock Edition Projection Tool
+// Litematica BE v2.1.0 - Minecraft Bedrock Edition Projection Tool
 // 全服共享投影系统，支持木剑操作、多模式切换
 
 // 测试zlib是否可用
@@ -22,29 +22,45 @@ try {
 const { LitematicLoader } = require('./src/core/LitematicLoader');
 const { DataManager } = require('./src/data/DataManager');
 const { ProjectionRenderer } = require('./src/render/ProjectionRenderer');
+const { ProjectionManager } = require('./src/render/ProjectionManager');
 const { UIManager } = require('./src/ui/UIManager');
+const { LogCleaner } = require('./src/core/LogCleaner');
+const { ConfigManager } = require('./src/core/ConfigManager');
+const { EasyPlaceManager } = require('./src/easyplace/EasyPlaceManager');
 
 ll.registerPlugin(
     "LitematicaBE",
     "Minecraft Bedrock Edition projection tool with shared projections",
-    [2, 0, 0],
+    [2, 1, 0],
     {}
 );
 
-const PLUGIN_NAME = "LitematicaBE";
-const PLUGIN_VERSION = "2.0.0";
-const SCHEMATIC_PATH = "./plugins/LitematicaBE/schematics/";
+// 配置管理器（最先初始化，供其他模块使用）
+const configManager = new ConfigManager();
+const PLUGIN_VERSION = '2.1.0';
+const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
 const loader = new LitematicLoader();
 const dataManager = new DataManager();
 const renderer = new ProjectionRenderer();
+const projManager = new ProjectionManager();
 const uiManager = new UIManager();
+const logCleaner = new LogCleaner();
+const easyPlaceManager = new EasyPlaceManager(projManager, dataManager);
 
 // 全局导出供其他模块使用
 global.zlib = zlib;
 global.fs = fs;
+global.configManager = configManager;
 global.dataManager = dataManager;
+global.renderer = renderer;
+global.projManager = projManager;
+global.loader = loader;
+global.logCleaner = logCleaner;
+global.easyPlaceManager = easyPlaceManager;
+
+const PLUGIN_NAME = "LitematicaBE";
 
 // 玩家临时数据（内存中）
 const playerSessions = new Map();
@@ -98,33 +114,55 @@ function getPlayerLookPitch(player) {
 // 冷却时间，防止快速重复触发
 const playerCooldowns = new Map();
 
+// ==================== 轻松放置事件监听 ====================
+
+mc.listen("onUseItemOn", (player, item, block, side, pos) => {
+    const enabled = easyPlaceManager.isEnabled(player);
+    
+    if (!enabled) return true;
+    
+    if (!item) return true;
+    
+    logger.info(`[EasyPlace] Player ${player.name} trying to place item: ${item.type}`);
+    
+    const result = easyPlaceManager.handleUseItemOn(player, item, block, side, pos);
+    logger.info(`[EasyPlace] Result: ${result}`);
+    
+    return result;
+});
+
+// ==================== 木剑操作事件监听 ====================
+
 // 监听使用物品事件
 mc.listen("onUseItemOn", (player, item, block, side, pos) => {
-    // 检查是否是木剑 
+    // 检查是否是木剑
     if (!item || !item.type || item.type !== 'minecraft:wooden_sword') {
         return;
     }
-    
-    // 检查冷却 - 使用 uuid 作为 key
+
     const cooldownKey = `litematica_${player.uuid}`;
     const now = Date.now();
     const lastUse = playerCooldowns.get(cooldownKey) || 0;
-    
+
     if (now - lastUse < 500) {
-        return; // 冷却中
+        return;
     }
     playerCooldowns.set(cooldownKey, now);
-    
-    // 蹲下 + 木剑 = 打开菜单
+
     if (player.isSneaking) {
         uiManager.showMainMenu(player);
         return;
     }
-    
+
     const playerData = dataManager.getPlayerData(player.xuid);
     const session = getPlayerSession(player.xuid);
 
-    // 根据当前模式执行操作
+    logger.info(`[ItemUse] ===============`);
+    logger.info(`[ItemUse] ${player.name} (${player.xuid}) used wooden sword`);
+    logger.info(`[ItemUse] toolMode: ${playerData.toolMode}`);
+    logger.info(`[ItemUse] currentProjectionId: ${playerData.currentProjectionId}`);
+    logger.info(`[ItemUse] projManager stats: ${JSON.stringify(projManager.getStats())}`);
+
     switch (playerData.toolMode) {
         case 'place':
             handlePlaceMode(player, block, pos, session);
@@ -133,11 +171,15 @@ mc.listen("onUseItemOn", (player, item, block, side, pos) => {
             handleRotateMode(player, session);
             break;
         case 'build':
+            logger.info(`[ItemUse] Calling handleBuildMode`);
             handleBuildMode(player, session);
             break;
         default:
+            logger.info(`[ItemUse] No tool mode set for ${player.name}`);
             player.tell('§7请先选择操作模式');
-            player.tell('§f使用 §e/litematica menu §f打开菜单');
+            player.tell('§e/litematica build §7- 切换到建造模式(逐层渲染)');
+            player.tell('§e/litematica place §7- 切换到放置模式');
+            player.tell('§e/litematica rotate §7- 切换到旋转模式');
             break;
     }
 });
@@ -201,135 +243,130 @@ function handlePlaceMode(player, block, pos, session) {
     // 保存投影
     dataManager.addProjection(projection);
     dataManager.setPlayerCurrentProjection(player.xuid, projection.id);
+    dataManager.setPlayerToolMode(player.xuid, 'build');
 
-    // 渲染投影
+    projManager.activateProjection(player, projection);
+
+    // 同步渲染器层状态
+    renderer.layerRenderMode.set(player.xuid, false);
+    renderer.currentRenderLayer.set(player.xuid, -1);
+
     renderer.startRender(player, projection);
 
     player.tell(`§a投影已放置: §e${projection.name}`);
     player.tell(`§7位置: §f(${projection.position.x}, ${projection.position.y}, ${projection.position.z})`);
     player.tell(`§7方块数: §f${projection.totalBlocks}`);
+    player.tell(`§a已自动切换到建造模式`);
+    player.tell(`§7抬头/低头+木剑切换层，平视切换显示`);
 }
 
 /**
  * 处理旋转模式
  */
 function handleRotateMode(player, session) {
-    const playerData = dataManager.getPlayerData(player.xuid);
-    const projectionId = playerData.currentProjectionId;
+    const activeProj = projManager.getActiveProjectionByPlayer(player);
 
-    if (!projectionId) {
+    if (!activeProj) {
         player.tell('§c你没有正在操作的投影');
+        player.tell('§e请先放置投影');
         return;
     }
 
-    const projection = dataManager.getProjection(projectionId);
-    if (!projection) {
-        player.tell('§c投影不存在');
-        return;
-    }
-
-    // 清除当前显示
     renderer.clearPlayerProjection(player);
 
-    // 旋转90度
-    const newRotation = (projection.rotation + 90) % 360;
-    dataManager.updateProjection(projectionId, { rotation: newRotation });
+    activeProj.projection.rotation = (activeProj.projection.rotation + 90) % 360;
+    activeProj.lastUpdate = Date.now();
 
-    // 重新显示
-    renderer.startRender(player, { ...projection, rotation: newRotation });
+    renderer.startRender(player, activeProj.projection, activeProj.renderLayer);
 
-    player.tell(`§a投影已旋转到 ${newRotation}°`);
+    player.tell(`§a投影已旋转到 ${activeProj.projection.rotation}°`);
 }
 
 /**
- * 处理建造模式
+ * 处理建造模式 - 逐层渲染
  */
 function handleBuildMode(player, session) {
-    const playerData = dataManager.getPlayerData(player.xuid);
-    const projectionId = playerData.currentProjectionId;
+    logger.info(`[BuildMode] ===============`);
+    logger.info(`[BuildMode] Triggered by ${player.name}`);
 
-    if (!projectionId) {
-        player.tell('§c你没有正在操作的投影');
-        return;
+    // 首先检查 projManager 中是否有活动投影
+    let activeProj = projManager.getActiveProjectionByPlayer(player);
+    logger.info(`[BuildMode] projManager activeProj: ${activeProj ? 'exists' : 'null'}`);
+
+    // 如果 projManager 中没有，尝试从 dataManager 恢复
+    if (!activeProj) {
+        const playerData = dataManager.getPlayerData(player.xuid);
+        const projectionId = playerData?.currentProjectionId;
+        logger.info(`[BuildMode] No active projection in projManager, checking dataManager. projectionId: ${projectionId}`);
+        logger.info(`[BuildMode] dataManager.projections.size: ${dataManager.projections?.size || 'unknown'}`);
+        logger.info(`[BuildMode] dataManager.projections keys: ${JSON.stringify([...(dataManager.projections?.keys() || [])])}`);
+
+        if (!projectionId) {
+            player.tell('§c你没有正在操作的投影');
+            player.tell('§e请先使用 §e/litematica place §e放置投影');
+            return;
+        }
+
+        const projection = dataManager.getProjection(projectionId);
+        logger.info(`[BuildMode] dataManager.getProjection result: ${projection ? 'exists' : 'null'}`);
+
+        if (!projection) {
+            player.tell('§c投影不存在或已被删除');
+            player.tell('§e请重新放置投影');
+            return;
+        }
+
+        logger.info(`[BuildMode] projection.name: ${projection.name}, blocks: ${projection.blocks?.length || 0}`);
+
+        // 激活投影
+        activeProj = projManager.activateProjection(player, projection);
+        logger.info(`[BuildMode] Activated projection from dataManager: ${projection.id}`);
+
+        // 同步到渲染器
+        renderer.layerRenderMode.set(player.xuid, true);
+        renderer.currentRenderLayer.set(player.xuid, projection.renderLayer !== undefined ? projection.renderLayer : -1);
+        logger.info(`[BuildMode] Synced layerRenderMode and currentRenderLayer to renderer`);
     }
 
-    const projection = dataManager.getProjection(projectionId);
-    if (!projection) {
-        player.tell('§c投影不存在');
-        return;
-    }
-
-    // 获取玩家视角
+    // 获取当前俯仰角和方向
     const pitch = getPlayerLookPitch(player);
-
-    let newLayer = projection.renderLayer;
+    let direction = 'down';
 
     if (pitch < -30) {
-        // 抬头 - 上一层
-        newLayer = Math.min((newLayer === -1 ? 0 : newLayer) + 1, projection.dimensions.y - 1);
+        direction = 'up';
     } else if (pitch > 30) {
-        // 低头 - 下一层
-        newLayer = Math.max((newLayer === -1 ? projection.dimensions.y - 1 : newLayer) - 1, 0);
+        direction = 'down';
     } else {
-        // 平视 - 切换显示/隐藏
+        direction = 'toggle';
+    }
+
+    logger.info(`[BuildMode] Pitch: ${pitch}, Direction: ${direction}`);
+
+    // 切换层级
+    const result = projManager.switchLayer(player, direction);
+
+    if (result) {
+        const newLayer = result.renderLayer;
+        logger.info(`[BuildMode] Layer switched to: ${newLayer}`);
+
+        // 同步到渲染器
+        renderer.currentRenderLayer.set(player.xuid, newLayer);
+        renderer.layerRenderMode.set(player.xuid, true);
+
+        // 清除并重新渲染
+        renderer.clearPlayerProjection(player);
+        renderer.startRender(player, result.projection, newLayer);
+
+        const info = projManager.getLayerInfo(result.projection, newLayer);
         if (newLayer === -1) {
-            newLayer = 0;
+            player.tell(`§a显示全部层 §7(${info.totalBlocks} 方块)`);
         } else {
-            newLayer = -1; // 显示全部
+            player.tell(`§a当前层: §e${newLayer} §7/ ${info.totalLayers}`);
+            player.tell(`§7本层方块: §f${info.currentLayerBlocks}`);
         }
-    }
-
-    // 更新层
-    dataManager.updateProjection(projectionId, { renderLayer: newLayer });
-
-    // 清除并重新渲染
-    renderer.clearPlayerProjection(player);
-    renderer.startRender(player, { ...projection, renderLayer: newLayer }, newLayer);
-
-    if (newLayer === -1) {
-        player.tell('§a显示全部层');
     } else {
-        const progress = Math.round((newLayer / projection.dimensions.y) * 100);
-        player.tell(`§a当前层: ${newLayer}/${projection.dimensions.y} (${progress}%)`);
+        logger.warn(`[BuildMode] switchLayer returned null`);
     }
-}
-
-// ==================== 范围检测系统 ====================
-
-// 定期检查玩家位置，显示范围提示
-setInterval(() => {
-    const projections = dataManager.getAllProjections();
-    const players = mc.getOnlinePlayers();
-
-    for (const player of players) {
-        const playerData = dataManager.getPlayerData(player.xuid);
-        if (!playerData.settings?.autoLoadInRange) continue;
-
-        for (const projection of projections) {
-            // 检查是否在同一维度
-            if (player.dim !== projection.dimension) continue;
-
-            // 检查是否在范围内
-            if (isPlayerInRange(player, projection, playerData.settings?.notificationRange || 50)) {
-                // 检查是否已经加载了该投影
-                if (!dataManager.isProjectionLoadedByPlayer(player.xuid, projection.id)) {
-                    // 显示提示
-                    uiManager.showRangeNotification(player, projection);
-                }
-            }
-        }
-    }
-}, 15000); // 每15秒检查一次
-
-function isPlayerInRange(player, projection, range) {
-    const pos = player.pos;
-    const { x, y, z } = projection.position || { x: 0, y: 0, z: 0 };
-    const dims = projection.dimensions || { x: 10, y: 10, z: 10 };
-    const { x: sx, y: sy, z: sz } = dims;
-
-    return pos.x >= x - range && pos.x <= x + sx + range &&
-           pos.y >= y - range && pos.y <= y + sy + range &&
-           pos.z >= z - range && pos.z <= z + sz + range;
 }
 
 // ==================== 命令系统 ====================
@@ -338,7 +375,7 @@ function registerCommands() {
     const cmd = mc.newCommand("litematica", "Litematica projection tool", PermType.Any, 0x80);
     const cmdShort = mc.newCommand("lit", "Litematica (Short)", PermType.Any, 0x80);
 
-    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "clear", "list", "remove", "info"]);
+    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "clear", "list", "remove", "info"]);
     cmd.setEnum("FileEnum", ["file"]);
     cmd.setEnum("CoordEnum", ["x", "y", "z"]);
 
@@ -388,8 +425,12 @@ function registerCommands() {
                 output.success("§a已切换到建造模式");
                 output.success("§f抬头/低头+木剑切换层");
                 break;
+            case "easyplace":
+                easyPlaceManager.toggle(player);
+                break;
             case "clear":
                 renderer.clearPlayerProjection(player);
+                projManager.removeActiveProjection(player.xuid);
                 output.success("§a已清除当前投影显示");
                 break;
             case "list":
@@ -416,6 +457,93 @@ function registerCommands() {
         }
     });
     cmdShort.setup();
+
+    // 日志清理命令
+    const cmdLogClean = mc.newCommand("litematica:logclean", "Clean render logs", PermType.Any, 0x80);
+    cmdLogClean.setEnum("LogCleanAction", ["status", "clean", "config"]);
+    cmdLogClean.mandatory("action", ParamType.Enum, "LogCleanAction", 1);
+    cmdLogClean.setCallback((cmd, origin, output, results) => {
+        const action = results.action;
+
+        // 支持玩家和后台执行
+        const isConsole = !origin.player;
+        const sendMessage = isConsole
+            ? (msg) => logger.info(msg)
+            : (msg) => origin.player.tell(msg);
+
+        switch (action) {
+            case "status":
+                const stats = logCleaner.getStats();
+                sendMessage("§6========== 日志清理状态 ==========");
+                sendMessage(`§e总扫描次数: §f${stats.totalScans}`);
+                sendMessage(`§e总清除行数: §f${stats.totalLinesRemoved}`);
+                sendMessage(`§e处理文件数: §f${stats.totalFilesProcessed}`);
+                sendMessage(`§e上次扫描: §f${stats.lastScanTime}`);
+                sendMessage(`§e扫描间隔: §f${stats.config.scanInterval}ms`);
+                break;
+            case "clean":
+                sendMessage("§7正在清理渲染日志...");
+                const cleanResult = logCleaner.cleanRenderLogsSync();
+                if (cleanResult.success) {
+                    sendMessage(`§a日志清理完成！`);
+                    sendMessage(`§7处理文件: ${cleanResult.filesProcessed}`);
+                    sendMessage(`§7清除行数: ${cleanResult.linesRemoved}`);
+                } else {
+                    sendMessage(`§c日志清理失败: ${cleanResult.errors.join(', ')}`);
+                }
+                break;
+            case "config":
+                const config = logCleaner.getConfig();
+                sendMessage("§6========== 日志清理配置 ==========");
+                sendMessage(`§e日志目录: §f${config.logDir}`);
+                sendMessage(`§e扫描间隔: §f${config.scanInterval}ms`);
+                sendMessage(`§e备份启用: §f${config.backupEnabled ? '是' : '否'}`);
+                sendMessage(`§e模式数量: §f${config.patterns.length}`);
+                sendMessage(`§e最大备份: §f${config.maxBackupFiles}`);
+                break;
+        }
+    });
+    cmdLogClean.setup();
+
+    // 配置管理命令
+    const cmdConfig = mc.newCommand("litematica:config", "Config management", PermType.Any, 0x80);
+    cmdConfig.setEnum("ConfigAction", ["reload", "reset", "get"]);
+    cmdConfig.mandatory("action", ParamType.Enum, "ConfigAction", 1);
+    cmdConfig.optional("key", ParamType.RawText);
+    cmdConfig.setCallback((cmd, origin, output, results) => {
+        const player = origin.player;
+        if (!player) {
+            output.success("This command must be used by a player");
+            return;
+        }
+
+        const action = results.action;
+        switch (action) {
+            case "reload":
+                configManager.reload();
+                player.tell("§a配置文件已重新加载");
+                break;
+            case "reset":
+                configManager.reset();
+                player.tell("§a配置已重置为默认值");
+                break;
+            case "get":
+                if (results.key) {
+                    const value = configManager.get(results.key);
+                    if (value !== null) {
+                        output.success(`§e${results.key}: §f${JSON.stringify(value)}`);
+                    } else {
+                        player.tell(`§c找不到配置: ${results.key}`);
+                    }
+                } else {
+                    player.tell("§c请指定配置键");
+                    player.tell("§7用法: /litematica:config get <key>");
+                    player.tell("§7示例: /litematica:config get render.opacity");
+                }
+                break;
+        }
+    });
+    cmdConfig.setup();
 }
 
 function handleLoadCommand(player, filename, output) {
@@ -456,13 +584,19 @@ function handleLoadCommand(player, filename, output) {
 }
 
 function handlePlaceCommand(player, filename, output) {
+    logger.info(`[LitematicaBE] handlePlaceCommand called, filename: ${filename}`);
+    
     loadSchematicFile(filename || (getPlayerSession(player.xuid).selectedSchematic?.name)).then(schematic => {
+        logger.info(`[LitematicaBE] loadSchematicFile.then callback, schematic: ${schematic ? 'exists' : 'null'}`);
+        
         if (!schematic) {
             output.error("§c没有加载的原理图");
             output.success("§f用法: /litematica place <文件名>");
             output.success("§f或先 /litematica load <文件名>");
             return;
         }
+        
+        logger.info(`[LitematicaBE] schematic.blocks length: ${schematic.blocks?.length || 0}`);
         
         const session = getPlayerSession(player.xuid);
         session.selectedSchematic = schematic;
@@ -497,10 +631,18 @@ function handlePlaceCommand(player, filename, output) {
             blocks: schematic.blocks
         };
         
+        logger.info(`[LitematicaBE] projection.blocks length: ${projection.blocks?.length || 0}`);
+        
         // 保存投影
         dataManager.addProjection(projection);
         dataManager.setPlayerCurrentProjection(player.xuid, projection.id);
-        
+
+        projManager.activateProjection(player, projection);
+
+        // 同步渲染器层状态
+        renderer.layerRenderMode.set(player.xuid, false);
+        renderer.currentRenderLayer.set(player.xuid, -1);
+
         logger.info(`[LitematicaBE] Projection created: ${projection.id}`);
         logger.info(`[LitematicaBE]   - Position: (${placePos.x}, ${placePos.y}, ${placePos.z})`);
         logger.info(`[LitematicaBE]   - Dimension: ${player.dim}`);
@@ -510,11 +652,14 @@ function handlePlaceCommand(player, filename, output) {
         
         // 渲染投影
         renderer.startRender(player, projection);
-        
+
         output.success(`§a投影已放置: §e${schematic.name}`);
         output.success(`§7位置: §f(${placePos.x}, ${placePos.y}, ${placePos.z})`);
         output.success(`§7方块数: §f${schematic.totalBlocks}`);
-        output.success("§f其他玩家进入范围时会看到提示");
+        output.success(`§e使用 §e/litematica build §e切换到建造模式`);
+    }).catch(err => {
+        logger.error(`[LitematicaBE] loadSchematicFile error: ${err.message}`);
+        output.error(`§c加载失败: ${err.message}`);
     });
 }
 
@@ -572,7 +717,13 @@ function handlePlaceAtCommand(player, x, y, z, output) {
     
     dataManager.addProjection(projection);
     dataManager.setPlayerCurrentProjection(player.xuid, projection.id);
-    
+
+    projManager.activateProjection(player, projection);
+
+    // 同步渲染器层状态
+    renderer.layerRenderMode.set(player.xuid, false);
+    renderer.currentRenderLayer.set(player.xuid, -1);
+
     logger.info(`[LitematicaBE] Projection created: ${projection.id}`);
     logger.info(`[LitematicaBE]   - Position: (${placePos.x}, ${placePos.y}, ${placePos.z})`);
     logger.info(`[LitematicaBE]   - Dimension: ${player.dim}`);
@@ -724,18 +875,21 @@ mc.listen("onJoin", (player) => {
 // 玩家离开
 mc.listen("onLeft", (player) => {
     logger.info(`Player ${player.name} left`);
-    
-    // 清除该玩家的投影显示
+
     renderer.clearPlayerProjection(player);
-    
-    // 清除临时会话数据
+    projManager.removeActiveProjection(player.xuid);
     playerSessions.delete(player.xuid);
 });
+
+// 服务器关闭时自动清理日志 - LeviLamina 不支持 onServerStop 事件
+// 建议在关机前手动执行 /litematica:logclean clean 命令清理日志
+// 或者依赖自动清理循环在服务器运行时清理
 
 // ==================== 初始化 ====================
 
 registerCommands();
 
 logger.info(`${PLUGIN_NAME} v${PLUGIN_VERSION} Loaded!`);
-logger.info("Commands: /litematica, /lit");
+logger.info("Commands: /litematica, /lit, /litematica:logclean, /litematica:config");
 logger.info("Use wooden sword to operate");
+logger.info("[LogCleaner] Auto-clean enabled");

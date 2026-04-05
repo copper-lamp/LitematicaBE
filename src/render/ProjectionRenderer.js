@@ -1,15 +1,128 @@
 // ProjectionRenderer - 投影渲染管理器
 // 处理投影方块的放置、清除、范围框显示等
 
-const RENDER_INTERVAL = 5; // 渲染间隔（tick）
-const MAX_BLOCKS_PER_BATCH = 50; // 每批次最大方块数
+const RENDER_INTERVAL = 1; // 渲染间隔（tick）
+const TOTAL_RENDER_FRAMES = 5; // 总渲染帧数（5帧完成所有粒子）
+const MAX_PARTICLES_PER_TICK = 5000; // 每tick最大粒子数（用于持续渲染）
+const MAX_RENDER_DISTANCE = 256; // 最大渲染距离（方块）- 渲染所有可见范围
+const PARTICLE_RENDER_MODE = 'particle'; // 'particle' 或 'setblock'
+const CHECK_INTERVAL = 500; // 放置检测间隔（ms）
 
 class ProjectionRenderer {
     constructor() {
-        this.renderTasks = new Map(); // 渲染任务队列
-        this.playerBlocks = new Map(); // 玩家已放置的方块
+        this.renderTasks = new Map(); // 渲染任务队列（用于粒子投影）
+        this.playerBlocks = new Map(); // 玩家已放置的方块（用于setblock模式）
         this.boundsParticles = new Map(); // 范围框粒子
+        this.activeProjections = new Map(); // 活跃投影（持续渲染用）
+        this.placedBlocks = new Map(); // 已正确放置的方块位置
+        this.easyPlaceMode = new Map(); // 玩家轻松放置模式状态
+        this.loadedProjections = new Map(); // 玩家已加载的投影
+        this.lastNearbyPrompt = new Map(); // 上次附近投影提示时间
+        this.playerParticles = new Map(); // 玩家渲染的粒子位置（用于取消渲染）
+        this.layerRenderMode = new Map(); // 逐层渲染模式
+        this.currentRenderLayer = new Map(); // 当前渲染的层
+        this.lastLayerSwitch = new Map(); // 上次切换层的时间（冷却用）
         this.startRenderLoop();
+        this.startPlacementCheckLoop();
+        this.startParticleRespawnLoop(); // 启动粒子重生循环
+        this.startItemUseListener(); // 启动物品使用监听
+    }
+
+    /**
+     * 启动物品使用监听（木剑切换层）
+     */
+    startItemUseListener() {
+        mc.listen('onUseItem', (player, item) => {
+            if (!item) return;
+
+            const itemName = item.name || '';
+            logger.info(`[ItemUse] 玩家: ${player.name}, 物品: ${itemName}`);
+            
+            // 检测木剑 (wooden_sword)
+            if (itemName === 'wooden_sword') {
+                logger.info(`[ItemUse] 检测到木剑，准备切换层`);
+                this.handleLayerSwitch(player);
+            }
+        });
+    }
+
+    /**
+     * 处理木剑切换层
+     * 抬头向下切换（层数-1），低头向上切换（层数+1）
+     */
+    handleLayerSwitch(player) {
+        // 检查冷却时间（0.2秒）
+        const now = Date.now();
+        const lastSwitch = this.lastLayerSwitch.get(player.xuid) || 0;
+        const COOLDOWN = 200; // 0.2秒冷却
+        if (now - lastSwitch < COOLDOWN) {
+            return; // 冷却中，忽略此次输入
+        }
+
+        // 检查是否开启了逐层渲染模式
+        if (!this.layerRenderMode.get(player.xuid)) {
+            return;
+        }
+
+        // 获取当前加载的投影 - 先从activeProjections获取，如果不存在则从renderTasks获取
+        let task = this.activeProjections.get(player.xuid);
+        if (!task) {
+            task = this.renderTasks.get(player.xuid);
+        }
+        
+        // 调试日志
+        logger.info(`[LayerSwitch] 玩家: ${player.name}, activeProjections: ${this.activeProjections.size}, renderTasks: ${this.renderTasks.size}`);
+        logger.info(`[LayerSwitch] task: ${task ? '存在' : '不存在'}, task.projection: ${task?.projection ? '存在' : '不存在'}`);
+        
+        if (!task || !task.projection) {
+            player.tell('§c当前没有加载的投影');
+            return;
+        }
+
+        // 更新冷却时间
+        this.lastLayerSwitch.set(player.xuid, now);
+
+        const projection = task.projection;
+        const maxLayer = projection.dimensions.y - 1;
+        let currentLayer = this.currentRenderLayer.get(player.xuid);
+        
+        // 如果当前层未设置，从最后一层开始
+        if (currentLayer === undefined || currentLayer === null) {
+            currentLayer = maxLayer;
+            this.currentRenderLayer.set(player.xuid, currentLayer);
+        }
+
+        // 获取玩家朝向（俯视/仰视）
+        const pitch = player.direction.pitch;
+
+        if (pitch < -10) {
+            // 抬头看 - 向下切换（层数减少）
+            currentLayer = Math.max(currentLayer - 1, 0);
+        } else if (pitch > 10) {
+            // 低头看 - 向上切换（层数增加）
+            currentLayer = Math.min(currentLayer + 1, maxLayer);
+        } else {
+            // 默认向下切换
+            currentLayer = Math.max(currentLayer - 1, 0);
+        }
+
+        this.currentRenderLayer.set(player.xuid, currentLayer);
+
+        // 清除当前层的粒子
+        this.clearPlayerProjectionParticles(player);
+
+        // 重新渲染当前层
+        this.startRender(player, projection, currentLayer);
+
+        player.tell(`§7已切换到第 ${currentLayer} 层 (共 ${maxLayer + 1} 层)`);
+    }
+
+    /**
+     * 清除玩家当前投影的粒子（不删除渲染任务）
+     */
+    clearPlayerProjectionParticles(player) {
+        // 清除粒子位置记录
+        this.playerParticles.delete(player.xuid);
     }
 
     /**
@@ -22,53 +135,495 @@ class ProjectionRenderer {
     }
 
     /**
-     * 处理渲染任务队列
+     * 启动放置检测循环
      */
-    processRenderTasks() {
-        for (const [playerXuid, task] of this.renderTasks) {
-            if (task.paused) continue;
+    startPlacementCheckLoop() {
+        setInterval(() => {
+            this.checkPlacedBlocks();
+        }, CHECK_INTERVAL);
+    }
 
+    /**
+     * 启动粒子重生循环
+     */
+    startParticleRespawnLoop() {
+        // 每1秒检查一次，在38秒时重生（40秒生命周期 - 2秒缓冲）
+        setInterval(() => {
+            this.respawnAllParticles();
+        }, 1000);
+    }
+
+    /**
+     * 重新生成所有活跃投影的粒子
+     */
+    respawnAllParticles() {
+        const now = Date.now();
+        const PARTICLE_LIFETIME = 40000; // 40秒粒子生命周期
+        const RESPAWN_BUFFER = 2000; // 2秒缓冲
+        const RESPAWN_TIME = PARTICLE_LIFETIME - RESPAWN_BUFFER; // 38秒时重生
+
+        // 调试：检查活跃投影数量
+        if (this.activeProjections.size === 0) {
+            return; // 没有活跃投影
+        }
+
+        for (const [playerXuid, task] of this.activeProjections) {
             const player = mc.getPlayer(playerXuid);
-            if (!player) {
-                this.renderTasks.delete(playerXuid);
+            if (!player) continue;
+
+            // 检查是否需要重生粒子（在38秒时重生）
+            const lastRespawn = task.lastParticleRespawn || 0;
+            const timeSinceLastRespawn = now - lastRespawn;
+            
+            // 调试日志：每10秒输出一次状态
+            if (timeSinceLastRespawn > 0 && timeSinceLastRespawn < RESPAWN_TIME && timeSinceLastRespawn % 10000 < 1000) {
+                logger.info(`[ParticleRespawn] 等待中... 已等待 ${(timeSinceLastRespawn / 1000).toFixed(1)}s / ${RESPAWN_TIME / 1000}s`);
+            }
+            
+            if (timeSinceLastRespawn < RESPAWN_TIME) {
+                continue; // 还没到重生时间
+            }
+            
+            logger.info(`[ParticleRespawn] 开始重生！已等待 ${(timeSinceLastRespawn / 1000).toFixed(1)}s`);
+
+            // 根据是否开启逐层模式决定重生范围
+            const isLayerMode = this.layerRenderMode.get(playerXuid);
+            let blocksToRespawn = [];
+
+            // 使用 allBlocks（完整方块列表）进行重生
+            const sourceBlocks = task.allBlocks || task.blocks;
+
+            if (isLayerMode) {
+                // 逐层模式：只重生当前层的粒子
+                const maxLayer = task.projection.dimensions.y - 1;
+                const currentLayer = this.currentRenderLayer.get(playerXuid) || maxLayer;
+                blocksToRespawn = sourceBlocks.filter(b => b.pos[1] === currentLayer);
+                
+                // 调试日志
+                logger.info(`[ParticleRespawn] 逐层模式 - 当前层: ${currentLayer}, 源方块数: ${sourceBlocks.length}, 过滤后: ${blocksToRespawn.length}`);
+            } else {
+                // 非逐层模式：重生所有粒子
+                blocksToRespawn = sourceBlocks;
+                logger.info(`[ParticleRespawn] 完整模式 - 重生所有 ${blocksToRespawn.length} 个方块`);
+            }
+
+            if (blocksToRespawn.length === 0) {
+                logger.warn(`[ParticleRespawn] 没有需要重生的方块`);
                 continue;
             }
 
-            this.renderBatch(player, task);
+            // 重新生成粒子
+            let respawnedCount = 0;
+            for (const block of blocksToRespawn) {
+                try {
+                    const worldPos = this.transformPosition(block.pos, task.projection);
+                    const posKey = `${worldPos[0]},${worldPos[1]},${worldPos[2]}`;
+                    
+                    // 检查是否已正确放置
+                    if (this.placedBlocks.has(posKey)) continue;
 
-            // 检查是否完成
-            if (task.currentIndex >= task.blocks.length) {
-                this.renderTasks.delete(playerXuid);
-                logger.info(`Projection render completed for ${player.name}`);
+                    this.spawnProjectionParticle(player, worldPos, block, false);
+                    respawnedCount++;
+                } catch (e) {
+                    // 忽略错误
+                }
+            }
+
+            logger.info(`[ParticleRespawn] 玩家 ${player.name} 重生了 ${respawnedCount} 个粒子`);
+
+            // 更新重生时间
+            task.lastParticleRespawn = now;
+        }
+    }
+
+    /**
+     * 处理渲染任务队列
+     */
+    processRenderTasks() {
+        const now = Date.now();
+        
+        // 处理活跃的粒子投影（持续渲染）
+        for (const [playerXuid, task] of this.activeProjections) {
+            const player = mc.getPlayer(playerXuid);
+            if (!player) {
+                this.activeProjections.delete(playerXuid);
+                continue;
+            }
+
+            // 每100ms重新渲染一批粒子
+            if (now - task.lastRenderTime >= 100) {
+                this.renderParticleBatch(player, task);
+                task.lastRenderTime = now;
             }
         }
     }
 
     /**
-     * 渲染一批方块
+     * 检查玩家放置的方块
      */
-    renderBatch(player, task) {
-        const { blocks, projection, currentIndex } = task;
-        const endIndex = Math.min(currentIndex + MAX_BLOCKS_PER_BATCH, blocks.length);
+    checkPlacedBlocks() {
+        for (const [playerXuid, task] of this.activeProjections) {
+            const player = mc.getPlayer(playerXuid);
+            if (!player) continue;
 
-        for (let i = currentIndex; i < endIndex; i++) {
-            const block = blocks[i];
-            const worldPos = this.transformPosition(block.pos, projection);
+            const { blocks, projection } = task;
+            const playerDim = player.dim ?? (player.pos && player.pos.dimid) ?? 0;
 
-            // 放置方块 - 使用玩家当前维度
-            this.placeBlockByPos(player.dim, worldPos, block, projection.opacity);
+            // 检查每个投影方块
+            for (const block of blocks) {
+                const worldPos = this.transformPosition(block.pos, projection);
+                const posKey = `${worldPos[0]},${worldPos[1]},${worldPos[2]}`;
+                
+                // 如果已经标记为正确放置，跳过
+                if (this.placedBlocks.has(posKey)) continue;
 
-            // 记录已放置的方块
-            if (!this.playerBlocks.has(player.xuid)) {
-                this.playerBlocks.set(player.xuid, []);
+                // 检查该位置是否放置了正确的方块
+                const isCorrect = this.checkBlockPlacement(playerDim, worldPos, block);
+                
+                if (isCorrect) {
+                    // 标记为已正确放置
+                    this.placedBlocks.set(posKey, true);
+                }
             }
-            this.playerBlocks.get(player.xuid).push({
-                pos: worldPos,
-                dimension: projection.dimension
+        }
+    }
+
+    /**
+     * 检查指定位置是否放置了正确的方块
+     */
+    checkBlockPlacement(dimension, pos, expectedBlock) {
+        try {
+            const world = mc.getWorld(dimension);
+            if (!world) return false;
+
+            const block = world.getBlock(pos);
+            if (!block) return false;
+
+            // 获取实际方块名称
+            const actualBlockName = block.type || block.name || '';
+            const expectedBlockName = expectedBlock.name || '';
+
+            // 比较方块名称（忽略命名空间）
+            const actualBase = actualBlockName.includes(':') 
+                ? actualBlockName.split(':')[1] 
+                : actualBlockName;
+            const expectedBase = expectedBlockName.includes(':') 
+                ? expectedBlockName.split(':')[1] 
+                : expectedBlockName;
+
+            return actualBase === expectedBase;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * 渲染一批粒子（用于持续投影）
+     * 优化：视距裁剪 + 分批渲染
+     */
+    renderParticleBatch(player, task) {
+        // 如果不在渲染中，直接返回
+        if (!task.isRendering) return;
+
+        const { blocks, projection } = task;
+
+        // 获取玩家位置和维度
+        const playerDim = player.dim ?? (player.pos && player.pos.dimid) ?? 0;
+        const playerPos = player.pos;
+        if (!playerPos) return;
+
+        const visibleBlocks = task.visibleBlocks;
+        if (!visibleBlocks || visibleBlocks.length === 0) return;
+
+        // 如果已经渲染完所有方块，停止渲染
+        if (task.visibleBlocksIndex >= visibleBlocks.length) {
+            task.isRendering = false;
+            return;
+        }
+
+        // 每批渲染一定数量的粒子
+        const startIndex = task.visibleBlocksIndex;
+        const endIndex = Math.min(startIndex + MAX_PARTICLES_PER_TICK, visibleBlocks.length);
+        let renderedCount = 0;
+
+        for (let i = startIndex; i < endIndex && renderedCount < MAX_PARTICLES_PER_TICK; i++) {
+            const block = visibleBlocks[i];
+            const worldPos = block.worldPos;
+            const posKey = `${worldPos[0]},${worldPos[1]},${worldPos[2]}`;
+
+            // 检查是否已正确放置
+            if (this.placedBlocks.has(posKey)) continue;
+
+            // 未放置，显示正常粒子
+            this.spawnProjectionParticle(player, worldPos, block, false);
+            renderedCount++;
+        }
+
+        // 更新索引
+        task.visibleBlocksIndex = endIndex;
+
+        // 检查是否完成
+        if (task.visibleBlocksIndex >= visibleBlocks.length) {
+            task.isRendering = false;
+        }
+    }
+
+    /**
+     * 获取所有方块的世界坐标（不进行距离裁剪）
+     */
+    getAllBlocksWorldPos(blocks, projection) {
+        const worldBlocks = [];
+
+        for (const block of blocks) {
+            const worldPos = this.transformPosition(block.pos, projection);
+            worldBlocks.push({
+                ...block,
+                worldPos: worldPos
             });
         }
 
-        task.currentIndex = endIndex;
+        return worldBlocks;
+    }
+
+    /**
+     * 获取玩家视野范围内的方块（用于持续渲染）
+     */
+    getVisibleBlocks(blocks, projection, playerPos) {
+        const visibleBlocks = [];
+        const px = playerPos.x;
+        const py = playerPos.y;
+        const pz = playerPos.z;
+
+        for (const block of blocks) {
+            const worldPos = this.transformPosition(block.pos, projection);
+            const dx = worldPos[0] - px;
+            const dy = worldPos[1] - py;
+            const dz = worldPos[2] - pz;
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+            // 只保留在渲染距离内的方块
+            if (distance <= MAX_RENDER_DISTANCE) {
+                visibleBlocks.push({
+                    ...block,
+                    worldPos: worldPos,
+                    distance: distance
+                });
+            }
+        }
+
+        // 按距离排序（优先渲染近的）
+        visibleBlocks.sort((a, b) => a.distance - b.distance);
+
+        return visibleBlocks;
+    }
+
+    /**
+     * 生成投影粒子
+     * @param dimension 维度
+     * @param pos 位置 [x, y, z]
+     * @param blockData 方块数据
+     * @param isError 是否为错误状态
+     */
+    spawnProjectionParticle(player, pos, blockData, isError = false) {
+        try {
+            const fullBlockName = blockData.name || '';
+            const particleId = this.getBlockParticleId(fullBlockName, isError);
+            // 方块中心坐标（三个轴都加 0.5）
+            const adjustedPos = [pos[0] + 0.5, pos[1] + 0.5, pos[2] + 0.5];
+
+            // 存储粒子位置用于取消渲染
+            if (player && player.xuid) {
+                if (!this.playerParticles.has(player.xuid)) {
+                    this.playerParticles.set(player.xuid, []);
+                }
+                this.playerParticles.get(player.xuid).push({
+                    pos: adjustedPos,
+                    particleId: particleId,
+                    dim: player.dim || 0
+                });
+            }
+
+            // 调试：记录前10个方块的粒子ID
+            if (!this.debugParticleCount) this.debugParticleCount = 0;
+            if (this.debugParticleCount < 10) {
+                logger.info(`[DEBUG] Spawning particle: ${particleId} for block: ${fullBlockName}`);
+                this.debugParticleCount++;
+            }
+
+            // 使用玩家对象的 spawnParticle 方法，不会输出到日志
+            if (player && player.spawnParticle) {
+                player.spawnParticle(
+                    particleId,
+                    { x: adjustedPos[0], y: adjustedPos[1], z: adjustedPos[2] }
+                );
+            } else {
+                // 降级到 mc.runcmd
+                const dimName = this.getDimensionName(player?.dim || 0);
+                mc.runcmd(`execute in ${dimName} positioned ${adjustedPos[0].toFixed(2)} ${adjustedPos[1].toFixed(2)} ${adjustedPos[2].toFixed(2)} run particle "${particleId}" ~ ~ ~`);
+            }
+        } catch (e) {
+            // 静默忽略粒子生成错误
+            if (!this.debugErrorCount) this.debugErrorCount = 0;
+            if (this.debugErrorCount < 5) {
+                logger.error(`[DEBUG] spawnProjectionParticle error: ${e.message}`);
+                this.debugErrorCount++;
+            }
+        }
+    }
+
+    /**
+     * 获取维度名称
+     */
+    getDimensionName(dimension) {
+        switch (dimension) {
+            case 1: return 'the_nether';
+            case 2: return 'the_end';
+            default: return 'overworld';
+        }
+    }
+
+    /**
+     * 获取方块对应的粒子ID
+     * @param fullBlockName 完整方块名称
+     * @param isError 是否为错误状态
+     * @returns 粒子ID字符串
+     */
+    getBlockParticleId(fullBlockName, isError = false) {
+        let baseName = fullBlockName.toLowerCase();
+
+        if (baseName.includes(':')) {
+            const parts = baseName.split(':');
+            baseName = parts[1] || parts[0];
+        }
+
+        const textureName = this.getBlockTextureName(baseName);
+        const suffix = isError ? 'error' : 'normal';
+        return `litematica:block_${textureName}_${suffix}`;
+    }
+
+    /**
+     * 切换轻松放置模式
+     */
+    toggleEasyPlace(player) {
+        const current = this.easyPlaceMode.get(player.xuid) || false;
+        this.easyPlaceMode.set(player.xuid, !current);
+        
+        if (!current) {
+            player.tell('§a轻松放置模式已开启');
+            this.startEasyPlace(player);
+        } else {
+            player.tell('§c轻松放置模式已关闭');
+            this.stopEasyPlace(player);
+        }
+    }
+
+    /**
+     * 启动轻松放置功能
+     */
+    startEasyPlace(player) {
+        // 监听玩家放置方块事件
+        const handler = (pl, block) => {
+            if (pl.xuid !== player.xuid) return;
+            if (!this.easyPlaceMode.get(player.xuid)) return;
+
+            // 检查是否放置了正确的方块
+            const task = this.activeProjections.get(player.xuid);
+            if (!task) return;
+
+            const { blocks, projection } = task;
+            const playerDim = player.dim ?? (player.pos && player.pos.dimid) ?? 0;
+
+            // 找到玩家点击的投影方块
+            for (const projBlock of blocks) {
+                const worldPos = this.transformPosition(projBlock.pos, projection);
+                const posKey = `${worldPos[0]},${worldPos[1]},${worldPos[2]}`;
+                
+                // 检查位置是否匹配
+                if (Math.abs(block.x - worldPos[0]) < 0.5 &&
+                    Math.abs(block.y - worldPos[1]) < 0.5 &&
+                    Math.abs(block.z - worldPos[2]) < 0.5) {
+                    
+                    // 检查方块类型是否匹配
+                    const isCorrect = this.checkBlockPlacement(playerDim, worldPos, projBlock);
+                    
+                    if (isCorrect) {
+                        // 正确放置，标记并发送提示
+                        this.placedBlocks.set(posKey, true);
+                        player.tell('§a✓ 方块放置正确！');
+                    } else {
+                        // 错误放置，显示错误粒子
+                        this.spawnProjectionParticle(player, worldPos, projBlock, true);
+                        player.tell('§c✗ 方块类型错误！');
+                    }
+                    break;
+                }
+            }
+        };
+
+        // 注册事件监听
+        mc.listen('onBlockPlaced', handler);
+        this.easyPlaceHandler = handler;
+    }
+
+    /**
+     * 停止轻松放置功能
+     */
+    stopEasyPlace(player) {
+        // 移除事件监听
+        if (this.easyPlaceHandler) {
+            // 注意：LeviLamina 可能不支持直接移除监听，这里简化处理
+            this.easyPlaceHandler = null;
+        }
+    }
+
+    /**
+     * 重置投影放置状态
+     */
+    resetPlacementStatus(player) {
+        this.placedBlocks.clear();
+        player.tell('§a投影放置状态已重置');
+    }
+
+    /**
+     * 从方块名称获取贴图名称
+     * 直接使用方块名称，因为资源包包含了所有方块的粒子
+     */
+    getBlockTextureName(blockNameOrFull) {
+        let name = blockNameOrFull.toLowerCase();
+
+        // 移除命名空间前缀
+        if (name.includes(':')) {
+            const parts = name.split(':');
+            name = parts[1] || parts[0];
+        }
+
+        // 替换特殊字符为下划线
+        name = name.replace(/[^a-z0-9_]/g, '_');
+
+        // 移除末尾的下划线
+        name = name.replace(/_+$/, '');
+
+        // 石英类方块特殊映射
+        if (name === 'smooth_quartz') {
+            name = 'quartz_block_bottom';
+        } else if (name === 'quartz_block') {
+            name = 'quartz_block_side';
+        } else if (name === 'chiseled_quartz_block') {
+            name = 'chiseled_quartz_block';
+        } else if (name === 'quartz_pillar') {
+            name = 'quartz_pillar';
+        } else if (name === 'quartz_bricks') {
+            name = 'quartz_bricks';
+        }
+
+        // 调试：记录前5个方块名称转换
+        if (!this.debugTextureCount) this.debugTextureCount = 0;
+        if (this.debugTextureCount < 5) {
+            logger.info(`[DEBUG] Texture mapping: ${blockNameOrFull} -> ${name}`);
+            this.debugTextureCount++;
+        }
+
+        return name || 'missing_tile';
     }
 
     /**
@@ -113,140 +668,114 @@ class ProjectionRenderer {
     }
 
     /**
-     * 放置单个方块（使用位置坐标）
-     */
-    placeBlockByPos(dimension, pos, blockData, opacity) {
-        try {
-            // 使用世界对象的 getBlock 方法
-            const block = mc.getWorld(dimension).getBlock(pos);
-            if (!block) {
-                logger.debug(`Cannot get block at ${pos.join(',')}`);
-                return;
-            }
-
-            // 获取方块ID
-            const blockId = this.getBlockNumericId(blockData.name);
-            if (blockId === null) {
-                logger.debug(`Unknown block: ${blockData.name}`);
-                return;
-            }
-
-            // 设置方块
-            block.set(blockId, 0);
-
-        } catch (e) {
-            logger.debug(`Failed to place block at ${pos.join(',')}: ${e.message}`);
-        }
-    }
-
-    /**
-     * 放置单个方块
-     */
-    placeBlock(dim, pos, blockData, opacity) {
-        try {
-            const block = mc.getWorld(dim).getBlock(pos);
-            if (!block) return;
-
-            // 获取方块ID
-            const blockId = this.getBlockNumericId(blockData.name);
-            if (blockId === null) return;
-
-            // 设置方块
-            block.set(blockId, 0);
-
-        } catch (e) {
-            logger.debug(`Failed to place block at ${pos.join(',')}: ${e.message}`);
-        }
-    }
-
-    /**
-     * 获取方块的数字ID（基岩版）
-     * 这是一个简化实现，实际需要完整的方块ID映射
-     */
-    getBlockNumericId(blockName) {
-        // 简化的方块ID映射
-        const blockMap = {
-            'minecraft:air': 0,
-            'minecraft:stone': 1,
-            'minecraft:grass': 2,
-            'minecraft:dirt': 3,
-            'minecraft:cobblestone': 4,
-            'minecraft:planks': 5,
-            'minecraft:bedrock': 7,
-            'minecraft:sand': 12,
-            'minecraft:gravel': 13,
-            'minecraft:gold_ore': 14,
-            'minecraft:iron_ore': 15,
-            'minecraft:coal_ore': 16,
-            'minecraft:log': 17,
-            'minecraft:leaves': 18,
-            'minecraft:glass': 20,
-            'minecraft:wool': 35,
-            'minecraft:yellow_flower': 37,
-            'minecraft:red_flower': 38,
-            'minecraft:brown_mushroom': 39,
-            'minecraft:red_mushroom': 40,
-            'minecraft:gold_block': 41,
-            'minecraft:iron_block': 42,
-            'minecraft:stone_slab': 44,
-            'minecraft:brick_block': 45,
-            'minecraft:mossy_cobblestone': 48,
-            'minecraft:obsidian': 49,
-            'minecraft:torch': 50,
-            'minecraft:chest': 54,
-            'minecraft:diamond_ore': 56,
-            'minecraft:diamond_block': 57,
-            'minecraft:crafting_table': 58,
-            'minecraft:furnace': 61,
-            'minecraft:ladder': 65,
-            'minecraft:rail': 66,
-            'minecraft:lever': 69,
-            'minecraft:stone_pressure_plate': 70,
-            'minecraft:wooden_pressure_plate': 72,
-            'minecraft:redstone_ore': 73,
-            'minecraft:redstone_torch': 76,
-            'minecraft:stone_button': 77,
-            'minecraft:ice': 79,
-            'minecraft:snow': 80,
-            'minecraft:cactus': 81,
-            'minecraft:clay': 82,
-            'minecraft:reeds': 83,
-            'minecraft:jukebox': 84,
-            'minecraft:fence': 85,
-            'minecraft:pumpkin': 86,
-            'minecraft:netherrack': 87,
-            'minecraft:soul_sand': 88,
-            'minecraft:glowstone': 89,
-            'minecraft:portal': 90,
-            'minecraft:lit_pumpkin': 91,
-            'minecraft:cake': 92,
-            'minecraft:unpowered_repeater': 93,
-            'minecraft:stained_glass': 95,
-        };
-
-        return blockMap[blockName] || null;
-    }
-
-    /**
      * 开始渲染投影
      */
     startRender(player, projection, layer = -1) {
+        // 保存完整的方块列表用于粒子重生
+        const allBlocks = projection.blocks;
+        
         // 过滤方块（如果指定了层）
-        let blocks = projection.blocks;
+        let blocks = allBlocks;
         if (layer >= 0) {
             blocks = blocks.filter(b => b.pos[1] === layer);
         }
 
+        // 清除旧的投影和放置状态
+        this.clearPlayerProjection(player);
+        this.placedBlocks.clear();
+
+        // 获取玩家位置
+        const playerPos = player.pos;
+        const playerDim = player.dim ?? (player.pos && player.pos.dimid) ?? 0;
+
+        // 记录渲染开始时间
+        const renderStartTime = Date.now();
+
+        // 转换所有方块为世界坐标
+        const visibleBlocks = this.getAllBlocksWorldPos(blocks, projection);
+
         // 创建渲染任务
         const task = {
             projection,
-            blocks,
+            blocks,              // 当前渲染的方块（可能已过滤）
+            allBlocks,           // 完整的方块列表（用于粒子重生）
+            visibleBlocks,
+            visibleBlocksIndex: 0,
             currentIndex: 0,
-            paused: false
+            paused: false,
+            lastRenderTime: Date.now(),
+            lastVisibleUpdate: Date.now(),
+            isInitialRender: true,
+            initialRenderCount: 0,
+            isRendering: true, // 标记正在渲染
+            renderStartTime: renderStartTime,
+            currentLayer: layer, // 记录当前渲染的层
+            lastParticleRespawn: Date.now() // 初始化粒子重生时间
         };
+        
+        logger.info(`[StartRender] 创建任务 - 层: ${layer}, 总方块: ${allBlocks.length}, 当前层方块: ${blocks.length}`);
 
         this.renderTasks.set(player.xuid, task);
-        logger.info(`Started rendering projection for ${player.name}, ${blocks.length} blocks`);
+
+        // 对于粒子模式，将投影添加到活跃列表以便持续渲染
+        if (PARTICLE_RENDER_MODE === 'particle') {
+            this.activeProjections.set(player.xuid, task);
+        }
+
+        // 执行渲染并传递回调函数
+        this.uniformRender(player, task, () => {
+            // 渲染完成回调
+            task.isRendering = false;
+            const renderTime = ((Date.now() - renderStartTime) / 1000).toFixed(2);
+            const renderTimeMs = (Date.now() - renderStartTime) / 1000; // 保存为秒数
+            task.renderTime = renderTimeMs; // 保存渲染耗时用于粒子重生计算
+            task.lastParticleRespawn = Date.now(); // 初始化粒子重生时间
+            const layerInfo = layer >= 0 ? ` | 第 ${layer} 层` : '';
+            player.tell(`§a投影 "${projection.name}" 渲染完成！`);
+            player.tell(`§7方块数: ${visibleBlocks.length} | 耗时: ${renderTime}秒${layerInfo}`);
+            player.tell(`§7位置: (${projection.position.x}, ${projection.position.y}, ${projection.position.z})`);
+            player.tell(`§7粒子将在 ${(renderTimeMs + 2).toFixed(0)} 秒后自动重生`);
+        });
+    }
+
+    /**
+     * 立即渲染 - 一次性渲染所有粒子
+     */
+    uniformRender(player, task, onComplete = null) {
+        const { visibleBlocks } = task;
+        
+        if (!visibleBlocks || visibleBlocks.length === 0) {
+            task.isInitialRender = false;
+            task.isRendering = false;
+            if (onComplete) onComplete();
+            return;
+        }
+
+        const totalBlocks = visibleBlocks.length;
+        let rendered = 0;
+        let errorCount = 0;
+        
+        // 一次性渲染所有方块
+        for (let i = 0; i < totalBlocks; i++) {
+            const block = visibleBlocks[i];
+            const posKey = `${block.worldPos[0]},${block.worldPos[1]},${block.worldPos[2]}`;
+
+            if (!this.placedBlocks.has(posKey)) {
+                try {
+                    this.spawnProjectionParticle(player, block.worldPos, block, false);
+                    rendered++;
+                } catch (e) {
+                    errorCount++;
+                }
+            }
+        }
+
+        task.visibleBlocksIndex = totalBlocks;
+        task.isInitialRender = false;
+        task.isRendering = false;
+
+        // 调用完成回调
+        if (onComplete) onComplete();
     }
 
     /**
@@ -255,92 +784,93 @@ class ProjectionRenderer {
     clearPlayerProjection(player) {
         // 停止渲染任务
         this.renderTasks.delete(player.xuid);
+        this.activeProjections.delete(player.xuid);
+
+        // 使用空粒子覆盖清除投影粒子
+        const particles = this.playerParticles.get(player.xuid);
+        if (particles && player && player.spawnParticle) {
+            for (const particle of particles) {
+                try {
+                    // 生成一个透明的基础粒子覆盖原粒子
+                    player.spawnParticle(
+                        'minecraft:basic_particle',
+                        { x: particle.pos[0], y: particle.pos[1], z: particle.pos[2] }
+                    );
+                } catch (e) {
+                    // 忽略错误
+                }
+            }
+        }
+
+        // 清除粒子位置记录
+        this.playerParticles.delete(player.xuid);
 
         // 清除已放置的方块
         const placedBlocks = this.playerBlocks.get(player.xuid);
         if (placedBlocks) {
-            for (const blockInfo of placedBlocks) {
-                // 简化处理：跳过清除，因为基岩版API限制
-            }
             this.playerBlocks.delete(player.xuid);
         }
     }
 
     /**
-     * 显示投影范围框
+     * 取消渲染（删除已渲染的粒子）
      */
-    showBounds(projection, player) {
-        const boundsId = `${player.xuid}_${projection.id}`;
-        
-        // 清除旧的范围框
-        this.hideBounds(boundsId);
-
-        const { x, y, z } = projection.position;
-        const { x: sx, y: sy, z: sz } = projection.dimensions;
-
-        // 生成范围框粒子
-        const particles = [];
-        const color = this.hexToRGB(projection.boundsColor || '#00FF00');
-
-        // 底部边框
-        for (let i = 0; i <= sx; i++) {
-            particles.push([x + i, y, z]);
-            particles.push([x + i, y, z + sz]);
-        }
-        for (let i = 0; i <= sz; i++) {
-            particles.push([x, y, z + i]);
-            particles.push([x + sx, y, z + i]);
+    cancelRender(player) {
+        // 从 activeProjections 获取任务
+        const task = this.activeProjections.get(player.xuid);
+        if (!task) {
+            player.tell('§c当前没有正在渲染的投影');
+            return false;
         }
 
-        // 垂直边框
-        for (let i = 0; i <= sy; i++) {
-            particles.push([x, y + i, z]);
-            particles.push([x + sx, y + i, z]);
-            particles.push([x, y + i, z + sz]);
-            particles.push([x + sx, y + i, z + sz]);
-        }
+        // 清除投影
+        this.clearPlayerProjection(player);
 
-        // 顶部边框
-        for (let i = 0; i <= sx; i++) {
-            particles.push([x + i, y + sy, z]);
-            particles.push([x + i, y + sy, z + sz]);
-        }
-        for (let i = 0; i <= sz; i++) {
-            particles.push([x, y + sy, z + i]);
-            particles.push([x + sx, y + sy, z + i]);
-        }
-
-        // 存储粒子位置
-        this.boundsParticles.set(boundsId, {
-            positions: particles,
-            dimension: projection.dimension,
-            color
-        });
-
-        // 显示粒子
-        this.spawnBoundsParticles(boundsId, player);
+        player.tell('§a投影渲染已取消');
+        return true;
     }
 
     /**
-     * 生成范围框粒子
+     * 加载已放置的投影
      */
-    spawnBoundsParticles(boundsId, player) {
-        const bounds = this.boundsParticles.get(boundsId);
-        if (!bounds) return;
-
-        // 简化实现：在ActionBar显示范围信息
-        const start = bounds.positions[0];
-        const end = bounds.positions[bounds.positions.length - 1];
-        if (start && end) {
-            player.tell(`§a投影范围: (${start.join(',')}) - (${end.join(',')})`);
+    loadProjection(player, projectionId) {
+        // 检查投影是否存在
+        const dataManager = global.dataManager;
+        if (!dataManager) {
+            player.tell('§c数据管理器未初始化');
+            return false;
         }
+
+        const projection = dataManager.getProjection(projectionId);
+        if (!projection) {
+            player.tell('§c投影不存在');
+            return false;
+        }
+
+        // 标记为已加载
+        this.loadedProjections.set(player.xuid, projectionId);
+
+        // 开始渲染
+        this.startRender(player, projection, -1, true);
+
+        player.tell(`§a已加载投影: ${projection.name}`);
+        return true;
     }
 
     /**
-     * 隐藏范围框
+     * 获取玩家的当前投影
      */
-    hideBounds(boundsId) {
-        this.boundsParticles.delete(boundsId);
+    getPlayerProjection(player) {
+        const task = this.renderTasks.get(player.xuid);
+        return task ? task.projection : null;
+    }
+
+    /**
+     * 检查玩家是否已加载指定投影
+     */
+    isProjectionLoaded(player, projectionId) {
+        const loadedId = this.loadedProjections.get(player.xuid);
+        return loadedId === projectionId;
     }
 
     /**

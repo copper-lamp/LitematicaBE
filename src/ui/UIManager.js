@@ -1,141 +1,147 @@
-// UIManager - UI管理器
+﻿﻿// UIManager - UI管理器
 // 处理GUI表单、屏幕提示、ActionBar消息等
+
+const fs = require('fs');
+const path = require('path');
 
 class UIManager {
     constructor() {
-        this.actionBarMessages = new Map(); // 玩家当前的ActionBar消息
+        this.actionBarMessages = new Map();
+        this.schematicsDir = './plugins/LitematicaBE/schematics/';
         this.startActionBarLoop();
+        this.ensureSchematicsDir();
     }
 
-    /**
-     * 启动ActionBar更新循环
-     */
+    // 确保原理图目录存在
+    ensureSchematicsDir() {
+        if (!fs.existsSync(this.schematicsDir)) {
+            fs.mkdirSync(this.schematicsDir, { recursive: true });
+            logger.info(`[UIManager] 创建原理图目录: ${this.schematicsDir}`);
+        }
+    }
+
+    // 列出所有原理图文件
+    listSchematics() {
+        const schematics = [];
+        
+        try {
+            if (!fs.existsSync(this.schematicsDir)) {
+                return schematics;
+            }
+
+            const files = fs.readdirSync(this.schematicsDir);
+            
+            for (const file of files) {
+                const ext = path.extname(file).toLowerCase();
+                if (ext === '.litematic') {
+                    const name = path.basename(file, ext);
+                    schematics.push({
+                        name: name,
+                        file: file,
+                        type: 'litematic'
+                    });
+                }
+            }
+        } catch (e) {
+            logger.error(`[UIManager] 读取原理图目录失败: ${e.message}`);
+        }
+        
+        return schematics;
+    }
+
     startActionBarLoop() {
-        mc.listen('onTick', () => {
+        mc.listen('onTick', () => {  
             this.updateActionBars();
         });
     }
 
-    /**
-     * 更新所有ActionBar
-     */
     updateActionBars() {
         for (const [xuid, message] of this.actionBarMessages) {
             const player = mc.getPlayer(xuid);
             if (player) {
-                player.setTitle(message, 3); // 3 = ActionBar
+                player.setTitle(message, 3);
             }
         }
     }
 
-    /**
-     * 设置玩家的ActionBar消息
-     */
     setActionBar(player, message) {
         this.actionBarMessages.set(player.xuid, message);
     }
 
-    /**
-     * 清除玩家的ActionBar
-     */
     clearActionBar(player) {
         this.actionBarMessages.delete(player.xuid);
     }
 
-    /**
-     * 显示主菜单
-     */
     showMainMenu(player) {
         const fm = mc.newSimpleForm();
-        fm.setTitle('§l§6Litematica BE');
-        fm.setContent('§6投影工具 v2.0.0\n§f选择一个操作：');
-        
-        fm.addButton('§l加载原理图');
-        fm.addButton('§l我的投影');
-        fm.addButton('§l选择操作模式');
-        fm.addButton('§l设置');
-        fm.addButton('§l帮助');
+        fm.setTitle('Litematica BE');
+        fm.setContent('投影工具 v2.1.0\n选择一个操作：');
+
+        fm.addButton('加载投影');
+        fm.addButton('投影管理');
+        fm.addButton('投影操作');
+        fm.addButton('关于投影');
 
         player.sendForm(fm, (player, data) => {
             if (data === null) return;
-            
+
             switch (data) {
                 case 0:
-                    this.showSchematicBrowser(player);
+                    this.showLoadProjection(player);
                     break;
                 case 1:
-                    this.showMyProjections(player);
+                    this.showProjectionManage(player);
                     break;
                 case 2:
-                    this.showModeSelector(player);
+                    this.showProjectionOperations(player);
                     break;
                 case 3:
-                    this.showSettings(player);
-                    break;
-                case 4:
-                    this.showHelp(player);
+                    this.showAbout(player);
                     break;
             }
         });
     }
 
-    /**
-     * 显示操作模式选择
-     */
-    showModeSelector(player) {
+    showAbout(player) {
         const fm = mc.newSimpleForm();
-        fm.setTitle('§l§e选择操作模式');
-        fm.setContent('§f选择一个模式来使用木剑操作：\n\n');
-        
-        fm.addButton('§l放置模式\n§7点击方块放置投影');
-        fm.addButton('§l旋转模式\n§7点击空气旋转投影');
-        fm.addButton('§l建造模式\n§7抬头/低头切换层');
+        fm.setTitle('关于投影');
+        fm.setContent(
+            'Litematica BE\n\n' +
+            '版本: 2.1.0\n\n' +
+            '功能说明:\n' +
+            '- 加载原理图文件\n' +
+            '- 使用粒子显示投影\n' +
+            '- 逐层渲染模式\n' +
+            '- 木剑切换层\n' +
+            '- 轻松放置辅助\n\n' +
+            '使用方法:\n' +
+            '- 手持木剑蹲下点击打开菜单\n' +
+            '- 逐层模式下用木剑切换层\n' +
+            '- 抬头向上切换，低头向下切换'
+        );
+        fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) {
-                this.showMainMenu(player);
-                return;
-            }
-            
-            const dataManager = global.dataManager;
-            switch (data) {
-                case 0:
-                    dataManager.setPlayerToolMode(player.xuid, 'place');
-                    player.tell('§a已切换到 §e放置模式');
-                    player.tell('§7使用木剑点击方块放置投影');
-                    break;
-                case 1:
-                    dataManager.setPlayerToolMode(player.xuid, 'rotate');
-                    player.tell('§a已切换到 §9旋转模式');
-                    player.tell('§7使用木剑点击来旋转投影');
-                    break;
-                case 2:
-                    dataManager.setPlayerToolMode(player.xuid, 'build');
-                    player.tell('§a已切换到 §6建造模式');
-                    player.tell('§7抬头/低头+木剑切换层');
-                    break;
-            }
+            this.showMainMenu(player);
         });
     }
 
-    /**
-     * 显示原理图浏览器
-     */
     showSchematicBrowser(player, onSelect = null) {
-        const schematics = this.getSchematicList();
-        
+        // 直接读取 schematics 目录
+        const schematics = this.listSchematics();
         if (schematics.length === 0) {
-            player.tell('§c没有找到原理图文件！');
-            player.tell('请将.litematic放入 §fplugins/LitematicaBE/schematics/ §7目录');
+            player.tell('§c未找到原理图文件！');
+            player.tell('§7请将.litematic文件放入 plugins/LitematicaBE/schematics/ 目录');
+            this.showMainMenu(player);
             return;
         }
 
         const fm = mc.newSimpleForm();
-        fm.setTitle('§l§b原理图浏览器');
-        fm.setContent(`找到 ${schematics.length} 个原理图文件\n§f选择一个来加载：`);
+        fm.setTitle('原理图浏览器');
+        fm.setContent(`找到 ${schematics.length} 个原理图文件\n选择一个来加载并放置：`);
 
         for (const schem of schematics) {
-            fm.addButton(`§f${schem.name}\n§7${schem.type.toUpperCase()} 格式`);
+            fm.addButton(`${schem.name}\n${schem.type.toUpperCase()} 格式`);
         }
 
         player.sendForm(fm, (player, data) => {
@@ -145,225 +151,390 @@ class UIManager {
             }
 
             const selected = schematics[data];
-            if (selected) {
-                if (onSelect) {
-                    onSelect(player, selected);
-                } else {
-                    this.showModeSelection(player, selected);
-                }
-            }
+            this.loadAndPlaceSchematic(player, selected);
         });
     }
 
-    /**
-     * 显示模式选择菜单
-     */
-    showModeSelection(player, schematic) {
-        const fm = mc.newSimpleForm();
-        fm.setTitle('§l§a选择操作模式');
-        fm.setContent(
-            `§f已加载: §e${schematic.name}\n` +
-            `§f尺寸: §7${schematic.dimensions?.x || '?'}x${schematic.dimensions?.y || '?'}x${schematic.dimensions?.z || '?'}\n\n` +
-            `§f选择一个操作模式：`
-        );
+    async loadAndPlaceSchematic(player, schematic) {
+        const loader = global.loader;
+        const dataManager = global.dataManager;
+        const renderer = global.renderer;
 
-        fm.addButton('§l放置模式\n§7使用木剑放置投影');
-        fm.addButton('§l旋转模式\n§7使用木剑旋转投影');
-        fm.addButton('§l建造模式\n§7分层显示，逐层建造');
+        try {
+            const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
+            let filePath = SCHEMATIC_PATH + schematic.file;
+
+            const loadedSchematic = await loader.load(filePath);
+
+            if (!loadedSchematic) {
+                player.tell('§c加载失败：无法解析原理图文件');
+                return;
+            }
+
+            const pos = player.pos;
+            const placePos = {
+                x: Math.floor(pos.x),
+                y: Math.floor(pos.y) - 1,
+                z: Math.floor(pos.z)
+            };
+
+            const projection = {
+                id: dataManager.generateId(),
+                name: loadedSchematic.name,
+                author: loadedSchematic.author,
+                dimensions: loadedSchematic.dimensions,
+                blocks: loadedSchematic.blocks,
+                position: placePos,
+                dimension: player.dim,
+                file: schematic.file,
+                rotation: 0,
+                mirrorX: false,
+                mirrorZ: false,
+                enabled: true,
+                opacity: 0.8,
+                renderLayer: -1,
+                showBounds: true,
+                boundsColor: "#00FF00",
+                createdAt: Date.now(),
+                totalBlocks: loadedSchematic.blocks.length
+            };
+
+            dataManager.addProjection(projection);
+            dataManager.setPlayerCurrentProjection(player.xuid, projection.id);
+
+            const projManager = global.projManager;
+            if (projManager) {
+                projManager.activateProjection(player, projection);
+            }
+
+            const renderer = global.renderer;
+            if (renderer) {
+                renderer.layerRenderMode.set(player.xuid, false);
+                renderer.currentRenderLayer.set(player.xuid, -1);
+            }
+
+            renderer.startRender(player, projection, -1);
+
+            player.tell(`§a投影 "${projection.name}" 已加载！`);
+            player.tell(`§a位置: (${placePos.x}, ${placePos.y}, ${placePos.z})`);
+            player.tell(`§a方块数: ${loadedSchematic.blocks.length}`);
+            player.tell(`§e使用 §e/litematica build §e切换到建造模式(逐层渲染)`);
+
+        } catch (e) {
+            player.tell('§c加载失败：' + e.message);
+        }
+    }
+
+    showLoadProjection(player) {
+        const dataManager = global.dataManager;
+        if (!dataManager) {
+            player.tell('§c错误：数据管理器未初始化');
+            this.showMainMenu(player);
+            return;
+        }
+
+        const projections = dataManager.getAllProjections();
+
+        const fm = mc.newSimpleForm();
+        fm.setTitle('加载投影');
+
+        if (projections.length === 0) {
+            fm.setContent('暂无已放置的投影\n\n请先使用原理图浏览器加载原理图');
+            fm.addButton('+ 浏览新原理图');
+            fm.addButton('返回主菜单');
+
+            player.sendForm(fm, (player, data) => {
+                if (data === 0) {
+                    this.showSchematicBrowser(player);
+                } else {
+                    this.showMainMenu(player);
+                }
+            });
+            return;
+        }
+
+        fm.setContent(`找到 ${projections.length} 个已放置的投影\n点击选择一个投影查看详情：`);
+
+        for (const proj of projections) {
+            const status = this.isProjectionLoaded(player, proj.id) ? '[已加载]' : '[未加载]';
+            fm.addButton(`${proj.name}\n${status} (${proj.dimensions?.x}×${proj.dimensions?.y}×${proj.dimensions?.z})`);
+        }
+        fm.addButton('+ 浏览新原理图');
+        fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
             if (data === null) {
+                this.showMainMenu(player);
+                return;
+            }
+
+            if (data === projections.length) {
                 this.showSchematicBrowser(player);
                 return;
             }
 
-            const modes = ['place', 'rotate', 'build'];
-            const modeNames = ['放置模式', '旋转模式', '建造模式'];
-            const selectedMode = modes[data];
-
-            // 保存原理图到玩家会话
-            const playerSessions = global.playerSessions;
-            if (playerSessions) {
-                let session = playerSessions.get(player.xuid);
-                if (!session) {
-                    session = { selectedSchematic: null, tempProjection: null };
-                    playerSessions.set(player.xuid, session);
-                }
-                session.selectedSchematic = schematic;
-            }
-
-            // 设置玩家模式
-            const dataManager = global.dataManager;
-            dataManager.setPlayerToolMode(player.xuid, selectedMode);
-            
-            player.tell(`§a已切换到${modeNames[data]}`);
-            player.tell('§7使用木剑点击方块进行操作');
-        });
-    }
-
-    /**
-     * 显示我的投影列表
-     */
-    showMyProjections(player) {
-        const dataManager = global.dataManager;
-        const projections = dataManager.getAllProjections();
-        
-        const fm = mc.newSimpleForm();
-        fm.setTitle('§l§a投影管理');
-        
-        if (projections.length === 0) {
-            fm.setContent('§c当前没有放置的投影');
-            fm.addButton('§l§c返回主菜单');
-        } else {
-            fm.setContent(`§7当前共有 §e${projections.length} §7个投影\n§f选择要管理的投影：`);
-            
-            for (const proj of projections) {
-                const isOwner = proj.author === player.xuid;
-                const owner = isOwner ? '§a你' : '§7其他玩家';
-                fm.addButton(`§f${proj.name}\n§7${proj.position?.x || '?'},${proj.position?.y || '?'},${proj.position?.z || '?'} §8| §${owner}`);
-            }
-            fm.addButton('§l§c删除所有投影');
-            fm.addButton('§l§c返回主菜单');
-        }
-
-        player.sendForm(fm, (player, data) => {
-            if (data === null) return;
-            
-            if (projections.length === 0) {
-                if (data === 0) this.showMainMenu(player);
-                return;
-            }
-            
-            if (data === projections.length) {
-                this.confirmClearProjections(player);
-                return;
-            }
-            
             if (data === projections.length + 1) {
                 this.showMainMenu(player);
                 return;
             }
-            
-            // 选择了一个投影
+
             const selectedProj = projections[data];
-            this.showProjectionManage(player, selectedProj);
+            this.showProjectionDetail(player, selectedProj);
         });
     }
 
-    /**
-     * 管理单个投影
-     */
-    showProjectionManage(player, projection) {
+    showProjectionDetail(player, projection) {
+        const isLoaded = this.isProjectionLoaded(player, projection.id);
+        const renderer = global.renderer;
+        const currentLayer = renderer?.currentRenderLayer?.get(player.xuid) || 0;
+
         const fm = mc.newSimpleForm();
-        fm.setTitle('§l§e投影管理');
-        fm.setContent(`§f投影: §e${projection.name}\n§7位置: (${projection.position?.x}, ${projection.position?.y}, ${projection.position?.z})`);
-        
-        fm.addButton('§l§a查看信息');
-        fm.addButton('§l§b传送到这里');
-        fm.addButton('§l§c删除此投影');
-        fm.addButton('§l返回列表');
+        fm.setTitle('投影详情');
+        fm.setContent(
+            `投影名称: ${projection.name}\n` +
+            `位置: (${projection.position?.x}, ${projection.position?.y}, ${projection.position?.z})\n` +
+            `尺寸: ${projection.dimensions?.x}×${projection.dimensions?.y}×${projection.dimensions?.z}\n` +
+            `方块数: ${projection.blocks?.length || 0}\n` +
+            `状态: ${isLoaded ? '已加载' : '未加载'}\n` +
+            (isLoaded ? `当前层: 第 ${currentLayer} 层` : '')
+        );
+
+        if (isLoaded) {
+            fm.addButton('卸载投影');
+        } else {
+            fm.addButton('加载投影');
+        }
+        fm.addButton('查看材料清单');
+        fm.addButton('删除投影');
+        fm.addButton('返回');
 
         player.sendForm(fm, (player, data) => {
             if (data === null) {
-                this.showMyProjections(player);
+                this.showLoadProjection(player);
                 return;
             }
-            
-            const dataManager = global.dataManager;
-            
+
             switch (data) {
                 case 0:
-                    player.tell(`§e========== 投影信息 ==========`);
-                    player.tell(`§f名称: §e${projection.name}`);
-                    player.tell(`§f位置: (${projection.position?.x}, ${projection.position?.y}, ${projection.position?.z})`);
-                    player.tell(`§f维度: §f${projection.dimension}`);
-                    player.tell(`§f方块数: §f${projection.totalBlocks || '?'}`);
-                    player.tell(`§f尺寸: §f${projection.dimensions?.x}x${projection.dimensions?.y}x${projection.dimensions?.z}`);
-                    this.showProjectionManage(player, projection);
+                    if (isLoaded) {
+                        this.unloadProjection(player, projection);
+                    } else {
+                        this.renderProjection(player, projection);
+                    }
                     break;
                 case 1:
-                    if (player.dim === projection.dimension) {
-                        player.teleport({ x: projection.position.x + 0.5, y: projection.position.y + 1, z: projection.position.z + 0.5, dim: projection.dimension });
-                        player.tell('§a已传送到投影位置');
-                    } else {
-                        player.tell('§c需要先前往同一维度');
-                    }
-                    this.showProjectionManage(player, projection);
+                    this.showMaterialList(player, projection);
                     break;
                 case 2:
-                    dataManager.removeProjection(projection.id);
-                    player.tell(`§c已删除投影: ${projection.name}`);
-                    this.showMyProjections(player);
+                    this.confirmDeleteProjection(player, projection);
                     break;
                 case 3:
-                    this.showMyProjections(player);
+                default:
+                    this.showLoadProjection(player);
                     break;
             }
         });
     }
 
-    /**
-     * 显示设置菜单
-     */
-    showSettings(player) {
-        const fm = mc.newSimpleForm();
-        fm.setTitle('§l§e设置');
-        fm.setContent('§f调整投影显示设置：');
+    renderProjection(player, projection) {
+        const renderer = global.renderer;
+        if (!renderer) {
+            player.tell('§c错误：渲染器未初始化');
+            return;
+        }
 
-        fm.addButton('§l§b透明度: 80%');
-        fm.addButton('§l§a显示范围框: §a开');
-        fm.addButton('§l§e范围提示: §a开');
-        fm.addButton('§l§f操作提示: §a开');
-        fm.addButton('§l§c清除所有投影');
-        fm.addButton('§l返回主菜单');
+        if (!projection || !projection.blocks || projection.blocks.length === 0) {
+            player.tell('§c错误：投影数据无效');
+            return;
+        }
+
+        if (this.isProjectionLoaded(player, projection.id)) {
+            player.tell('§c该投影已在渲染中');
+            return;
+        }
+
+        player.tell(`§a正在渲染投影: ${projection.name}`);
+        player.tell(`§a方块数: ${projection.blocks.length}`);
+
+        renderer.startRender(player, projection, -1);
+
+        setTimeout(() => {
+            this.showProjectionDetail(player, projection);
+        }, 500);
+    }
+
+    isProjectionLoaded(player, projectionId) {
+        const renderer = global.renderer;
+        if (!renderer) return false;
+        const task = renderer.activeProjections.get(player.xuid);
+        return task && task.projection && task.projection.id === projectionId;
+    }
+
+    unloadProjection(player, projection) {
+        const renderer = global.renderer;
+        if (!renderer) {
+            player.tell('错误：渲染器未初始化');
+            return;
+        }
+
+        renderer.cancelRender(player);
+        player.tell(`§a投影 "${projection.name}" 已卸载`);
+
+        setTimeout(() => {
+            this.showProjectionDetail(player, projection);
+        }, 500);
+    }
+
+    confirmDeleteProjection(player, projection) {
+        const fm = mc.newSimpleForm();
+        fm.setTitle('确认删除');
+        fm.setContent(
+            `确定要删除投影 "${projection.name}" 吗？\n\n此操作将永久删除该投影数据，不可恢复。`
+        );
+        fm.addButton('确认删除');
+        fm.addButton('取消');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null || data === 5) {
+            if (data === 0) {
+                const dataManager = global.dataManager;
+                if (dataManager) {
+                    if (this.isProjectionLoaded(player, projection.id)) {
+                        renderer.cancelRender(player);
+                    }
+                    dataManager.removeProjection(projection.id);
+                    player.tell('§a投影 "${projection.name}" 已删除');
+                }
+                setTimeout(() => {
+                    this.showLoadProjection(player);
+                }, 500);
+            } else {
+                this.showProjectionDetail(player, projection);
+            }
+        });
+    }
+
+    showMaterialList(player, projection) {
+        const fm = mc.newSimpleForm();
+        fm.setTitle('材料清单');
+        fm.setContent(
+            `投影: ${projection.name}\n\n` +
+            `方块总数: ${projection.blocks?.length || 0}\n\n` +
+            `点击"生成Excel"导出材料清单到文件`
+        );
+        fm.addButton('生成Excel');
+        fm.addButton('返回');
+
+        player.sendForm(fm, (player, data) => {
+            if (data === null || data === 1) {
+                this.showProjectionDetail(player, projection);
+                return;
+            }
+
+            if (data === 0) {
+                // 生成材料清单
+                this.generateMaterialExcel(player, projection);
+            }
+        });
+    }
+
+    generateMaterialExcel(player, projection) {
+        // 确保MaterialCounter已初始化
+        if (!global.materialCounter) {
+            const { MaterialCounter } = require('../utils/MaterialCounter');
+            global.materialCounter = new MaterialCounter();
+        }
+
+        // 生成Excel文件
+        global.materialCounter.generateExcel(projection, player);
+
+        // 返回材料清单界面
+        setTimeout(() => {
+            this.showMaterialList(player, projection);
+        }, 500);
+    }
+
+    showProjectionManage(player) {
+        const dataManager = global.dataManager;
+        if (!dataManager) {
+            player.tell('§c错误：数据管理器未初始化');
+            this.showMainMenu(player);
+            return;
+        }
+
+        const projections = dataManager.getAllProjections();
+
+        const fm = mc.newSimpleForm();
+        fm.setTitle('投影管理');
+
+        if (projections.length === 0) {
+            fm.setContent('暂无投影\n\n请先加载原理图');
+        } else {
+            fm.setContent(`共 ${projections.length} 个投影`);
+            for (const proj of projections) {
+                fm.addButton(`${proj.name}\n(${proj.position?.x}, ${proj.position?.y}, ${proj.position?.z})`);
+            }
+        }
+
+        fm.addButton('删除所有投影');
+        fm.addButton('返回主菜单');
+
+        player.sendForm(fm, (player, data) => {
+            if (data === null) {
                 this.showMainMenu(player);
                 return;
             }
 
-            switch (data) {
-                case 0:
-                    this.showOpacitySettings(player);
-                    break;
-                case 4:
-                    this.confirmClearProjections(player);
-                    break;
-                default:
-                    player.tell('§a设置已更新');
-                    this.showSettings(player);
+            if (projections.length === 0) {
+                if (data === 0) {
+                    this.showMainMenu(player);
+                }
+                return;
+            }
+
+            if (data === projections.length) {
+                this.confirmClearProjections(player);
+            } else if (data === projections.length + 1) {
+                this.showMainMenu(player);
+            } else if (data >= 0 && data < projections.length) {
+                const projection = projections[data];
+                if (projection && projection.id) {
+                    this.showProjectionDetail(player, projection);
+                } else {
+                    player.tell('§c错误：投影数据无效');
+                    this.showProjectionManage(player);
+                }
+            } else {
+                this.showMainMenu(player);
             }
         });
     }
 
-    /**
-     * 显示透明度设置
-     */
-    showOpacitySettings(player) {
-        const fm = mc.newSlider();
-        fm.setTitle('§l§b透明度设置');
-        fm.setContent('§f调整投影方块透明度');
-        fm.addSlider('透明度', 0, 100, 80);
+    showSettings(player) {
+        const fm = mc.newSimpleForm();
+        fm.setTitle('LitematicaBE 设置');
+        fm.setContent('选择设置选项：');
+
+        fm.addButton('清除所有投影');
+        fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
-            if (data !== null) {
-                const opacity = data[0] / 100;
-                player.tell(`§a透明度已设置为 ${data[0]}%`);
+            if (data === null || data === 1) {
+                this.showMainMenu(player);
+                return;
             }
-            this.showSettings(player);
+
+            if (data === 0) {
+                this.confirmClearProjections(player);
+            }
         });
     }
 
-    /**
-     * 确认清除投影
-     */
     confirmClearProjections(player) {
         const fm = mc.newSimpleForm();
-        fm.setTitle('§l§c确认清除');
-        fm.setContent('§e确定要清除所有投影吗？\n§7此操作不可恢复。');
-        fm.addButton('§c确认清除');
-        fm.addButton('§a取消');
+        fm.setTitle('确认清除');
+        fm.setContent('确定要清除所有投影吗？\n此操作不可恢复。');
+        fm.addButton('确认清除');
+        fm.addButton('取消');
 
         player.sendForm(fm, (player, data) => {
             if (data === 0) {
@@ -372,118 +543,137 @@ class UIManager {
                 for (const proj of projections) {
                     dataManager.removeProjection(proj.id);
                 }
-                player.tell('§c所有投影已清除');
+                player.tell('§a所有投影已清除');
             }
             this.showMainMenu(player);
         });
     }
 
-    /**
-     * 显示帮助
-     */
-    showHelp(player) {
+    showProjectionOperations(player) {
+        const renderer = global.renderer;
+        if (!renderer) {
+            player.tell('§c错误：渲染器未初始化');
+            this.showMainMenu(player);
+            return;
+        }
+
+        const isLayerMode = renderer.layerRenderMode?.get(player.xuid) || false;
+        const isEasyPlace = renderer.easyPlaceMode?.get(player.xuid) || false;
+        const hasActive = renderer.activeProjections?.has(player.xuid);
+
         const fm = mc.newSimpleForm();
-        fm.setTitle('§l§7帮助');
+        fm.setTitle('投影操作');
         fm.setContent(
-            '§f=== Litematica BE 帮助 ===\n\n' +
-            '§6木剑操作:\n' +
-            '§f  蹲下 + 点击 §7- 打开菜单\n' +
-            '§f  站立 + 点击 §7- 执行当前模式操作\n\n' +
-            '§6三种模式:\n' +
-            '§b  放置模式 §7- 点击方块放置投影\n' +
-            '§d  旋转模式 §7- 点击旋转投影\n' +
-            '§e  建造模式 §7- 抬头/低头切换层\n\n' +
-            '§6范围提示:\n' +
-            '§f  进入投影范围时会显示提示\n' +
-            '§f  使用木剑加载投影'
+            `当前状态:\n` +
+            `逐层显示: ${isLayerMode ? '开启' : '关闭'}\n` +
+            `轻松放置: ${isEasyPlace ? '开启' : '关闭'}\n` +
+            `投影状态: ${hasActive ? '已加载' : '未加载'}`
         );
-        fm.addButton('§l§a返回主菜单');
+
+        fm.addButton(`${isLayerMode ? '关闭' : '开启'}逐层显示`);
+        fm.addButton(`${isEasyPlace ? '关闭' : '开启'}轻松放置`);
+        fm.addButton('取消渲染');
+        fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
-            this.showMainMenu(player);
+            if (data === null) {
+                this.showMainMenu(player);
+                return;
+            }
+
+            switch (data) {
+                case 0:
+                    this.toggleLayerRenderFromMenu(player);
+                    break;
+                case 1:
+                    this.toggleEasyPlaceFromMenu(player);
+                    break;
+                case 2:
+                    this.cancelRenderFromMenu(player);
+                    break;
+                case 3:
+                default:
+                    this.showMainMenu(player);
+                    break;
+            }
         });
     }
 
-    /**
-     * 显示范围提示
-     */
-    showRangeNotification(player, projection) {
-        const message = `§e附近有一个投影 §f${projection.name} §7| §b使用木剑加载`;
-        player.tell(message);
-    }
-
-    /**
-     * 更新放置模式提示
-     */
-    updatePlaceModeTip(player, projection) {
-        const message = `§a[放置模式] §7点击方块放置 | §e${projection.name} §7| §b旋转: ${projection.rotation}°`;
-        this.setActionBar(player, message);
-    }
-
-    /**
-     * 更新旋转模式提示
-     */
-    updateRotateModeTip(player, projection) {
-        const message = `§b[旋转模式] §7点击旋转投影 | §e${projection.name} §7| §b旋转: ${projection.rotation}°`;
-        this.setActionBar(player, message);
-    }
-
-    /**
-     * 更新建造模式提示
-     */
-    updateBuildModeTip(player, projection, layer) {
-        const progress = Math.round((layer / projection.dimensions.y) * 100);
-        const message = `§e[建造模式] §7抬头/低头切换层 | §b层: ${layer}/${projection.dimensions.y} §7| §a进度: ${progress}%`;
-        this.setActionBar(player, message);
-    }
-
-    /**
-     * 获取原理图列表
-     */
-    getSchematicList() {
-        const schematics = [];
-        const path = './plugins/LitematicaBE/schematics/';
+    toggleLayerRenderFromMenu(player) {
+        const renderer = global.renderer;
+        const dataManager = global.dataManager;
+        const projManager = global.projManager;
         
-        if (!File.exists(path)) {
-            return schematics;
+        if (!renderer) {
+            player.tell('§c错误：渲染器未初始化');
+            this.showProjectionOperations(player);
+            return;
         }
 
-        const files = File.getFilesList(path);
-        for (const file of files) {
-            if (file.endsWith('.litematic') || file.endsWith('.json')) {
-                const name = file.replace('.litematic', '').replace('.json', '');
-                const type = file.endsWith('.litematic') ? 'litematic' : 'json';
-                schematics.push({ name, file, type });
+        if (!renderer.layerRenderMode) {
+            renderer.layerRenderMode = new Map();
+        }
+
+        const current = renderer.layerRenderMode.get(player.xuid) || false;
+        renderer.layerRenderMode.set(player.xuid, !current);
+
+        const status = !current ? '§a开启' : '§c关闭';
+        player.tell(`逐层渲染模式已${status}`);
+
+        // 自动切换到建造模式
+        if (!current && dataManager) {
+            dataManager.setPlayerToolMode(player.xuid, 'build');
+            player.tell('§a已自动切换到建造模式');
+        }
+
+        const activeProj = projManager?.getActiveProjectionByPlayer(player);
+        if (activeProj) {
+            const projection = activeProj.projection;
+            if (!current) {
+                const maxLayer = projection.dimensions.y - 1;
+                projManager.switchLayer(player, 'down');
+                renderer.currentRenderLayer.set(player.xuid, maxLayer);
+                player.tell(`§a已切换到第 ${maxLayer} 层（共 ${projection.dimensions.y} 层）`);
+            } else {
+                projManager.switchLayer(player, 'all');
+                renderer.currentRenderLayer.set(player.xuid, -1);
+                player.tell('§a已切换到完整渲染模式');
             }
         }
 
-        return schematics;
+        setTimeout(() => {
+            this.showProjectionOperations(player);
+        }, 500);
     }
 
-    /**
-     * 发送模式切换提示
-     */
-    sendModeChangeTip(player, mode) {
-        const modeNames = {
-            'place': '§b放置模式',
-            'rotate': '§d旋转模式',
-            'build': '§e建造模式',
-            'none': '§7无模式'
-        };
-
-        player.tell(`§a已切换到${modeNames[mode] || mode}`);
-        
-        switch (mode) {
-            case 'place':
-                player.tell('§7使用木剑点击方块来放置投影');
-                break;
-            case 'rotate':
-                player.tell('§7使用木剑点击任意位置来旋转投影');
-                break;
-            case 'build':
-                player.tell('§7抬头/低头+木剑切换层，平视切换显示');
-                break;
+    toggleEasyPlaceFromMenu(player) {
+        const easyPlaceManager = global.easyPlaceManager;
+        if (!easyPlaceManager) {
+            player.tell('§c错误：轻松放置模块未初始化');
+            this.showProjectionOperations(player);
+            return;
         }
+
+        easyPlaceManager.toggle(player);
+
+        setTimeout(() => {
+            this.showProjectionOperations(player);
+        }, 500);
+    }
+
+    cancelRenderFromMenu(player) {
+        const renderer = global.renderer;
+        if (!renderer) {
+            player.tell('§c错误：渲染器未初始化');
+            this.showMainMenu(player);
+            return;
+        }
+
+        renderer.cancelRender(player);
+
+        setTimeout(() => {
+            this.showMainMenu(player);
+        }, 500);
     }
 }
 

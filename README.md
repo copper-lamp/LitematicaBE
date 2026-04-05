@@ -1,7 +1,7 @@
 # LitematicaBE
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.0.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.2.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-Bedrock%20Edition-brightgreen" alt="Platform">
   <img src="https://img.shields.io/badge/LeviLamina-1.9.x-orange" alt="Framework">
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
@@ -21,7 +21,7 @@
 
 ### 核心功能
 
-- 📂 **原*理图加载*** *- 支持加载* `.litematic` 和 `.json` 格式的 Litematic 原理图文件
+- 📂 **原理图加载** - 支持加载 `.litematic` 和 `.json` 格式的 Litematic 原理图文件
 - 🎯 **精准投影** - 在世界中显示全息投影，辅助建筑建造
 - 🔄 **旋转功能** - 支持 90° 倍数旋转投影
 - 📊 **多层显示** - 支持按层显示，方便逐层建造
@@ -32,6 +32,13 @@
 - **放置模式** - 点击放置投影
 - **旋转模式** - 点击旋转投影 90°
 - **建造模式** - 抬头/低头切换显示层级
+
+### 轻松放置 (Easy Place)
+
+- 🎯 **自动选中方块** - 在投影范围内放置方块时，自动从背包中选择正确的方块
+- 📦 **潜影盒支持** - 自动检索并提取潜影盒中的方块
+- 🔒 **错误操作阻止** - 阻止在错误位置放置方块，并提示"由轻松放置阻止的操作"
+- 🧱 **方块状态匹配** - 支持方块方向等状态的精确匹配
 
 ### 额外功能
 
@@ -80,8 +87,10 @@ bedrock-server/
         └── src/
             ├── core/
             ├── data/
+            ├── easyplace/
             ├── render/
-            └── ui/
+            ├── ui/
+            └── utils/
 ```
 
 ### 3. 放置原理图文件
@@ -107,6 +116,7 @@ plugins/LitematicaBE/schematics/
 | `/litematica placeat <x> <y> <z>` | 在指定坐标放置投影 | 所有人    |
 | `/litematica rotate`              | 切换到旋转模式   | 所有人    |
 | `/litematica build`               | 切换到建造模式   | 所有人    |
+| `/litematica easyplace`           | 切换轻松放置模式  | 所有人    |
 | `/litematica clear`               | 清除当前投影显示  | 所有人    |
 | `/litematica list`                | 列出所有投影    | 所有人    |
 | `/litematica info`                | 显示当前投影信息  | 所有人    |
@@ -136,6 +146,14 @@ plugins/LitematicaBE/schematics/
 - 抬头点击 = 上一层
 - 低头点击 = 下一层
 - 平视点击 = 切换全部/单层显示
+
+#### 轻松放置模式
+
+- 开启后，在投影范围内放置方块时：
+  - 自动从背包中选择正确的方块类型
+  - 自动从潜影盒中提取方块
+  - 阻止在错误位置放置方块
+- 使用 `/litematica easyplace` 或 GUI 菜单开启/关闭
 
 ***
 
@@ -193,11 +211,27 @@ A: 请先使用 `/litematica place` 命令放置投影
 
 ### Q: 木剑操作无反应？
 
-A: 确保手持木剑（minecraft:wooden\_sword）且未在冷却中
+A: 确保手持木剑（minecraft:wooden_sword）且未在冷却中
+
+### Q: 轻松放置不工作？
+
+A: 确保已开启轻松放置模式，且当前有活动的投影
 
 ***
 
 ## 更新日志
+
+### v2.2.0
+
+- ✨ 新增轻松放置 (Easy Place) 功能
+  - 自动选择正确方块
+  - 潜影盒物品提取
+  - 方块状态匹配
+  - 错误操作阻止
+- 🐛 修复粒子位置显示问题
+- 🐛 修复层切换时状态同步问题
+- 🐛 修复 GUI 删除投影错误
+- 🔧 统一投影状态管理
 
 ### v2.0.0
 

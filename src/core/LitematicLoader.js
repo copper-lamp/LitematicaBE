@@ -81,6 +81,8 @@ class LitematicLoader {
             // 缓存
             this.schematics.set(filePath, schematic);
             
+            logger.info(`[LitematicaBE] About to return schematic, blocks length: ${schematic.blocks?.length || 0}`);
+            
             return schematic;
         } catch (error) {
             logger.error(`Failed to load litematic: ${error.message}`);
@@ -670,15 +672,33 @@ class LitematicLoader {
         
         for (const regionName in regions) {
             const region = regions[regionName];
-            if (typeof region !== 'object') continue;
+            if (typeof region !== 'object') {
+                logger.warn(`parseLitematic: region "${regionName}" is not an object, type=${typeof region}`);
+                continue;
+            }
             
             regionCount++;
             
-            // 读取区域尺寸
-            const size = region.Size || {};
-            const sizeX = size.x || 0;
-            const sizeY = size.y || 0;
-            const sizeZ = size.z || 0;
+            logger.info(`parseLitematic: Processing region "${regionName}"`);
+            logger.info(`parseLitematic: region keys = ${Object.keys(region).join(', ')}`);
+            
+            // 读取区域尺寸 - 尝试多种可能的字段名
+            let size = region.Size;
+            if (!size) {
+                size = region.size;
+                logger.info(`parseLitematic: Using lowercase "size"`);
+            }
+            if (!size) {
+                size = { x: region.SizeX || region.sizeX || 0, 
+                         y: region.SizeY || region.sizeY || 0, 
+                         z: region.SizeZ || region.sizeZ || 0 };
+                logger.info(`parseLitematic: Constructed size from SizeX/SizeY/SizeZ`);
+            }
+            
+            // Litematic格式中Size可能是负数（表示方向），需要取绝对值
+            const sizeX = Math.abs(size.x || 0);
+            const sizeY = Math.abs(size.y || 0);
+            const sizeZ = Math.abs(size.z || 0);
             
             logger.info(`Region "${regionName}": ${sizeX}x${sizeY}x${sizeZ}`);
             
@@ -687,13 +707,27 @@ class LitematicLoader {
             if (sizeY > totalSize.y) totalSize.y = sizeY;
             if (sizeZ > totalSize.z) totalSize.z = sizeZ;
             
-            // 读取方块调色板
-            const palette = region.BlockStatePalette || [];
-            logger.info(`Palette size: ${palette.length}`);
+            // 读取方块调色板 - 尝试多种可能的字段名
+            let palette = region.BlockStatePalette || region.Palette || region.palette || [];
+            if (region.BlockStatePalette) {
+                logger.info(`Palette size: ${palette.length} (from BlockStatePalette)`);
+            } else if (region.Palette) {
+                logger.info(`Palette size: ${palette.length} (from Palette)`);
+            } else {
+                logger.warn(`Palette not found! region keys: ${Object.keys(region).join(', ')}`);
+            }
             
-            // 读取方块状态数据
-            const blockStates = region.BlockStates || [];
-            logger.info(`BlockStates length: ${blockStates.length}`);
+            // 读取方块状态数据 - 尝试多种可能的字段名
+            let blockStates = region.BlockStates || region.blockStates || region.block_states || [];
+            if (region.BlockStates) {
+                logger.info(`BlockStates length: ${blockStates.length} (from BlockStates)`);
+            } else if (region.blockStates) {
+                logger.info(`BlockStates length: ${blockStates.length} (from blockStates)`);
+            } else {
+                logger.warn(`BlockStates not found!`);
+            }
+            
+            logger.info(`decodeBlocks check: palette.length=${palette.length}, blockStates.length=${blockStates.length}`);
             
             // 解码方块数据
             if (palette.length > 0 && blockStates.length > 0) {
@@ -713,57 +747,135 @@ class LitematicLoader {
     
     /**
      * 解码方块数据
+     * 使用与Minecraft Litematic格式兼容的解码方式
      */
     decodeBlocks(palette, blockStates, sizeX, sizeY, sizeZ) {
         const blocks = [];
         const totalBlocks = sizeX * sizeY * sizeZ;
         
         if (palette.length === 0 || blockStates.length === 0) {
+            logger.warn(`decodeBlocks: empty palette (${palette.length}) or blockStates (${blockStates.length})`);
             return blocks;
         }
         
         // 计算每个方块状态需要的位数
-        const bitsPerBlock = Math.max(2, Math.ceil(Math.log2(palette.length)));
-        const blocksPerLong = Math.floor(64 / bitsPerBlock);
+        // 对于 n 个 palette 项，需要 ceil(log2(n)) 位，但至少 2 位
+        // 例如：259 个项需要 9 位 (2^9 = 512 >= 259)
+        let bitsPerBlock = Math.max(2, Math.ceil(Math.log2(palette.length)));
+        
+        // Minecraft Litematic 格式使用特定的 bitsPerBlock 规则
+        // 当 palette 大小 > 256 时，必须使用 9 位或更多
+        if (palette.length > 256 && bitsPerBlock < 9) {
+            bitsPerBlock = 9;
+        }
+        if (palette.length > 512 && bitsPerBlock < 10) {
+            bitsPerBlock = 10;
+        }
+        
         const mask = (1n << BigInt(bitsPerBlock)) - 1n;
         
+        logger.info(`[DECODE] Palette size: ${palette.length}, bitsPerBlock: ${bitsPerBlock}, mask: 0x${mask.toString(16)}`);
+        
+        // 调试：显示 palette 内容
+        logger.info(`[DECODE] Palette contents (first 20):`);
+        for (let i = 0; i < Math.min(20, palette.length); i++) {
+            const entry = palette[i];
+            logger.info(`[DECODE]   [${i}] ${entry?.Name || 'null'}`);
+        }
+        
+        // 统计 palette 中的空气方块
+        let airCount = 0;
+        for (const entry of palette) {
+            if (entry && entry.Name && entry.Name.includes('air')) {
+                airCount++;
+            }
+        }
+        logger.info(`[DECODE] Air blocks in palette: ${airCount}/${palette.length}`);
+        
+        logger.info(`[DECODE] Starting decode: ${totalBlocks} total blocks, palette size: ${palette.length}, bitsPerBlock: ${bitsPerBlock}`);
+        
         let blockIndex = 0;
-        let longIndex = 0;
-        let bitOffset = 0;
+        let decodedCount = 0;
+        let errorCount = 0;
+        const maxErrors = 10; // 最多显示10个错误
         
         for (let y = 0; y < sizeY && blockIndex < totalBlocks; y++) {
             for (let z = 0; z < sizeZ && blockIndex < totalBlocks; z++) {
                 for (let x = 0; x < sizeX && blockIndex < totalBlocks; x++) {
-                    if (longIndex >= blockStates.length) break;
+                    // 计算该方块在bit流中的位置
+                    const bitIndex = blockIndex * bitsPerBlock;
+                    const longIndex = Math.floor(bitIndex / 64);
+                    const bitOffset = bitIndex % 64;
                     
-                    // 从long数组中提取方块索引
-                    let longValue = BigInt(blockStates[longIndex]);
-                    const paletteIndex = Number((longValue >> BigInt(bitOffset)) & mask);
+                    if (longIndex >= blockStates.length) {
+                        if (errorCount < maxErrors) {
+                            logger.warn(`[DECODE] longIndex ${longIndex} >= blockStates.length ${blockStates.length}`);
+                            errorCount++;
+                        }
+                        blockIndex++;
+                        continue;
+                    }
                     
-                    if (paletteIndex < palette.length) {
-                        const blockState = palette[paletteIndex];
-                        if (blockState && blockState.Name) {
-                            // 跳过空气方块
-                            if (!blockState.Name.includes('air')) {
-                                blocks.push({
-                                    pos: [x, y, z],
-                                    name: blockState.Name,
-                                    properties: blockState.Properties || {}
-                                });
-                            }
+                    // 从long数组中提取方块索引（处理跨long的情况）
+                    let paletteIndex;
+                    
+                    if (bitOffset + bitsPerBlock <= 64) {
+                        // 不跨long，直接读取
+                        const longValue = BigInt(blockStates[longIndex]);
+                        paletteIndex = Number((longValue >> BigInt(bitOffset)) & mask);
+                    } else {
+                        // 跨long，需要组合两个long的值
+                        const long1 = BigInt(blockStates[longIndex]);
+                        const bitsFromLong1 = 64 - bitOffset;
+                        const bitsFromLong2 = bitsPerBlock - bitsFromLong1;
+                        
+                        if (longIndex + 1 < blockStates.length) {
+                            const long2 = BigInt(blockStates[longIndex + 1]);
+                            const val1 = (long1 >> BigInt(bitOffset)) & ((1n << BigInt(bitsFromLong1)) - 1n);
+                            const val2 = long2 & ((1n << BigInt(bitsFromLong2)) - 1n);
+                            paletteIndex = Number(val1 | (val2 << BigInt(bitsFromLong1)));
+                        } else {
+                            // 没有足够的long，使用默认值
+                            paletteIndex = 0;
+                        }
+                    }
+                    
+                    // 验证palette索引
+                    if (paletteIndex >= palette.length) {
+                        if (errorCount < maxErrors) {
+                            logger.warn(`[DECODE] Invalid paletteIndex ${paletteIndex} at block ${blockIndex}, using 0`);
+                            errorCount++;
+                        }
+                        paletteIndex = 0;
+                    }
+                    
+                    const blockState = palette[paletteIndex];
+                    if (blockState && blockState.Name) {
+                        // 跳过空气方块
+                        if (!blockState.Name.includes('air')) {
+                            blocks.push({
+                                pos: [x, y, z],
+                                name: blockState.Name,
+                                properties: blockState.Properties || {}
+                            });
+                            decodedCount++;
                         }
                     }
                     
                     blockIndex++;
-                    bitOffset += bitsPerBlock;
-                    
-                    if (bitOffset + bitsPerBlock > 64) {
-                        bitOffset = 0;
-                        longIndex++;
-                    }
                 }
             }
         }
+        
+        logger.info(`[DECODE] Completed: ${blocks.length} non-air blocks decoded out of ${totalBlocks} positions`);
+        
+        // 调试：统计解码后的方块类型
+        const blockTypeCount = {};
+        for (const block of blocks) {
+            const name = block.name || 'unknown';
+            blockTypeCount[name] = (blockTypeCount[name] || 0) + 1;
+        }
+        logger.info(`[DECODE] Decoded block types: ${JSON.stringify(blockTypeCount).substring(0, 1000)}`);
         
         return blocks;
     }
