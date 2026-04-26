@@ -5,7 +5,7 @@ class ProjectionManager {
     constructor() {
         this.activeProjections = new Map();
         this.onLayerChange = null;
-        this.debugMode = true;
+        this.debugMode = false;
     }
 
     setLayerChangeCallback(callback) {

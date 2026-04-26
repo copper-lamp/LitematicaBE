@@ -36,8 +36,11 @@ class BlockMatcher {
             }
         }
 
-        if (!expectedState) return true;
-        if (!actualState) return false;
+        if (!expectedState || Object.keys(expectedState).length === 0) return true;
+
+        if (!actualState) {
+            return true;
+        }
 
         return this.matchState(actualState, expectedState);
     }

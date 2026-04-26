@@ -4,6 +4,7 @@
 const { NBTParser, NBT_TAGS } = require('./NBT');
 const { PaletteDecoder } = require('./PaletteDecoder');
 const { convertBlockId } = require('./BlockIdMap');
+const { converter } = require('./BlockStateConverter');
 
 let zlib = null;
 let fs = null;
@@ -71,7 +72,7 @@ class LitematicLoader {
             logger.info(`NBT parsed successfully, keys: ${Object.keys(nbtData).join(', ')}`);
             
             // 转换为标准格式
-            const schematic = this.parseLitematic(nbtData);
+            const schematic = this.parseLitematic(nbtData, filePath);
             
             logger.info(`Schematic loaded: ${schematic.name}, ${schematic.totalBlocks} blocks, size: ${schematic.dimensions?.x}x${schematic.dimensions?.y}x${schematic.dimensions?.z}`);
             
@@ -640,9 +641,21 @@ class LitematicLoader {
     }
 
     /**
+     * 从文件名提取原理图名称
+     */
+    extractNameFromFilename(filePath) {
+        if (!filePath) return '';
+        
+        const fullName = filePath.split('/').pop().split('\\').pop() || '';
+        const nameWithoutExt = fullName.replace(/\.(litematic|json|dat|nbt)$/i, '');
+        
+        return nameWithoutExt || '';
+    }
+
+    /**
      * 解析Litematic NBT数据
      */
-    parseLitematic(nbtData) {
+    parseLitematic(nbtData, filename = '') {
         if (!nbtData) {
             throw new Error("No NBT data to parse");
         }
@@ -650,14 +663,21 @@ class LitematicLoader {
         const version = nbtData.Version || 0;
         const metadata = nbtData.Metadata || {};
         
+        let schematicName = metadata.Name || '';
+        if (!schematicName || schematicName === 'Unnamed' || schematicName.trim() === '') {
+            schematicName = this.extractNameFromFilename(filename);
+        }
+        
         const schematic = {
             version,
-            name: metadata.Name || 'Unnamed',
+            name: schematicName || 'Unnamed',
             author: metadata.Author || 'Unknown',
             description: metadata.Description || '',
             dimensions: { x: 0, y: 0, z: 0 },
             dimension: 0,
             blocks: [],
+            blockIndex: new Map(),
+            blockChunks: new Map(), // 空间分块索引: "chunkX,chunkY,chunkZ" -> Block[]
             entities: [],
             tileEntities: [],
             totalBlocks: 0,
@@ -739,8 +759,25 @@ class LitematicLoader {
         schematic.dimensions = totalSize;
         schematic.totalBlocks = schematic.blocks.length;
         
+        // 构建方块位置索引，加速轻松放置查找
+        const CHUNK_SIZE = 16;
+        for (const block of schematic.blocks) {
+            const key = `${block.pos[0]},${block.pos[1]},${block.pos[2]}`;
+            schematic.blockIndex.set(key, block);
+            
+            // 构建空间分块索引
+            const cx = Math.floor(block.pos[0] / CHUNK_SIZE);
+            const cy = Math.floor(block.pos[1] / CHUNK_SIZE);
+            const cz = Math.floor(block.pos[2] / CHUNK_SIZE);
+            const chunkKey = `${cx},${cy},${cz}`;
+            if (!schematic.blockChunks.has(chunkKey)) {
+                schematic.blockChunks.set(chunkKey, []);
+            }
+            schematic.blockChunks.get(chunkKey).push(block);
+        }
+        
         logger.info(`Parsing schematic: ${schematic.name}, dimensions: ${totalSize.x}x${totalSize.y}x${totalSize.z}`);
-        logger.info(`Total blocks: ${schematic.totalBlocks}`);
+        logger.info(`Total blocks: ${schematic.totalBlocks}, chunks: ${schematic.blockChunks.size}`);
 
         return schematic;
     }
@@ -853,10 +890,17 @@ class LitematicLoader {
                     if (blockState && blockState.Name) {
                         // 跳过空气方块
                         if (!blockState.Name.includes('air')) {
+                            // 获取Java版方块状态
+                            const javaStates = blockState.Properties || blockState.properties || {};
+                            
+                            // 转换为基岩版方块状态
+                            const bedrockStates = converter.convert(blockState.Name, javaStates);
+                            
                             blocks.push({
                                 pos: [x, y, z],
                                 name: blockState.Name,
-                                properties: blockState.Properties || {}
+                                state: javaStates,        // 保留原始Java版状态
+                                bedrockState: bedrockStates  // 添加转换后的基岩版状态
                             });
                             decodedCount++;
                         }

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wrong placement prevention with notification
 - `/litematica easyplace` command to toggle feature
 - GUI menu integration for easy place toggle
+- `isInProjectionRangeDebug()` method for detailed range checking diagnostics
 
 ### Changed
 - Unified projection state management with `ProjectionManager`
@@ -33,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GUI delete projection error (boundary check)
 - Layer render mode not syncing with build mode
 - ID mismatch between currentProjectionId and projections.json
+- **Easy Place not working** - Fixed dimension check failing when `projection.dimension` is undefined (legacy projections)
+  - Root cause: Legacy projections saved before dimension field was added
+  - Solution: Skip dimension check if `projection.dimension === undefined`
 
 ### Architecture
 - Added `src/easyplace/` module directory

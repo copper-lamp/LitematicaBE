@@ -80,6 +80,24 @@ class ConfigManager {
                 maxCachedBlocks: 100000,
                 monitorEnabled: false,
                 monitorInterval: 5000
+            },
+            megaSchematic: {
+                threshold: 30000,
+                enabled: true,
+                chunkSize: 16,
+                batchInsertSize: 5000,
+                lruCacheSize: 200,
+                storagePath: "./plugins/LitematicaBE/mega_schematics/"
+            },
+            megaRender: {
+                maxParticlesPerTick: 2000,
+                maxRenderDistance: 96,
+                viewportUpdateInterval: 500,
+                lodLevels: {
+                    near: { distance: 32, skipRate: 0 },
+                    medium: { distance: 80, skipRate: 2 },
+                    far: { distance: 160, skipRate: 4 }
+                }
             }
         };
     }

@@ -28,6 +28,11 @@ const { LogCleaner } = require('./src/core/LogCleaner');
 const { ConfigManager } = require('./src/core/ConfigManager');
 const { EasyPlaceManager } = require('./src/easyplace/EasyPlaceManager');
 
+// 导入超大型投影模块
+const { MegaSchematicManager } = require('./src/core/MegaSchematicManager');
+const { StreamingLitematicLoader } = require('./src/core/StreamingLitematicLoader');
+const { MegaProjectionRenderer } = require('./src/render/MegaProjectionRenderer');
+
 ll.registerPlugin(
     "LitematicaBE",
     "Minecraft Bedrock Edition projection tool with shared projections",
@@ -37,7 +42,7 @@ ll.registerPlugin(
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '2.1.0';
+const PLUGIN_VERSION = '2.2.0';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
@@ -48,6 +53,11 @@ const projManager = new ProjectionManager();
 const uiManager = new UIManager();
 const logCleaner = new LogCleaner();
 const easyPlaceManager = new EasyPlaceManager(projManager, dataManager);
+
+// 超大型投影全局实例
+const megaManager = new MegaSchematicManager();
+const streamLoader = new StreamingLitematicLoader();
+const megaRenderer = new MegaProjectionRenderer(megaManager);
 
 // 全局导出供其他模块使用
 global.zlib = zlib;
@@ -60,6 +70,11 @@ global.loader = loader;
 global.logCleaner = logCleaner;
 global.easyPlaceManager = easyPlaceManager;
 
+// 超大型投影全局导出
+global.megaManager = megaManager;
+global.streamLoader = streamLoader;
+global.megaRenderer = megaRenderer;
+
 const PLUGIN_NAME = "LitematicaBE";
 
 // 玩家临时数据（内存中）
@@ -67,6 +82,15 @@ const playerSessions = new Map();
 global.playerSessions = playerSessions;
 
 logger.info(`${PLUGIN_NAME} v${PLUGIN_VERSION} Loading...`);
+
+// 超大型投影渲染循环
+mc.listen('onTick', () => {
+    try {
+        megaRenderer.onTick();
+    } catch (e) {
+        // 静默处理，避免影响主循环
+    }
+});
 
 // 确保目录存在
 if (!File.exists(SCHEMATIC_PATH)) {
@@ -91,7 +115,6 @@ function isHoldingWoodenSword(player) {
         if (!item) return false;
         
         const itemType = String(item.type || item.name || item.id || '');
-        logger.info(`[Debug] Player ${player.name} holding: ${itemType}`);
         
         // 木剑的几种可能名称
         return itemType.includes('wooden_sword') || 
@@ -116,19 +139,20 @@ const playerCooldowns = new Map();
 
 // ==================== 轻松放置事件监听 ====================
 
+// 方法1: onUseItemOn - 在放置前拦截（用于取消/替换手持物品）
 mc.listen("onUseItemOn", (player, item, block, side, pos) => {
     const enabled = easyPlaceManager.isEnabled(player);
-    
     if (!enabled) return true;
-    
     if (!item) return true;
-    
-    logger.info(`[EasyPlace] Player ${player.name} trying to place item: ${item.type}`);
-    
     const result = easyPlaceManager.handleUseItemOn(player, item, block, side, pos);
-    logger.info(`[EasyPlace] Result: ${result}`);
-    
     return result;
+});
+
+// 方法2: afterPlaceBlock - 在放置后检测并修正（更可靠）
+mc.listen("afterPlaceBlock", (player, block) => {
+    const enabled = easyPlaceManager.isEnabled(player);
+    if (!enabled) return;
+    easyPlaceManager.correctBlockPlacement(player, block);
 });
 
 // ==================== 木剑操作事件监听 ====================
@@ -157,12 +181,6 @@ mc.listen("onUseItemOn", (player, item, block, side, pos) => {
     const playerData = dataManager.getPlayerData(player.xuid);
     const session = getPlayerSession(player.xuid);
 
-    logger.info(`[ItemUse] ===============`);
-    logger.info(`[ItemUse] ${player.name} (${player.xuid}) used wooden sword`);
-    logger.info(`[ItemUse] toolMode: ${playerData.toolMode}`);
-    logger.info(`[ItemUse] currentProjectionId: ${playerData.currentProjectionId}`);
-    logger.info(`[ItemUse] projManager stats: ${JSON.stringify(projManager.getStats())}`);
-
     switch (playerData.toolMode) {
         case 'place':
             handlePlaceMode(player, block, pos, session);
@@ -171,11 +189,9 @@ mc.listen("onUseItemOn", (player, item, block, side, pos) => {
             handleRotateMode(player, session);
             break;
         case 'build':
-            logger.info(`[ItemUse] Calling handleBuildMode`);
             handleBuildMode(player, session);
             break;
         default:
-            logger.info(`[ItemUse] No tool mode set for ${player.name}`);
             player.tell('§7请先选择操作模式');
             player.tell('§e/litematica build §7- 切换到建造模式(逐层渲染)');
             player.tell('§e/litematica place §7- 切换到放置模式');
@@ -206,6 +222,8 @@ function handlePlaceMode(player, block, pos, session) {
     // 创建投影
     const schematic = session.selectedSchematic;
     
+    const isMegaPlace = schematic.isMega && schematic.schematicId;
+    
     // 创建新的投影
     const projection = {
         id: dataManager.generateId(),
@@ -229,16 +247,12 @@ function handlePlaceMode(player, block, pos, session) {
         createdAt: Date.now(),
         totalBlocks: schematic.totalBlocks || 0,
         dimensions: schematic.dimensions || { x: 1, y: 1, z: 1 },
-        blocks: schematic.blocks || []
+        blocks: schematic.blocks || [],
+        isMega: isMegaPlace,
+        schematicId: schematic.schematicId || null,
+        blockIndex: schematic.blockIndex || null,
+        blockChunks: schematic.blockChunks || null
     };
-
-    // 调试日志
-    logger.info(`[LitematicaBE] Placing projection: ${projection.name}`);
-    logger.info(`[LitematicaBE]   - Position: (${projection.position.x}, ${projection.position.y}, ${projection.position.z})`);
-    logger.info(`[LitematicaBE]   - Dimension: ${projection.dimension}`);
-    logger.info(`[LitematicaBE]   - TotalBlocks: ${projection.totalBlocks}`);
-    logger.info(`[LitematicaBE]   - Dimensions: ${JSON.stringify(projection.dimensions)}`);
-    logger.info(`[LitematicaBE]   - Blocks array length: ${projection.blocks?.length || 0}`);
 
     // 保存投影
     dataManager.addProjection(projection);
@@ -247,11 +261,17 @@ function handlePlaceMode(player, block, pos, session) {
 
     projManager.activateProjection(player, projection);
 
-    // 同步渲染器层状态
-    renderer.layerRenderMode.set(player.xuid, false);
-    renderer.currentRenderLayer.set(player.xuid, -1);
-
-    renderer.startRender(player, projection);
+    if (isMegaPlace) {
+        megaRenderer.initRenderState(player, schematic.schematicId, projection);
+        player.tell('§6⚡ 已启用超大型投影渲染模式');
+        renderer.layerRenderMode.set(player.xuid, false);
+        renderer.currentRenderLayer.set(player.xuid, -1);
+        renderer.startRender(player, projection, -1);
+    } else {
+        renderer.layerRenderMode.set(player.xuid, false);
+        renderer.currentRenderLayer.set(player.xuid, -1);
+        renderer.startRender(player, projection);
+    }
 
     player.tell(`§a投影已放置: §e${projection.name}`);
     player.tell(`§7位置: §f(${projection.position.x}, ${projection.position.y}, ${projection.position.z})`);
@@ -272,6 +292,11 @@ function handleRotateMode(player, session) {
         return;
     }
 
+    if (activeProj.projection.isMega) {
+        player.tell('§c超大型投影暂不支持旋转操作');
+        return;
+    }
+
     renderer.clearPlayerProjection(player);
 
     activeProj.projection.rotation = (activeProj.projection.rotation + 90) % 360;
@@ -286,20 +311,13 @@ function handleRotateMode(player, session) {
  * 处理建造模式 - 逐层渲染
  */
 function handleBuildMode(player, session) {
-    logger.info(`[BuildMode] ===============`);
-    logger.info(`[BuildMode] Triggered by ${player.name}`);
-
     // 首先检查 projManager 中是否有活动投影
     let activeProj = projManager.getActiveProjectionByPlayer(player);
-    logger.info(`[BuildMode] projManager activeProj: ${activeProj ? 'exists' : 'null'}`);
 
     // 如果 projManager 中没有，尝试从 dataManager 恢复
     if (!activeProj) {
         const playerData = dataManager.getPlayerData(player.xuid);
         const projectionId = playerData?.currentProjectionId;
-        logger.info(`[BuildMode] No active projection in projManager, checking dataManager. projectionId: ${projectionId}`);
-        logger.info(`[BuildMode] dataManager.projections.size: ${dataManager.projections?.size || 'unknown'}`);
-        logger.info(`[BuildMode] dataManager.projections keys: ${JSON.stringify([...(dataManager.projections?.keys() || [])])}`);
 
         if (!projectionId) {
             player.tell('§c你没有正在操作的投影');
@@ -308,7 +326,6 @@ function handleBuildMode(player, session) {
         }
 
         const projection = dataManager.getProjection(projectionId);
-        logger.info(`[BuildMode] dataManager.getProjection result: ${projection ? 'exists' : 'null'}`);
 
         if (!projection) {
             player.tell('§c投影不存在或已被删除');
@@ -316,16 +333,12 @@ function handleBuildMode(player, session) {
             return;
         }
 
-        logger.info(`[BuildMode] projection.name: ${projection.name}, blocks: ${projection.blocks?.length || 0}`);
-
         // 激活投影
         activeProj = projManager.activateProjection(player, projection);
-        logger.info(`[BuildMode] Activated projection from dataManager: ${projection.id}`);
 
         // 同步到渲染器
         renderer.layerRenderMode.set(player.xuid, true);
         renderer.currentRenderLayer.set(player.xuid, projection.renderLayer !== undefined ? projection.renderLayer : -1);
-        logger.info(`[BuildMode] Synced layerRenderMode and currentRenderLayer to renderer`);
     }
 
     // 获取当前俯仰角和方向
@@ -340,32 +353,39 @@ function handleBuildMode(player, session) {
         direction = 'toggle';
     }
 
-    logger.info(`[BuildMode] Pitch: ${pitch}, Direction: ${direction}`);
-
     // 切换层级
     const result = projManager.switchLayer(player, direction);
 
     if (result) {
         const newLayer = result.renderLayer;
-        logger.info(`[BuildMode] Layer switched to: ${newLayer}`);
+        const isMegaProj = result.projection.isMega && result.projection.schematicId;
 
-        // 同步到渲染器
-        renderer.currentRenderLayer.set(player.xuid, newLayer);
-        renderer.layerRenderMode.set(player.xuid, true);
+        if (isMegaProj) {
+            // 超大型投影：使用Mega渲染器的层模式
+            const stateId = `${player.xuid}_${result.projection.schematicId}`;
+            megaRenderer.setLayerMode(stateId, newLayer);
 
-        // 清除并重新渲染
-        renderer.clearPlayerProjection(player);
-        renderer.startRender(player, result.projection, newLayer);
-
-        const info = projManager.getLayerInfo(result.projection, newLayer);
-        if (newLayer === -1) {
-            player.tell(`§a显示全部层 §7(${info.totalBlocks} 方块)`);
+            if (newLayer === -1) {
+                const totalBlocks = result.projection.totalBlocks || 0;
+                player.tell(`§a显示全部层 §7(${totalBlocks} 方块)`);
+            } else {
+                player.tell(`§a当前层: §e${newLayer} §7/ ${result.projection.dimensions?.y || 1}`);
+            }
         } else {
-            player.tell(`§a当前层: §e${newLayer} §7/ ${info.totalLayers}`);
-            player.tell(`§7本层方块: §f${info.currentLayerBlocks}`);
+            // 普通投影渲染
+            renderer.currentRenderLayer.set(player.xuid, newLayer);
+            renderer.layerRenderMode.set(player.xuid, true);
+            renderer.clearPlayerProjection(player);
+            renderer.startRender(player, result.projection, newLayer);
+
+            const info = projManager.getLayerInfo(result.projection, newLayer);
+            if (newLayer === -1) {
+                player.tell(`§a显示全部层 §7(${info.totalBlocks} 方块)`);
+            } else {
+                player.tell(`§a当前层: §e${newLayer} §7/ ${info.totalLayers}`);
+                player.tell(`§7本层方块: §f${info.currentLayerBlocks}`);
+            }
         }
-    } else {
-        logger.warn(`[BuildMode] switchLayer returned null`);
     }
 }
 
@@ -375,7 +395,7 @@ function registerCommands() {
     const cmd = mc.newCommand("litematica", "Litematica projection tool", PermType.Any, 0x80);
     const cmdShort = mc.newCommand("lit", "Litematica (Short)", PermType.Any, 0x80);
 
-    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "clear", "list", "remove", "info"]);
+    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "verify", "clear", "list", "remove", "info", "debug"]);
     cmd.setEnum("FileEnum", ["file"]);
     cmd.setEnum("CoordEnum", ["x", "y", "z"]);
 
@@ -384,11 +404,13 @@ function registerCommands() {
     cmd.optional("x", ParamType.Int);
     cmd.optional("y", ParamType.Int);
     cmd.optional("z", ParamType.Int);
+    cmd.optional("args", ParamType.RawText);
 
     cmd.overload([]);
     cmd.overload(["ActionEnum"]);
     cmd.overload(["ActionEnum", "filename"]);
     cmd.overload(["ActionEnum", "x", "y", "z"]);
+    cmd.overload(["ActionEnum", "args"]);
 
     cmd.setCallback((cmd, origin, output, results) => {
         const player = origin.player;
@@ -398,7 +420,6 @@ function registerCommands() {
         }
 
         const action = results.action;
-        logger.info(`[LitematicaBE] Command: ${action} by ${player.name}`);
 
         switch (action) {
             case "menu":
@@ -428,8 +449,19 @@ function registerCommands() {
             case "easyplace":
                 easyPlaceManager.toggle(player);
                 break;
+            case "printer":
+                easyPlaceManager.toggleFastPlace(player);
+                break;
+            case "verify":
+                handleVerifyCommand(player, output);
+                break;
             case "clear":
                 renderer.clearPlayerProjection(player);
+                // 先获取活动投影信息，再删除
+                const activeForClear = projManager.getActiveProjection(player.xuid);
+                if (activeForClear && activeForClear.projection && activeForClear.projection.schematicId) {
+                    megaRenderer.stopRender(`${player.xuid}_${activeForClear.projection.schematicId}`);
+                }
                 projManager.removeActiveProjection(player.xuid);
                 output.success("§a已清除当前投影显示");
                 break;
@@ -441,6 +473,9 @@ function registerCommands() {
                 break;
             case "info":
                 showProjectionInfo(player, output);
+                break;
+            case "debug":
+                handleDebugCommand(player, results.args || [], output);
                 break;
             default:
                 uiManager.showMainMenu(player);
@@ -558,16 +593,10 @@ function handleLoadCommand(player, filename, output) {
         return;
     }
 
-    logger.info(`[LitematicaBE] Loading schematic: ${filename}`);
-    
     loadSchematicFile(filename).then(schematic => {
         if (schematic) {
             const session = getPlayerSession(player.xuid);
             session.selectedSchematic = schematic;
-            
-            logger.info(`[LitematicaBE] Successfully loaded: ${schematic.name}`);
-            logger.info(`[LitematicaBE]   - Blocks: ${schematic.totalBlocks}`);
-            logger.info(`[LitematicaBE]   - Dimensions: ${schematic.dimensions?.x}x${schematic.dimensions?.y}x${schematic.dimensions?.z}`);
             
             output.success(`§a已加载: §e${schematic.name}`);
             output.success(`§7方块数: §f${schematic.totalBlocks}`);
@@ -578,17 +607,12 @@ function handleLoadCommand(player, filename, output) {
             output.success("§e  /litematica build §7- 建造模式");
         } else {
             output.error(`§c找不到文件: ${filename}`);
-            logger.error(`[LitematicaBE] Failed to load: ${filename}`);
         }
     });
 }
 
 function handlePlaceCommand(player, filename, output) {
-    logger.info(`[LitematicaBE] handlePlaceCommand called, filename: ${filename}`);
-    
     loadSchematicFile(filename || (getPlayerSession(player.xuid).selectedSchematic?.name)).then(schematic => {
-        logger.info(`[LitematicaBE] loadSchematicFile.then callback, schematic: ${schematic ? 'exists' : 'null'}`);
-        
         if (!schematic) {
             output.error("§c没有加载的原理图");
             output.success("§f用法: /litematica place <文件名>");
@@ -596,12 +620,8 @@ function handlePlaceCommand(player, filename, output) {
             return;
         }
         
-        logger.info(`[LitematicaBE] schematic.blocks length: ${schematic.blocks?.length || 0}`);
-        
         const session = getPlayerSession(player.xuid);
         session.selectedSchematic = schematic;
-        
-        logger.info(`[LitematicaBE] Placing projection: ${schematic.name} at player position`);
         
         const pos = player.pos;
         const placePos = {
@@ -609,6 +629,8 @@ function handlePlaceCommand(player, filename, output) {
             y: Math.floor(pos.y) - 1,
             z: Math.floor(pos.z)
         };
+        
+        const isMega = schematic.isMega && schematic.schematicId;
         
         const projection = {
             id: dataManager.generateId(),
@@ -628,10 +650,12 @@ function handlePlaceCommand(player, filename, output) {
             createdAt: Date.now(),
             totalBlocks: schematic.totalBlocks,
             dimensions: schematic.dimensions,
-            blocks: schematic.blocks
+            blocks: schematic.blocks,
+            isMega: isMega,
+            schematicId: schematic.schematicId || null,
+            blockIndex: schematic.blockIndex || null,
+            blockChunks: schematic.blockChunks || null
         };
-        
-        logger.info(`[LitematicaBE] projection.blocks length: ${projection.blocks?.length || 0}`);
         
         // 保存投影
         dataManager.addProjection(projection);
@@ -639,24 +663,31 @@ function handlePlaceCommand(player, filename, output) {
 
         projManager.activateProjection(player, projection);
 
-        // 同步渲染器层状态
-        renderer.layerRenderMode.set(player.xuid, false);
-        renderer.currentRenderLayer.set(player.xuid, -1);
-
-        logger.info(`[LitematicaBE] Projection created: ${projection.id}`);
-        logger.info(`[LitematicaBE]   - Position: (${placePos.x}, ${placePos.y}, ${placePos.z})`);
-        logger.info(`[LitematicaBE]   - Dimension: ${player.dim}`);
-        
-        // 显示范围框
-        renderer.showBounds(projection, player);
-        
-        // 渲染投影
-        renderer.startRender(player, projection);
+        if (isMega) {
+            // 超大型投影：使用Mega渲染
+            megaRenderer.initRenderState(player, schematic.schematicId, projection);
+            player.tell('§6⚡ 已启用超大型投影渲染模式');
+            
+            // 同步渲染器状态
+            renderer.layerRenderMode.set(player.xuid, false);
+            renderer.currentRenderLayer.set(player.xuid, -1);
+            
+            // 显示范围框
+            renderer.showBounds(projection, player);
+            renderer.startRender(player, projection, -1);
+        } else {
+            // 普通投影渲染
+            renderer.layerRenderMode.set(player.xuid, true);
+            renderer.currentRenderLayer.set(player.xuid, 0);
+            renderer.showBounds(projection, player);
+            renderer.startRender(player, projection, 0);
+        }
 
         output.success(`§a投影已放置: §e${schematic.name}`);
         output.success(`§7位置: §f(${placePos.x}, ${placePos.y}, ${placePos.z})`);
         output.success(`§7方块数: §f${schematic.totalBlocks}`);
-        output.success(`§e使用 §e/litematica build §e切换到建造模式`);
+        output.success(`§7当前层: §f0 / ${projection.dimensions?.y || 1}`);
+        output.success(`§e使用 §e/lit build §e切换到建造模式`);
     }).catch(err => {
         logger.error(`[LitematicaBE] loadSchematicFile error: ${err.message}`);
         output.error(`§c加载失败: ${err.message}`);
@@ -675,8 +706,6 @@ function handlePlaceAtCommand(player, x, y, z, output) {
     }
     
     const session = getPlayerSession(player.xuid);
-    logger.info(`[LitematicaBE] Session exists: ${!!session}`);
-    logger.info(`[LitematicaBE] Session has selectedSchematic: ${!!session?.selectedSchematic}`);
     
     const schematic = session.selectedSchematic;
     
@@ -686,11 +715,9 @@ function handlePlaceAtCommand(player, x, y, z, output) {
         return;
     }
     
-    logger.info(`[LitematicaBE] Placing projection: ${schematic.name}`);
-    logger.info(`[LitematicaBE]   - Blocks in schematic: ${schematic.blocks?.length || 0}`);
-    logger.info(`[LitematicaBE]   - TotalBlocks: ${schematic.totalBlocks}`);
-    
     const placePos = { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) };
+    
+    const isMega2 = schematic.isMega && schematic.schematicId;
     
     const projection = {
         id: dataManager.generateId(),
@@ -710,33 +737,36 @@ function handlePlaceAtCommand(player, x, y, z, output) {
         createdAt: Date.now(),
         totalBlocks: schematic.totalBlocks || 0,
         dimensions: schematic.dimensions || { x: 1, y: 1, z: 1 },
-        blocks: schematic.blocks || []
+        blocks: schematic.blocks || [],
+        isMega: isMega2,
+        schematicId: schematic.schematicId || null,
+        blockIndex: schematic.blockIndex || null,
+        blockChunks: schematic.blockChunks || null
     };
-    
-    logger.info(`[LitematicaBE] Projection blocks: ${projection.blocks.length}`);
     
     dataManager.addProjection(projection);
     dataManager.setPlayerCurrentProjection(player.xuid, projection.id);
 
     projManager.activateProjection(player, projection);
 
-    // 同步渲染器层状态
-    renderer.layerRenderMode.set(player.xuid, false);
-    renderer.currentRenderLayer.set(player.xuid, -1);
-
-    logger.info(`[LitematicaBE] Projection created: ${projection.id}`);
-    logger.info(`[LitematicaBE]   - Position: (${placePos.x}, ${placePos.y}, ${placePos.z})`);
-    logger.info(`[LitematicaBE]   - Dimension: ${player.dim}`);
-    
-    // 显示范围框
-    renderer.showBounds(projection, player);
-    
-    // 渲染投影
-    renderer.startRender(player, projection);
+    if (isMega2) {
+        megaRenderer.initRenderState(player, schematic.schematicId, projection);
+        player.tell('§6⚡ 已启用超大型投影渲染模式');
+        renderer.layerRenderMode.set(player.xuid, false);
+        renderer.currentRenderLayer.set(player.xuid, -1);
+        renderer.showBounds(projection, player);
+        renderer.startRender(player, projection, -1);
+    } else {
+        renderer.layerRenderMode.set(player.xuid, true);
+        renderer.currentRenderLayer.set(player.xuid, 0);
+        renderer.showBounds(projection, player);
+        renderer.startRender(player, projection, 0);
+    }
     
     output.success(`§a投影已放置: §e${schematic.name}`);
     output.success(`§7位置: §f(${placePos.x}, ${placePos.y}, ${placePos.z})`);
     output.success(`§7方块数: §f${schematic.totalBlocks || 0}`);
+    output.success(`§7当前层: §f0 / ${projection.dimensions?.y || 1}`);
 }
 
 async function loadSchematicFile(filename) {
@@ -752,23 +782,58 @@ async function loadSchematicFile(filename) {
     }
     
     if (!fullPath) {
-        logger.info(`[LitematicaBE] File not found: ${filePath}`);
         return null;
     }
     
-    logger.info(`[LitematicaBE] Loading file: ${fullPath}`);
-    
     try {
-        const schematic = await loader.load(fullPath);
-        logger.info(`[LitematicaBE] loadSchematicFile returned: ${schematic ? 'valid' : 'null'}`);
-        if (schematic) {
-            logger.info(`[LitematicaBE] File loaded successfully`);
-            logger.info(`[LitematicaBE]   - Name: ${schematic.name}`);
-            logger.info(`[LitematicaBE]   - TotalBlocks: ${schematic.totalBlocks}`);
-            logger.info(`[LitematicaBE]   - Blocks array length: ${schematic.blocks?.length || 0}`);
-            logger.info(`[LitematicaBE]   - Dimensions: ${JSON.stringify(schematic.dimensions)}`);
+        const megaThreshold = configManager.get('megaSchematic.threshold', 30000);
+        
+        // 先尝试流式加载，获取元数据判断是否需要Mega模式
+        let useMegaMode = false;
+        let streamResult = null;
+        
+        try {
+            streamResult = await streamLoader.prepareStream(loader, fullPath);
+            if (streamResult && streamResult.totalEstimate > megaThreshold) {
+                useMegaMode = true;
+                logger.info(`[MegaSchematic] Auto-detected mega schematic: ${streamResult.totalEstimate} blocks (threshold: ${megaThreshold})`);
+            } else {
+                logger.info(`[MegaSchematic] Standard mode: ${streamResult?.totalEstimate || 0} blocks <= ${megaThreshold}`);
+            }
+        } catch (streamErr) {
+            logger.info(`[MegaSchematic] Stream detection failed: ${streamErr.message}, fallback to standard loading`);
         }
-        return schematic;
+        
+        // 根据检测结果选择加载模式
+        if (useMegaMode && streamResult) {
+            const megaResult = await megaManager.loadMegaSchematic(fullPath, streamResult, (blocks) => {
+                logger.info(`[MegaSchematic] Loading progress: ${blocks} blocks...`);
+            });
+            
+            const schematic = {
+                name: megaResult.meta.name,
+                author: megaResult.meta.author,
+                description: megaResult.meta.description || '',
+                dimensions: megaResult.meta.dimensions,
+                totalBlocks: megaResult.totalBlocks,
+                filePath: fullPath,
+                isMega: true,
+                schematicId: megaResult.schematicId,
+                blocks: [],
+                blockIndex: null,
+                blockChunks: null
+            };
+            
+            logger.info(`[MegaSchematic] Loaded mega schematic: ${schematic.name}, ${megaResult.totalBlocks} blocks, ${megaResult.chunkCount} chunks`);
+            return schematic;
+        } else {
+            // 标准加载（小投影或检测失败时回退）
+            logger.info(`[LitematicaBE] Using standard loader for: ${fullPath}`);
+            const schematic = await loader.load(fullPath);
+            schematic.isMega = false;
+            schematic.schematicId = null;
+            return schematic;
+        }
     } catch (e) {
         logger.error(`[LitematicaBE] Error loading file: ${e.message}`);
         return null;
@@ -813,6 +878,118 @@ function showProjectionInfo(player, output) {
     output.success(`§e方块数: §f${projection.totalBlocks}`);
     output.success(`§e尺寸: §f${projection.dimensions?.x}x${projection.dimensions?.y}x${projection.dimensions?.z}`);
     output.success(`§e创建时间: §f${new Date(projection.createdAt).toLocaleString()}`);
+    output.success(`§e超大型模式: §f${projection.isMega ? '是' : '否'}`);
+    
+    // 如果是Mega模式，显示额外调试信息
+    if (projection.isMega && projection.schematicId) {
+        const stateId = `${player.xuid}_${projection.schematicId}`;
+        const debugInfo = megaRenderer.getDebugInfo(stateId);
+        if (debugInfo) {
+            output.success("§6========== Mega渲染调试 ==========");
+            output.success(`§e调试模式: §f${debugInfo.config.debugMode}`);
+            output.success(`§e渲染距离: §f${debugInfo.config.defaultRenderDistance}`);
+            output.success(`§e每tick粒子: §f${debugInfo.config.maxParticlesPerTick}`);
+            output.success(`§e已加载区块: §f${debugInfo.memory.loadedChunks}`);
+            output.success(`§e可见区块: §f${debugInfo.memory.visibleChunks}`);
+            output.success(`§e待渲染: §f${debugInfo.memory.pendingRender}`);
+            output.success(`§e已渲染: §f${debugInfo.stats.totalParticles}`);
+            output.success(`§eLOD分布: §fN:${debugInfo.lodDistribution.near} M:${debugInfo.lodDistribution.medium} F:${debugInfo.lodDistribution.far}`);
+        }
+    }
+}
+
+/**
+ * 处理调试命令
+ */
+function handleDebugCommand(player, args, output) {
+    const subCommand = args[0]?.toLowerCase();
+    
+    switch (subCommand) {
+        case 'mega':
+        case 'megarender': {
+            const enabled = args[1] === 'on' || args[1] === 'true';
+            megaRenderer.setDebugMode(enabled);
+            output.success(`§aMega渲染调试模式: §f${enabled ? '开启' : '关闭'}`);
+            break;
+        }
+        
+        case 'lod': {
+            const enabled = args[1] === 'on' || args[1] === 'true';
+            megaRenderer.lodRenderer.setDebugMode(enabled);
+            output.success(`§aLOD调试模式: §f${enabled ? '开启' : '关闭'}`);
+            break;
+        }
+        
+        case 'stats': {
+            const playerData = dataManager.getPlayerData(player.xuid);
+            const projectionId = playerData.currentProjectionId;
+            
+            if (!projectionId) {
+                output.error("§c当前没有激活的投影");
+                return;
+            }
+            
+            const projection = dataManager.getProjection(projectionId);
+            if (!projection || !projection.isMega) {
+                output.error("§c当前投影不是超大型模式");
+                return;
+            }
+            
+            const stateId = `${player.xuid}_${projection.schematicId}`;
+            const stats = megaRenderer.getStats(stateId);
+            const debugInfo = megaRenderer.getDebugInfo(stateId);
+            
+            if (!stats) {
+                output.error("§c无法获取渲染统计");
+                return;
+            }
+            
+            output.success("§6========== Mega渲染统计 ==========");
+            output.success(`§e总粒子数: §f${stats.totalParticles}`);
+            output.success(`§e跳过数: §f${stats.particlesSkipped}`);
+            output.success(`§e已加载区块: §f${stats.loadedChunks}`);
+            output.success(`§e可见区块: §f${stats.visibleChunks}`);
+            output.success(`§e待渲染: §f${stats.pendingRender}`);
+            output.success(`§e层模式: §f${stats.isLayerMode ? '是' : '否'}`);
+            if (stats.isLayerMode) {
+                output.success(`§e当前层: §f${stats.currentLayer}`);
+            }
+            
+            if (debugInfo) {
+                output.success("§6========== LOD分布 ==========");
+                const lod = debugInfo.lodDistribution;
+                output.success(`§e近距离(≤32): §f${lod.near} (${(lod.near/lod.total*100).toFixed(1)}%)`);
+                output.success(`§e中距离(≤80): §f${lod.medium} (${(lod.medium/lod.total*100).toFixed(1)}%)`);
+                output.success(`§e远距离(≤160): §f${lod.far} (${(lod.far/lod.total*100).toFixed(1)}%)`);
+                output.success(`§e已过滤: §f${lod.filtered} (${(lod.filtered/lod.total*100).toFixed(1)}%)`);
+            }
+            break;
+        }
+        
+        case 'config': {
+            output.success("§6========== 当前配置 ==========");
+            output.success(`§e视口更新间隔: §f${megaRenderer.viewportUpdateInterval}ms`);
+            output.success(`§e每tick粒子: §f${megaRenderer.maxParticlesPerTick}`);
+            output.success(`§e渲染距离: §f${megaRenderer.defaultRenderDistance}`);
+            output.success(`§e调试模式: §f${megaRenderer.debugMode}`);
+            
+            const lodConfig = megaRenderer.lodRenderer.lodConfig;
+            output.success("§6========== LOD配置 ==========");
+            output.success(`§eNEAR: §f≤${lodConfig.NEAR.distance}格, skip=${lodConfig.NEAR.skipRate}`);
+            output.success(`§eMEDIUM: §f≤${lodConfig.MEDIUM.distance}格, skip=${lodConfig.MEDIUM.skipRate}`);
+            output.success(`§eFAR: §f≤${lodConfig.FAR.distance}格, skip=${lodConfig.FAR.skipRate}`);
+            output.success(`§eOUTLINE: §f>${lodConfig.FAR.distance}格`);
+            break;
+        }
+        
+        default:
+            output.success("§6========== 调试命令帮助 ==========");
+            output.success("§e/lit debug mega <on|off> §f- 切换Mega渲染调试模式");
+            output.success("§e/lit debug lod <on|off> §f- 切换LOD调试模式");
+            output.success("§e/lit debug stats §f- 显示渲染统计");
+            output.success("§e/lit debug config §f- 显示当前配置");
+            break;
+    }
 }
 
 function listProjections(player, output) {
@@ -856,12 +1033,45 @@ function handleRemoveCommand(player, projectionId, output) {
     output.success(`已删除投影: ${projection.name}`);
 }
 
+function handleVerifyCommand(player, output) {
+    const activeProj = projManager.getActiveProjectionByPlayer(player);
+    
+    if (!activeProj || !activeProj.projection) {
+        output.error("§c你没有正在操作的投影");
+        output.success("§e请先放置投影");
+        return;
+    }
+    
+    const projection = activeProj.projection;
+    output.success("§7正在验证投影...");
+    
+    const results = easyPlaceManager.verifyProjection(projection);
+    
+    output.success("§6========== 验证结果 ==========");
+    output.success(`§e总方块数: §f${results.total}`);
+    output.success(`§a完全匹配: §f${results.match}`);
+    output.success(`§e状态错误: §f${results.typeMatch}`);
+    output.success(`§c错误方块: §f${results.noMatch}`);
+    output.success(`§b缺失方块: §f${results.missing}`);
+    
+    const matchPercent = results.total > 0 ? ((results.match / results.total) * 100).toFixed(1) : 0;
+    output.success(`§7完成度: §f${matchPercent}%`);
+    
+    if (results.blocks.length > 0 && results.blocks.length <= 10) {
+        output.success("§7问题方块:");
+        for (const block of results.blocks) {
+            const color = block.level === 1 ? "§c" : (block.level === 2 ? "§e" : "§b");
+            output.success(`  ${color}(${block.position.x}, ${block.position.y}, ${block.position.z}) - ${block.levelName}`);
+        }
+    } else if (results.blocks.length > 10) {
+        output.success(`§7共有 ${results.blocks.length} 个问题方块`);
+    }
+}
+
 // ==================== 事件监听 ====================
 
 // 玩家加入
 mc.listen("onJoin", (player) => {
-    logger.info(`Player ${player.name} joined`);
-    
     // 更新玩家数据
     const playerData = dataManager.getPlayerData(player.xuid);
     playerData.lastLogin = Date.now();
@@ -874,9 +1084,12 @@ mc.listen("onJoin", (player) => {
 
 // 玩家离开
 mc.listen("onLeft", (player) => {
-    logger.info(`Player ${player.name} left`);
-
     renderer.clearPlayerProjection(player);
+    // 先获取活动投影信息，再删除
+    const activeForLeft = projManager.getActiveProjection(player.xuid);
+    if (activeForLeft && activeForLeft.projection && activeForLeft.projection.schematicId) {
+        megaRenderer.stopRender(`${player.xuid}_${activeForLeft.projection.schematicId}`);
+    }
     projManager.removeActiveProjection(player.xuid);
     playerSessions.delete(player.xuid);
 });

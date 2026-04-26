@@ -45,15 +45,33 @@ class InventoryHelper {
 
     getSelectedSlot(player) {
         try {
+            if (player.selectedSlot !== undefined) {
+                return player.selectedSlot;
+            }
+            
+            const inventory = player.getInventory();
+            if (inventory && inventory.selectedSlot !== undefined) {
+                return inventory.selectedSlot;
+            }
+            
             const nbt = player.getNbt();
-            if (nbt && nbt.has('SelectedSlot')) {
-                const slot = nbt.get('SelectedSlot');
-                if (typeof slot === 'number' && slot >= 0 && slot <= 8) {
-                    return slot;
+            if (nbt) {
+                const data = nbt.getData ? nbt.getData() : nbt;
+                if (data && data.SelectedSlot !== undefined) {
+                    return data.SelectedSlot;
+                }
+                if (typeof nbt.get === 'function') {
+                    try {
+                        const slot = nbt.get('SelectedSlot');
+                        if (typeof slot === 'number' && slot >= 0 && slot <= 8) {
+                            return slot;
+                        }
+                    } catch (e) {
+                    }
                 }
             }
         } catch (e) {
-            logger.warn(`[EasyPlace] Failed to get selected slot from NBT: ${e.message}`);
+            logger.warn(`[EasyPlace] Failed to get selected slot: ${e.message}`);
         }
         return 0;
     }

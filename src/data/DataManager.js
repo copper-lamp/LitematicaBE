@@ -70,15 +70,30 @@ class DataManager {
 
     /**
      * 保存投影数据
+     * 对于超大型投影，不保存 blocks 数组（因为数据存储在分块文件中）
      */
     saveProjections() {
         const filePath = DATA_PATH + PROJECTIONS_FILE;
         
         try {
+            // 处理投影数据，移除超大数组
+            const processedProjections = Array.from(this.projections.values()).map(proj => {
+                // 如果是超大型投影或 blocks 数组过大，移除 blocks
+                if (proj.isMega || (proj.blocks && proj.blocks.length > 100000)) {
+                    return {
+                        ...proj,
+                        blocks: [], // 清空 blocks 数组
+                        blockIndex: null, // 清空索引
+                        blockChunks: null
+                    };
+                }
+                return proj;
+            });
+            
             const data = {
                 version: '2.0.0',
                 lastUpdate: Date.now(),
-                projections: Array.from(this.projections.values())
+                projections: processedProjections
             };
             
             File.writeTo(filePath, JSON.stringify(data, null, 2));

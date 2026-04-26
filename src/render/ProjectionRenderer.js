@@ -196,11 +196,12 @@ class ProjectionRenderer {
             if (isLayerMode) {
                 // 逐层模式：只重生当前层的粒子
                 const maxLayer = task.projection.dimensions.y - 1;
-                const currentLayer = this.currentRenderLayer.get(playerXuid) || maxLayer;
-                blocksToRespawn = sourceBlocks.filter(b => b.pos[1] === currentLayer);
+                const currentLayer = this.currentRenderLayer.get(playerXuid);
+                const actualLayer = (currentLayer !== undefined && currentLayer !== null) ? currentLayer : maxLayer;
+                blocksToRespawn = sourceBlocks.filter(b => b.pos[1] === actualLayer);
                 
                 // 调试日志
-                logger.info(`[ParticleRespawn] 逐层模式 - 当前层: ${currentLayer}, 源方块数: ${sourceBlocks.length}, 过滤后: ${blocksToRespawn.length}`);
+                logger.info(`[ParticleRespawn] 逐层模式 - 当前层: ${actualLayer}, 源方块数: ${sourceBlocks.length}, 过滤后: ${blocksToRespawn.length}`);
             } else {
                 // 非逐层模式：重生所有粒子
                 blocksToRespawn = sourceBlocks;
@@ -561,7 +562,7 @@ class ProjectionRenderer {
         };
 
         // 注册事件监听
-        mc.listen('onBlockPlaced', handler);
+        mc.listen('afterPlaceBlock', handler);
         this.easyPlaceHandler = handler;
     }
 
