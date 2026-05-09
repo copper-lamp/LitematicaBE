@@ -1,5 +1,6 @@
-// MegaProjectionRenderer - 超大型投影渲染器
-// 使用分块按需加载 + LOD细节层次 + 分批渲染
+// MegaProjectionRenderer - 超大型投影 LOD 分块管理器
+// 负责视口计算、LOD分块按需加载/卸载，方块数据提供给 ProjectionRenderer 统一渲染
+// 不直接生成粒子 —— 所有渲染由 ProjectionRenderer 处理
 // 支持 500,000+ 方块的超大型投影流畅渲染
 
 const { LODRenderer } = require('./LODRenderer');
@@ -79,7 +80,17 @@ class MegaProjectionRenderer {
      * 记录调试日志
      */
     log(level, category, message, data = null) {
-        // 控制台输出
+        // WARN/ERROR level always output to console
+        if (level === 'WARN' || level === 'ERROR') {
+            if (data) {
+                logger.warn(`[MegaRender][${category}] ${message} ${JSON.stringify(data)}`);
+            } else {
+                logger.warn(`[MegaRender][${category}] ${message}`);
+            }
+            return;
+        }
+        
+        // 控制台输出（debug）
         if (this.debugMode) {
             if (data) {
                 logger.info(`[MegaRender][${category}] ${message} ${JSON.stringify(data)}`);
@@ -100,34 +111,32 @@ class MegaProjectionRenderer {
     initRenderState(player, schematicId, projection) {
         const stateId = `${player.xuid}_${schematicId}`;
 
+        if (this.renderStates.has(stateId)) {
+            return this.renderStates.get(stateId);
+        }
+
         const state = {
             player,
             schematicId,
             projection,
             visibleChunks: new Set(),
             loadedChunks: new Map(),
-            pendingRender: [],
-            renderedPositions: new Set(),
-            placedPositions: new Set(),
             lastViewportUpdate: 0,
             lastChunkLoad: 0,
+            lastStatusLog: 0,
             isActive: true,
             isLayerMode: false,
             currentLayer: -1,
+            _needsSync: true,
             stats: {
-                totalParticles: 0,
                 chunksLoaded: 0,
-                particlesSkipped: 0,
                 lodStats: { NEAR: 0, MEDIUM: 0, FAR: 0, filtered: 0 }
             }
         };
 
         this.renderStates.set(stateId, state);
-        this.log('INFO', 'INIT', `Initialized render state: ${stateId}`, { 
-            projection: projection.name, 
-            isMega: projection.isMega,
-            totalBlocks: projection.totalBlocks 
-        });
+        
+        logger.info(`[MegaRender][INIT] State created: ${stateId} name="${projection.name}" totalBlocks=${projection.totalBlocks} isMega=${!!projection.isMega}`);
         
         if (this.debugMode) {
             player.tell(`§7[Debug] MegaRender init: ${projection.name}, blocks=${projection.totalBlocks}`);
@@ -150,28 +159,84 @@ class MegaProjectionRenderer {
             const player = state.player;
             if (!player || !player.pos) {
                 state.isActive = false;
-                if (this.debugMode) logger.info(`[MegaRender] State ${stateId} inactive: no player pos`);
+                logger.warn(`[MegaRender] State ${stateId} inactive: no player reference`);
                 continue;
             }
 
-            if (!mc.getPlayer(player.xuid)) {
+            const onlinePlayer = mc.getPlayer(player.xuid);
+            if (!onlinePlayer) {
                 state.isActive = false;
-                if (this.debugMode) logger.info(`[MegaRender] State ${stateId} inactive: player offline`);
+                logger.warn(`[MegaRender] State ${stateId} inactive: player offline`);
                 continue;
             }
+            
+            state.player = onlinePlayer;
 
-            if (now - state.lastViewportUpdate >= this.viewportUpdateInterval) {
+            const viewportChanged = now - state.lastViewportUpdate >= this.viewportUpdateInterval;
+            if (viewportChanged) {
                 this.updateViewport(state);
                 state.lastViewportUpdate = now;
+                state._needsSync = true;
             }
-
-            this.renderBatch(state, Math.min(this.maxParticlesPerTick, 2000));
             
-            // 每100tick输出一次调试信息
+            // 层模式切换或视口变化后，同步方块数据到 ProjectionRenderer
+            if (state._needsSync) {
+                this.syncBlocksToRenderer(state);
+                state._needsSync = false;
+            }
+            
+            if (now - state.lastStatusLog >= 2000) {
+                logger.info(`[MegaRender] status=${stateId} chunks=${state.loadedChunks.size} cachedBlocks=${this.countCachedBlocks(state)} N=${state.stats.lodStats.NEAR} M=${state.stats.lodStats.MEDIUM} F=${state.stats.lodStats.FAR}`);
+                state.lastStatusLog = now;
+            }
+            
             if (this.debugMode && this.tickCount % 100 === 0) {
                 this.outputDebugInfo(state);
             }
         }
+    }
+    
+    /**
+     * 统计当前缓存的方块数
+     */
+    countCachedBlocks(state) {
+        let count = 0;
+        for (const chunk of state.loadedChunks.values()) {
+            count += chunk.worldBlocks.length;
+        }
+        return count;
+    }
+    
+    /**
+     * 将当前分块中的方块数据同步给 ProjectionRenderer
+     * 应用 LOD 和 layer 过滤
+     */
+    syncBlocksToRenderer(state) {
+        const renderer = global.renderer;
+        if (!renderer || !state.player) return;
+        
+        // 严格节流：3秒内最多同步一次，确保批次渲染有足够时间完成
+        const now = Date.now();
+        if (!state._lastSyncTime) state._lastSyncTime = 0;
+        if (now - state._lastSyncTime < 3000) {
+            return;
+        }
+        
+        const allBlocks = [];
+        for (const chunk of state.loadedChunks.values()) {
+            for (const block of chunk.worldBlocks) {
+                if (state.isLayerMode && state.currentLayer >= 0 && block.pos[1] !== state.currentLayer) {
+                    continue;
+                }
+                allBlocks.push(block);
+            }
+        }
+        
+        state._lastSyncTime = now;
+        state._lastSyncBlockCount = allBlocks.length;
+        
+        logger.info(`[MegaRender][SYNC] feeding ${allBlocks.length} blocks (layerMode=${state.isLayerMode} layer=${state.currentLayer})`);
+        renderer.updateBlocks(state.player.xuid, allBlocks);
     }
     
     /**
@@ -183,9 +248,8 @@ class MegaProjectionRenderer {
         if (!player) return;
         
         const lod = stats.lodStats;
-        const totalLod = lod.NEAR + lod.MEDIUM + lod.FAR;
         
-        player.tell(`§8[Debug] Chunks:${state.loadedChunks.size} Pending:${state.pendingRender.length} Rendered:${stats.totalParticles} LOD[N:${lod.NEAR} M:${lod.MEDIUM} F:${lod.FAR}]`);
+        player.tell(`§8[Debug] Chunks:${state.loadedChunks.size} Cached:${this.countCachedBlocks(state)} LOD[N:${lod.NEAR} M:${lod.MEDIUM} F:${lod.FAR}]`);
     }
 
     /**
@@ -322,14 +386,7 @@ class MegaProjectionRenderer {
         
         const totalLoaded = nearCount + mediumCount + farCount;
         if (totalLoaded > 0 || unloadedCount > newVisible.size) {
-            this.log('DEBUG', 'VIEWPORT', 'Update', { 
-                visible: newVisible.size, 
-                loaded: totalLoaded,
-                near: nearCount,
-                medium: mediumCount,
-                far: farCount,
-                unloaded: unloadedCount - newVisible.size 
-            });
+            logger.info(`[MegaRender][VIEWPORT] visible=${newVisible.size} loaded=${totalLoaded} N=${nearCount} M=${mediumCount} F=${farCount} unloaded=${unloadedCount - newVisible.size}`);
         }
     }
 
@@ -344,8 +401,12 @@ class MegaProjectionRenderer {
         const chunkBlocks = this.megaManager.loadChunkFromDisk(schematicId, cx, cy, cz);
         if (!chunkBlocks || chunkBlocks.length === 0) {
             state.visibleChunks.delete(chunkKey);
-            this.log('DEBUG', 'CHUNK', `Empty or not found: ${chunkKey}`);
             return;
+        }
+
+        // 首次加载chunk时有日志
+        if (!state.loadedChunks.has(chunkKey)) {
+            logger.info(`[MegaRender][CHUNK] loaded=${chunkKey} blocks=${chunkBlocks.length} lod=${lodLevel}`);
         }
 
         const playerPos = state.player.pos;
@@ -398,16 +459,6 @@ class MegaProjectionRenderer {
             loadedAt: Date.now()
         });
 
-        for (const block of worldBlocks) {
-            const posKey = `${block.worldPos[0]},${block.worldPos[1]},${block.worldPos[2]}`;
-            if (state.isLayerMode && state.currentLayer >= 0 && block.pos[1] !== state.currentLayer) {
-                continue;
-            }
-            if (!state.renderedPositions.has(posKey) && !state.placedPositions.has(posKey)) {
-                state.pendingRender.push(block);
-            }
-        }
-
         state.stats.chunksLoaded++;
     }
 
@@ -415,51 +466,19 @@ class MegaProjectionRenderer {
      * 卸载一个分块
      */
     unloadChunk(state, chunkKey) {
-        const chunk = state.loadedChunks.get(chunkKey);
-        if (chunk) {
-            for (const block of chunk.worldBlocks) {
-                const posKey = `${block.worldPos[0]},${block.worldPos[1]},${block.worldPos[2]}`;
-                state.renderedPositions.delete(posKey);
-                state.pendingRender = state.pendingRender.filter(b =>
-                    `${b.worldPos[0]},${b.worldPos[1]},${b.worldPos[2]}` !== posKey
-                );
-            }
+        if (state.loadedChunks.has(chunkKey)) {
             state.loadedChunks.delete(chunkKey);
-            this.log('DEBUG', 'CHUNK', `Unloaded: ${chunkKey}`);
         }
     }
 
     /**
-     * 渲染一批粒子
+     * 获取维度名称
      */
-    renderBatch(state, maxCount) {
-        const player = state.player;
-        if (!player || !player.spawnParticle) return;
-
-        const pending = state.pendingRender;
-        let rendered = 0;
-
-        while (rendered < maxCount && pending.length > 0) {
-            const block = pending.shift();
-            const posKey = `${block.worldPos[0]},${block.worldPos[1]},${block.worldPos[2]}`;
-
-            if (state.placedPositions.has(posKey)) {
-                state.stats.particlesSkipped++;
-                continue;
-            }
-
-            if (!this.isInPlayerRange(player, block)) {
-                continue;
-            }
-
-            try {
-                this.spawnParticleForBlock(player, block);
-                state.renderedPositions.add(posKey);
-                state.stats.totalParticles++;
-                rendered++;
-            } catch (e) {
-                this.log('WARN', 'RENDER', `Failed to spawn particle`, { error: e.message });
-            }
+    getDimensionName(dimension) {
+        switch (dimension) {
+            case 1: return 'the_nether';
+            case 2: return 'the_end';
+            default: return 'overworld';
         }
     }
 
@@ -478,57 +497,6 @@ class MegaProjectionRenderer {
     }
 
     /**
-     * 为方块生成粒子
-     */
-    spawnParticleForBlock(player, block) {
-        const [wx, wy, wz] = block.worldPos;
-        const fullBlockName = block.name || '';
-        const particleId = this.getParticleId(fullBlockName, false);
-
-        const adjustedPos = [wx + 0.5, wy + 0.5, wz + 0.5];
-
-        if (player.spawnParticle) {
-            player.spawnParticle(
-                particleId,
-                { x: adjustedPos[0], y: adjustedPos[1], z: adjustedPos[2] }
-            );
-        }
-    }
-
-    /**
-     * 获取粒子ID
-     */
-    getParticleId(fullBlockName, isError = false) {
-        let baseName = fullBlockName.toLowerCase();
-        if (baseName.includes(':')) {
-            baseName = baseName.split(':')[1] || baseName.split(':')[0];
-        }
-
-        let textureName = baseName.replace(/[^a-z0-9_]/g, '_').replace(/_+$/, '');
-
-        if (textureName === 'smooth_quartz') textureName = 'quartz_block_bottom';
-        else if (textureName === 'quartz_block') textureName = 'quartz_block_side';
-
-        const suffix = isError ? 'error' : 'normal';
-        return `litematica:block_${textureName}_${suffix}`;
-    }
-
-    /**
-     * 标记方块为已放置
-     */
-    markBlockPlaced(state, worldPos) {
-        const posKey = `${worldPos[0]},${worldPos[1]},${worldPos[2]}`;
-        state.placedPositions.add(posKey);
-        state.renderedPositions.delete(posKey);
-
-        state.pendingRender = state.pendingRender.filter(b =>
-            `${b.worldPos[0]},${b.worldPos[1]},${b.worldPos[2]}` !== posKey
-        );
-        
-        this.log('DEBUG', 'BLOCK', `Marked as placed: ${posKey}`);
-    }
-
-    /**
      * 切换到层次渲染模式
      */
     setLayerMode(stateId, layerY) {
@@ -537,24 +505,12 @@ class MegaProjectionRenderer {
 
         state.isLayerMode = true;
         state.currentLayer = layerY;
-        state.pendingRender = [];
-        state.renderedPositions.clear();
+        state._needsSync = true;
 
-        for (const [chunkKey, chunk] of state.loadedChunks) {
-            for (const block of chunk.worldBlocks) {
-                if (block.pos[1] === layerY) {
-                    const posKey = `${block.worldPos[0]},${block.worldPos[1]},${block.worldPos[2]}`;
-                    if (!state.placedPositions.has(posKey)) {
-                        state.pendingRender.push(block);
-                    }
-                }
-            }
-        }
-
-        this.log('INFO', 'LAYER', `Layer mode: ${layerY}`, { pending: state.pendingRender.length });
+        logger.info(`[MegaRender][LAYER] stateId=${stateId} layer=${layerY}`);
         
         if (this.debugMode && state.player) {
-            state.player.tell(`§7[Debug] Layer mode: ${layerY}, pending=${state.pendingRender.length}`);
+            state.player.tell(`§7[Debug] Layer mode: ${layerY}`);
         }
         
         return true;
@@ -568,9 +524,9 @@ class MegaProjectionRenderer {
         if (!state) return;
 
         state.isActive = false;
-        const totalParticles = state.stats.totalParticles;
+        const chunkCount = state.loadedChunks.size;
         this.renderStates.delete(stateId);
-        this.log('INFO', 'STOP', `Stopped: ${stateId}`, { totalParticles });
+        logger.info(`[MegaRender][STOP] stopped=${stateId} chunks=${chunkCount}`);
     }
 
     /**
@@ -601,8 +557,6 @@ class MegaProjectionRenderer {
             ...state.stats,
             loadedChunks: state.loadedChunks.size,
             visibleChunks: state.visibleChunks.size,
-            pendingRender: state.pendingRender.length,
-            renderedPositions: state.renderedPositions.size,
             isLayerMode: state.isLayerMode,
             currentLayer: state.currentLayer
         };

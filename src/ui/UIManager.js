@@ -1,4 +1,4 @@
-﻿﻿// UIManager - UI管理器
+// UIManager - UI管理器
 // 处理GUI表单、屏幕提示、ActionBar消息等
 
 const fs = require('fs');
@@ -156,15 +156,15 @@ class UIManager {
     }
 
     async loadAndPlaceSchematic(player, schematic) {
-        const loader = global.loader;
         const dataManager = global.dataManager;
         const renderer = global.renderer;
+        const loadSchematicFile = global.loadSchematicFile;
+        const megaRenderer = global.megaRenderer;
+        const projManager = global.projManager;
 
         try {
-            const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
-            let filePath = SCHEMATIC_PATH + schematic.file;
-
-            const loadedSchematic = await loader.load(filePath);
+            // 使用 loadSchematicFile 以支持 Mega 模式自动检测
+            const loadedSchematic = await loadSchematicFile(schematic.file.replace('.litematic', ''));
 
             if (!loadedSchematic) {
                 player.tell('§c加载失败：无法解析原理图文件');
@@ -178,12 +178,14 @@ class UIManager {
                 z: Math.floor(pos.z)
             };
 
+            const isMega = loadedSchematic.isMega && loadedSchematic.schematicId;
+
             const projection = {
                 id: dataManager.generateId(),
                 name: loadedSchematic.name,
                 author: loadedSchematic.author,
                 dimensions: loadedSchematic.dimensions,
-                blocks: loadedSchematic.blocks,
+                blocks: loadedSchematic.blocks || [],
                 position: placePos,
                 dimension: player.dim,
                 file: schematic.file,
@@ -196,32 +198,44 @@ class UIManager {
                 showBounds: true,
                 boundsColor: "#00FF00",
                 createdAt: Date.now(),
-                totalBlocks: loadedSchematic.blocks.length
+                totalBlocks: loadedSchematic.totalBlocks || (loadedSchematic.blocks?.length || 0),
+                isMega: isMega,
+                schematicId: loadedSchematic.schematicId || null,
+                blockIndex: loadedSchematic.blockIndex || null,
+                blockChunks: loadedSchematic.blockChunks || null
             };
 
             dataManager.addProjection(projection);
             dataManager.setPlayerCurrentProjection(player.xuid, projection.id);
 
-            const projManager = global.projManager;
             if (projManager) {
                 projManager.activateProjection(player, projection);
             }
 
-            const renderer = global.renderer;
-            if (renderer) {
-                renderer.layerRenderMode.set(player.xuid, false);
-                renderer.currentRenderLayer.set(player.xuid, -1);
+            if (isMega) {
+                // 超大型投影：Mega 管理 LOD 分块，ProjectionRenderer 统一渲染
+                megaRenderer.initRenderState(player, loadedSchematic.schematicId, projection);
+                player.tell('§6⚡ 已启用超大型投影渲染模式');
             }
 
+            // 统一渲染路径（Mega 和普通模式同样走 ProjectionRenderer）
+            renderer.layerRenderMode.set(player.xuid, false);
+            renderer.currentRenderLayer.set(player.xuid, -1);
             renderer.startRender(player, projection, -1);
+            // MegaProjectionRenderer.onTick 会通过 updateBlocks 注入 LOD 方块数据
 
             player.tell(`§a投影 "${projection.name}" 已加载！`);
             player.tell(`§a位置: (${placePos.x}, ${placePos.y}, ${placePos.z})`);
-            player.tell(`§a方块数: ${loadedSchematic.blocks.length}`);
+            player.tell(`§a方块数: ${loadedSchematic.totalBlocks || loadedSchematic.blocks?.length || 0}`);
+            if (isMega) {
+                player.tell('§6⚡ 超大型投影模式 - 使用LOD渲染');
+            }
             player.tell(`§e使用 §e/litematica build §e切换到建造模式(逐层渲染)`);
 
         } catch (e) {
             player.tell('§c加载失败：' + e.message);
+            logger.error(`[UIManager] loadAndPlaceSchematic error: ${e.message}`);
+            logger.error(`[UIManager] Stack: ${e.stack}`);
         }
     }
 
@@ -256,8 +270,9 @@ class UIManager {
         fm.setContent(`找到 ${projections.length} 个已放置的投影\n点击选择一个投影查看详情：`);
 
         for (const proj of projections) {
+            if (!proj) continue;
             const status = this.isProjectionLoaded(player, proj.id) ? '[已加载]' : '[未加载]';
-            fm.addButton(`${proj.name}\n${status} (${proj.dimensions?.x}×${proj.dimensions?.y}×${proj.dimensions?.z})`);
+            fm.addButton(`${proj.name || '未命名'}\n${status} (${proj.dimensions?.x || '?'}×${proj.dimensions?.y || '?'}×${proj.dimensions?.z || '?'})`);
         }
         fm.addButton('+ 浏览新原理图');
         fm.addButton('返回主菜单');
@@ -279,11 +294,21 @@ class UIManager {
             }
 
             const selectedProj = projections[data];
-            this.showProjectionDetail(player, selectedProj);
+            if (selectedProj) {
+                this.showProjectionDetail(player, selectedProj);
+            } else {
+                this.showMainMenu(player);
+            }
         });
     }
 
     showProjectionDetail(player, projection) {
+        if (!projection) {
+            player.tell('§c投影不存在');
+            this.showMainMenu(player);
+            return;
+        }
+        
         const isLoaded = this.isProjectionLoaded(player, projection.id);
         const renderer = global.renderer;
         const currentLayer = renderer?.currentRenderLayer?.get(player.xuid) || 0;
@@ -364,6 +389,7 @@ class UIManager {
     }
 
     isProjectionLoaded(player, projectionId) {
+        if (!projectionId) return false;
         const renderer = global.renderer;
         if (!renderer) return false;
         const task = renderer.activeProjections.get(player.xuid);
@@ -397,12 +423,12 @@ class UIManager {
         player.sendForm(fm, (player, data) => {
             if (data === 0) {
                 const dataManager = global.dataManager;
-                if (dataManager) {
+                if (dataManager && projection && projection.id) {
                     if (this.isProjectionLoaded(player, projection.id)) {
                         renderer.cancelRender(player);
                     }
                     dataManager.removeProjection(projection.id);
-                    player.tell('§a投影 "${projection.name}" 已删除');
+                    player.tell(`§a投影 "${projection.name}" 已删除`);
                 }
                 setTimeout(() => {
                     this.showLoadProjection(player);
@@ -539,11 +565,15 @@ class UIManager {
         player.sendForm(fm, (player, data) => {
             if (data === 0) {
                 const dataManager = global.dataManager;
-                const projections = dataManager.getAllProjections();
-                for (const proj of projections) {
-                    dataManager.removeProjection(proj.id);
+                if (dataManager) {
+                    const projections = dataManager.getAllProjections();
+                    for (const proj of projections) {
+                        if (proj && proj.id) {
+                            dataManager.removeProjection(proj.id);
+                        }
+                    }
+                    player.tell('§a所有投影已清除');
                 }
-                player.tell('§a所有投影已清除');
             }
             this.showMainMenu(player);
         });
@@ -551,6 +581,8 @@ class UIManager {
 
     showProjectionOperations(player) {
         const renderer = global.renderer;
+        const easyPlaceManager = global.easyPlaceManager;
+        
         if (!renderer) {
             player.tell('§c错误：渲染器未初始化');
             this.showMainMenu(player);
@@ -558,20 +590,29 @@ class UIManager {
         }
 
         const isLayerMode = renderer.layerRenderMode?.get(player.xuid) || false;
-        const isEasyPlace = renderer.easyPlaceMode?.get(player.xuid) || false;
+        const isEasyPlace = easyPlaceManager?.isEnabled(player) || false;
+        const isFastPlace = easyPlaceManager?.isFastPlaceEnabled(player) || false;
         const hasActive = renderer.activeProjections?.has(player.xuid);
+
+        const layerStatus = isLayerMode ? '开启' : '关闭';
+        const easyStatus = isEasyPlace ? '开启' : '关闭';
+        const fastStatus = isFastPlace ? '开启' : '关闭';
+        const projStatus = hasActive ? '已加载' : '未加载';
 
         const fm = mc.newSimpleForm();
         fm.setTitle('投影操作');
         fm.setContent(
             `当前状态:\n` +
-            `逐层显示: ${isLayerMode ? '开启' : '关闭'}\n` +
-            `轻松放置: ${isEasyPlace ? '开启' : '关闭'}\n` +
-            `投影状态: ${hasActive ? '已加载' : '未加载'}`
+            `逐层显示: ${layerStatus}\n` +
+            `轻松放置: ${easyStatus}\n` +
+            `投影打印机: ${fastStatus}\n` +
+            `投影状态: ${projStatus}`
         );
 
         fm.addButton(`${isLayerMode ? '关闭' : '开启'}逐层显示`);
         fm.addButton(`${isEasyPlace ? '关闭' : '开启'}轻松放置`);
+        fm.addButton(`${isFastPlace ? '关闭' : '开启'}投影打印机`);
+        fm.addButton('验证投影');
         fm.addButton('取消渲染');
         fm.addButton('返回主菜单');
 
@@ -589,9 +630,15 @@ class UIManager {
                     this.toggleEasyPlaceFromMenu(player);
                     break;
                 case 2:
-                    this.cancelRenderFromMenu(player);
+                    this.toggleFastPlaceFromMenu(player);
                     break;
                 case 3:
+                    this.showVerifyResult(player);
+                    break;
+                case 4:
+                    this.cancelRenderFromMenu(player);
+                    break;
+                case 5:
                 default:
                     this.showMainMenu(player);
                     break;
@@ -674,6 +721,75 @@ class UIManager {
         setTimeout(() => {
             this.showMainMenu(player);
         }, 500);
+    }
+
+    toggleFastPlaceFromMenu(player) {
+        const easyPlaceManager = global.easyPlaceManager;
+        if (!easyPlaceManager) {
+            player.tell('§c错误：轻松放置模块未初始化');
+            this.showProjectionOperations(player);
+            return;
+        }
+
+        easyPlaceManager.toggleFastPlace(player);
+
+        setTimeout(() => {
+            this.showProjectionOperations(player);
+        }, 500);
+    }
+
+    showVerifyResult(player) {
+        const easyPlaceManager = global.easyPlaceManager;
+        const projManager = global.projManager;
+        
+        if (!easyPlaceManager) {
+            player.tell('§c错误：验证模块未初始化');
+            this.showProjectionOperations(player);
+            return;
+        }
+
+        const activeProj = projManager?.getActiveProjectionByPlayer(player);
+        
+        if (!activeProj || !activeProj.projection) {
+            player.tell('§c没有活动的投影');
+            this.showProjectionOperations(player);
+            return;
+        }
+
+        const projection = activeProj.projection;
+        const results = easyPlaceManager.verifyProjection(projection);
+
+        const matchPercent = results.total > 0 ? ((results.match / results.total) * 100).toFixed(1) : 0;
+
+        const fm = mc.newSimpleForm();
+        fm.setTitle('验证结果');
+        fm.setContent(
+            `投影: ${projection.name}\n\n` +
+            `§e总方块数: §f${results.total}\n` +
+            `§a完全匹配: §f${results.match}\n` +
+            `§e状态错误: §f${results.typeMatch}\n` +
+            `§c错误方块: §f${results.noMatch}\n` +
+            `§b缺失方块: §f${results.missing}\n\n` +
+            `§7完成度: §f${matchPercent}%`
+        );
+
+        if (results.blocks.length > 0 && results.blocks.length <= 20) {
+            let blockList = '\n§7问题方块列表:\n';
+            for (const block of results.blocks.slice(0, 10)) {
+                const color = block.level === 1 ? '§c' : (block.level === 2 ? '§e' : '§b');
+                blockList += `${color}(${block.position.x}, ${block.position.y}, ${block.position.z})\n`;
+            }
+            if (results.blocks.length > 10) {
+                blockList += `§7... 还有 ${results.blocks.length - 10} 个`;
+            }
+            fm.setContent(fm.content + blockList);
+        }
+
+        fm.addButton('返回');
+
+        player.sendForm(fm, (player, data) => {
+            this.showProjectionOperations(player);
+        });
     }
 }
 

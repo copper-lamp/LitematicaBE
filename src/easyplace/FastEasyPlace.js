@@ -1,5 +1,6 @@
 const { BlockConversions } = require('./BlockConversions');
 const { InventoryHelper } = require('./InventoryHelper');
+const { SpatialIndexUtils } = require('./SpatialIndexUtils');
 
 class FastEasyPlace {
     static SEARCH_RADIUS = 5;
@@ -125,26 +126,29 @@ class FastEasyPlace {
     findBlocksInRadius(projection, playerPos, currentLayer) {
         const results = [];
         const projPos = projection.position;
-        const projDim = projection.dimensions;
         const dimid = playerPos.dimid;
 
         const centerX = Math.floor(playerPos.x);
         const centerY = Math.floor(playerPos.y);
         const centerZ = Math.floor(playerPos.z);
         const radius = FastEasyPlace.SEARCH_RADIUS;
+        const radiusSquared = radius * radius;
 
-        for (const block of projection.blocks) {
+        const candidateBlocks = SpatialIndexUtils.getBlocksInRadius(
+            projection, centerX, centerY, centerZ, radius
+        );
+
+        for (const block of candidateBlocks) {
             const worldX = projPos.x + block.pos[0];
             const worldY = projPos.y + block.pos[1];
             const worldZ = projPos.z + block.pos[2];
 
-            const dist = Math.sqrt(
+            const distSquared =
                 Math.pow(worldX - centerX, 2) +
                 Math.pow(worldY - centerY, 2) +
-                Math.pow(worldZ - centerZ, 2)
-            );
+                Math.pow(worldZ - centerZ, 2);
 
-            if (dist > radius) {
+            if (distSquared > radiusSquared) {
                 continue;
             }
 

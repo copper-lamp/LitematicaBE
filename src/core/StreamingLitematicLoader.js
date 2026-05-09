@@ -24,17 +24,26 @@ class StreamingLitematicLoader {
 
         logger.info(`[StreamLoader] File size: ${fileData.length} bytes`);
 
+        // 检查 zlib 是否可用
+        if (!global.zlib) {
+            throw new Error('zlib module not available, cannot decompress .litematic file');
+        }
+
         let decompressed = null;
         let nbtData = null;
 
+        // 检查是否是 GZIP 格式
         if (fileData[0] === 0x1f && fileData[1] === 0x8b) {
+            logger.info(`[StreamLoader] Detected GZIP format, decompressing...`);
             decompressed = this.gunzipData(fileData);
-            if (decompressed) {
-                nbtData = this.parseNBTHeader(decompressed);
+            if (!decompressed) {
+                throw new Error('Failed to decompress GZIP data');
             }
-        }
-
-        if (!nbtData) {
+            logger.info(`[StreamLoader] Decompressed size: ${decompressed.length} bytes`);
+            nbtData = this.parseNBTHeader(decompressed);
+        } else {
+            // 未压缩的数据
+            logger.info(`[StreamLoader] Uncompressed data, parsing directly...`);
             nbtData = this.parseNBTHeader(fileData);
             decompressed = fileData;
         }
@@ -42,6 +51,8 @@ class StreamingLitematicLoader {
         if (!nbtData) {
             throw new Error('Failed to parse NBT header');
         }
+        
+        logger.info(`[StreamLoader] NBT parsed successfully, keys: ${Object.keys(nbtData).join(', ')}`);
 
         const meta = {
             name: (nbtData.Metadata && nbtData.Metadata.Name) || 'Unknown',
@@ -252,9 +263,11 @@ class StreamingLitematicLoader {
             let offset = 1;
             const nameLen = (data[offset] << 8) | data[offset + 1];
             offset += 2 + nameLen;
-            return this.parseCompoundLite(data, offset);
+            const parsed = this.parseCompoundLite(data, offset);
+            return parsed ? parsed.result : null;
         } catch (e) {
             logger.error(`[StreamLoader] NBT parse error: ${e.message}`);
+            logger.error(`[StreamLoader] Stack: ${e.stack}`);
             return null;
         }
     }
@@ -284,7 +297,7 @@ class StreamingLitematicLoader {
                 result[tagName] = r.value;
             }
         }
-        return result;
+        return { result, newOffset: offset };
     }
 
     readTagLite(data, offset, type) {
@@ -304,11 +317,15 @@ class StreamingLitematicLoader {
             case 4: offset += 8; value = 0; break;
             case 5: offset += 4; value = 0; break;
             case 6: offset += 8; value = 0; break;
-            case 7:
+            case 7: {
                 const baLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                offset += 4 + baLen;
+                offset += 4;
                 value = [];
+                for (let i = 0; i < baLen && offset < data.length; i++) {
+                    value.push(data[offset++]);
+                }
                 break;
+            }
             case 8:
                 const strLen = (data[offset] << 8) | data[offset + 1];
                 offset += 2;
@@ -327,34 +344,36 @@ class StreamingLitematicLoader {
                 }
                 break;
             }
-            case 10:
-                value = this.parseCompoundLite(data, offset);
-                let tempOffset = offset, depth = 1;
-                while (tempOffset < data.length && depth > 0) {
-                    const t = data[tempOffset++];
-                    if (t === 0) { depth--; }
-                    else if (t === 10) {
-                        const n = (data[tempOffset] << 8) | data[tempOffset + 1];
-                        tempOffset += 2 + n; depth++;
-                    } else {
-                        const n = (data[tempOffset] << 8) | data[tempOffset + 1];
-                        tempOffset += 2 + n;
-                        const skip = this.skipTag(data, tempOffset, t);
-                        if (skip > 0) tempOffset = skip; else break;
-                    }
-                }
-                offset = tempOffset;
+            case 10: {
+                const parsed = this.parseCompoundLite(data, offset);
+                value = parsed.result;
+                offset = parsed.newOffset;
                 break;
+            }
             case 11: {
                 const iaLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                offset += 4 + iaLen * 4;
+                offset += 4;
                 value = [];
+                for (let i = 0; i < iaLen && offset + 4 <= data.length; i++) {
+                    let val = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+                    if (val > 2147483647) val -= 4294967296;
+                    value.push(val);
+                    offset += 4;
+                }
                 break;
             }
             case 12: {
                 const laLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                offset += 4 + laLen * 8;
+                offset += 4;
                 value = [];
+                for (let i = 0; i < laLen && offset + 8 <= data.length; i++) {
+                    let val = 0n;
+                    for (let j = 0; j < 8; j++) {
+                        val |= BigInt(data[offset + j]) << BigInt(j * 8);
+                    }
+                    value.push(val);
+                    offset += 8;
+                }
                 break;
             }
             default:

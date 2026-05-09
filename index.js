@@ -42,7 +42,7 @@ ll.registerPlugin(
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '2.2.0';
+const PLUGIN_VERSION = '2.3.0';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
@@ -336,7 +336,7 @@ function handleBuildMode(player, session) {
         // 激活投影
         activeProj = projManager.activateProjection(player, projection);
 
-        // 同步到渲染器
+        // 同步到渲染器（Mega 和普通模式统一路径）
         renderer.layerRenderMode.set(player.xuid, true);
         renderer.currentRenderLayer.set(player.xuid, projection.renderLayer !== undefined ? projection.renderLayer : -1);
     }
@@ -361,9 +361,16 @@ function handleBuildMode(player, session) {
         const isMegaProj = result.projection.isMega && result.projection.schematicId;
 
         if (isMegaProj) {
-            // 超大型投影：使用Mega渲染器的层模式
+            // 超大型投影：Mega 管理分层过滤，ProjectionRenderer 统一渲染
             const stateId = `${player.xuid}_${result.projection.schematicId}`;
+            // 设置 Mega 层模式（标记 _needsSync，下个 tick 自动同步）
             megaRenderer.setLayerMode(stateId, newLayer);
+            // ProjectionRenderer 同步层信息（用于 respawn）
+            renderer.currentRenderLayer.set(player.xuid, newLayer);
+            renderer.layerRenderMode.set(player.xuid, newLayer >= 0);
+            // 清除旧粒子并重建任务
+            renderer.clearPlayerProjection(player);
+            renderer.startRender(player, result.projection, newLayer >= 0 ? newLayer : -1);
 
             if (newLayer === -1) {
                 const totalBlocks = result.projection.totalBlocks || 0;
@@ -664,17 +671,16 @@ function handlePlaceCommand(player, filename, output) {
         projManager.activateProjection(player, projection);
 
         if (isMega) {
-            // 超大型投影：使用Mega渲染
+            // 超大型投影：MegaRenderer 管理 LOD 分块，由 ProjectionRenderer 统一渲染
             megaRenderer.initRenderState(player, schematic.schematicId, projection);
             player.tell('§6⚡ 已启用超大型投影渲染模式');
             
-            // 同步渲染器状态
-            renderer.layerRenderMode.set(player.xuid, false);
-            renderer.currentRenderLayer.set(player.xuid, -1);
-            
-            // 显示范围框
+            // 与普通模式使用相同的 ProjectionRenderer 渲染路径
+            renderer.layerRenderMode.set(player.xuid, true);
+            renderer.currentRenderLayer.set(player.xuid, 0);
             renderer.showBounds(projection, player);
-            renderer.startRender(player, projection, -1);
+            renderer.startRender(player, projection, 0);
+            // MegaProjectionRenderer.onTick 会通过 updateBlocks 将 LOD 方块数据注入渲染器
         } else {
             // 普通投影渲染
             renderer.layerRenderMode.set(player.xuid, true);
@@ -793,6 +799,13 @@ async function loadSchematicFile(filename) {
         let streamResult = null;
         
         try {
+            logger.info(`[MegaSchematic] Starting stream detection for: ${fullPath}`);
+            logger.info(`[MegaSchematic] streamLoader type: ${typeof streamLoader}`);
+            logger.info(`[MegaSchematic] streamLoader is null: ${streamLoader === null}`);
+            logger.info(`[MegaSchematic] streamLoader is undefined: ${streamLoader === undefined}`);
+            if (!streamLoader) {
+                throw new Error('streamLoader is not initialized');
+            }
             streamResult = await streamLoader.prepareStream(loader, fullPath);
             if (streamResult && streamResult.totalEstimate > megaThreshold) {
                 useMegaMode = true;
@@ -801,7 +814,9 @@ async function loadSchematicFile(filename) {
                 logger.info(`[MegaSchematic] Standard mode: ${streamResult?.totalEstimate || 0} blocks <= ${megaThreshold}`);
             }
         } catch (streamErr) {
-            logger.info(`[MegaSchematic] Stream detection failed: ${streamErr.message}, fallback to standard loading`);
+            logger.error(`[MegaSchematic] Stream detection failed: ${streamErr.message}`);
+            logger.error(`[MegaSchematic] Stack: ${streamErr.stack}`);
+            logger.info(`[MegaSchematic] Falling back to standard loading`);
         }
         
         // 根据检测结果选择加载模式
@@ -1101,6 +1116,9 @@ mc.listen("onLeft", (player) => {
 // ==================== 初始化 ====================
 
 registerCommands();
+
+// 导出加载函数供UI使用（必须在函数定义之后）
+global.loadSchematicFile = loadSchematicFile;
 
 logger.info(`${PLUGIN_NAME} v${PLUGIN_VERSION} Loaded!`);
 logger.info("Commands: /litematica, /lit, /litematica:logclean, /litematica:config");

@@ -724,19 +724,47 @@ class ProjectionRenderer {
         }
 
         // 执行渲染并传递回调函数
+        const isEmptyInit = visibleBlocks.length === 0;
         this.uniformRender(player, task, () => {
             // 渲染完成回调
             task.isRendering = false;
             const renderTime = ((Date.now() - renderStartTime) / 1000).toFixed(2);
-            const renderTimeMs = (Date.now() - renderStartTime) / 1000; // 保存为秒数
-            task.renderTime = renderTimeMs; // 保存渲染耗时用于粒子重生计算
-            task.lastParticleRespawn = Date.now(); // 初始化粒子重生时间
-            const layerInfo = layer >= 0 ? ` | 第 ${layer} 层` : '';
-            player.tell(`§a投影 "${projection.name}" 渲染完成！`);
-            player.tell(`§7方块数: ${visibleBlocks.length} | 耗时: ${renderTime}秒${layerInfo}`);
-            player.tell(`§7位置: (${projection.position.x}, ${projection.position.y}, ${projection.position.z})`);
-            player.tell(`§7粒子将在 ${(renderTimeMs + 2).toFixed(0)} 秒后自动重生`);
+            const renderTimeMs = (Date.now() - renderStartTime) / 1000;
+            task.renderTime = renderTimeMs;
+            task.lastParticleRespawn = Date.now();
+            
+            if (!isEmptyInit) {
+                const layerInfo = layer >= 0 ? ` | 第 ${layer} 层` : '';
+                player.tell(`§a投影 "${projection.name}" 渲染完成！`);
+                player.tell(`§7方块数: ${visibleBlocks.length} | 耗时: ${renderTime}秒${layerInfo}`);
+                player.tell(`§7位置: (${projection.position.x}, ${projection.position.y}, ${projection.position.z})`);
+                player.tell(`§7粒子将在 ${(renderTimeMs + 2).toFixed(0)} 秒后自动重生`);
+            }
         });
+    }
+
+    /**
+     * 更新投影方块数据（Mega 模式用）
+     * 由 MegaProjectionRenderer 在 LOD 分块加载完成后调用
+     */
+    updateBlocks(playerXuid, newBlocks) {
+        const task = this.activeProjections.get(playerXuid);
+        if (!task) return;
+        
+        // 构建新的世界坐标方块列表
+        const newVisible = this.getAllBlocksWorldPos(newBlocks, task.projection);
+        
+        task.allBlocks = newBlocks;
+        task.blocks = newBlocks;
+        task.visibleBlocks = newVisible;
+        task.lastParticleRespawn = Date.now();
+        
+        // 仅在之前没有方块时重置索引，否则保持当前进度
+        if (task.visibleBlocksIndex >= newVisible.length) {
+            task.visibleBlocksIndex = 0;
+        }
+        
+        task.isRendering = task.visibleBlocksIndex < newVisible.length;
     }
 
     /**
@@ -810,6 +838,48 @@ class ProjectionRenderer {
         const placedBlocks = this.playerBlocks.get(player.xuid);
         if (placedBlocks) {
             this.playerBlocks.delete(player.xuid);
+        }
+    }
+
+    showBounds(projection, player) {
+        try {
+            if (!projection || !player || !player.spawnParticle) return;
+            const dims = projection.dimensions;
+            if (!dims) return;
+            const pos = projection.position;
+            if (!pos) return;
+            
+            const corners = [
+                [0, 0, 0], [dims.x, 0, 0], [dims.x, 0, dims.z], [0, 0, dims.z],
+                [0, dims.y, 0], [dims.x, dims.y, 0], [dims.x, dims.y, dims.z], [0, dims.y, dims.z]
+            ];
+            
+            const edges = [
+                [0, 1], [1, 2], [2, 3], [3, 0],
+                [4, 5], [5, 6], [6, 7], [7, 4],
+                [0, 4], [1, 5], [2, 6], [3, 7]
+            ];
+            
+            for (const [a, b] of edges) {
+                const from = corners[a];
+                const to = corners[b];
+                const steps = Math.max(1, Math.ceil(Math.max(
+                    Math.abs(to[0] - from[0]),
+                    Math.abs(to[1] - from[1]),
+                    Math.abs(to[2] - from[2])
+                )));
+                
+                for (let i = 0; i <= steps; i++) {
+                    const t = steps === 0 ? 0 : i / steps;
+                    const px = pos.x + from[0] + (to[0] - from[0]) * t;
+                    const py = pos.y + from[1] + (to[1] - from[1]) * t;
+                    const pz = pos.z + from[2] + (to[2] - from[2]) * t;
+                    
+                    player.spawnParticle('minecraft:basic_particle', { x: px, y: py, z: pz });
+                }
+            }
+        } catch (e) {
+            // 范围框渲染失败不影响主流程
         }
     }
 

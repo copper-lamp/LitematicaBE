@@ -3,6 +3,7 @@ const { PositionConverter } = require('./PositionConverter');
 const { InventoryHelper } = require('./InventoryHelper');
 const { BlockConversions } = require('./BlockConversions');
 const { converter } = require('../core/BlockStateConverter');
+const { SpatialIndexUtils } = require('./SpatialIndexUtils');
 const fs = require('fs');
 const path = require('path');
 
@@ -174,22 +175,23 @@ class EasyPlaceManager {
         let placedCount = 0;
 
         // 使用空间分块索引加速查找（避免遍历全部方块）
-        const CHUNK_SIZE = 16;
-        const blocksToCheck = this.getBlocksInRadius(projection, centerX, centerY, centerZ, radius, CHUNK_SIZE);
-        
+        const blocksToCheck = SpatialIndexUtils.getBlocksInRadius(
+            projection, centerX, centerY, centerZ, radius
+        );
+        const radiusSquared = radius * radius;
+
         for (const block of blocksToCheck) {
             checkedBlocks++;
             const worldX = projPos.x + block.pos[0];
             const worldY = projPos.y + block.pos[1];
             const worldZ = projPos.z + block.pos[2];
 
-            const dist = Math.sqrt(
+            const distSquared =
                 Math.pow(worldX - centerX, 2) +
                 Math.pow(worldY - centerY, 2) +
-                Math.pow(worldZ - centerZ, 2)
-            );
+                Math.pow(worldZ - centerZ, 2);
 
-            if (dist > radius) {
+            if (distSquared > radiusSquared) {
                 skippedRadius++;
                 continue;
             }
@@ -258,48 +260,8 @@ class EasyPlaceManager {
         });
     }
 
-    /**
-     * 使用空间分块索引获取玩家半径内的方块（性能优化）
-     * 避免遍历全部方块，只返回附近分块中的方块
-     */
-    getBlocksInRadius(projection, centerX, centerY, centerZ, radius, chunkSize) {
-        if (!projection.blockChunks || projection.blockChunks.size === 0) {
-            // 回退到全量遍历
-            return projection.blocks || [];
-        }
-
-        const projPos = projection.position;
-        
-        // 计算玩家在世界坐标系中相对于投影的位置
-        const relX = centerX - projPos.x;
-        const relY = centerY - projPos.y;
-        const relZ = centerZ - projPos.z;
-        
-        // 计算需要检查的分块范围
-        const minChunkX = Math.floor((relX - radius) / chunkSize);
-        const maxChunkX = Math.floor((relX + radius) / chunkSize);
-        const minChunkY = Math.floor((relY - radius) / chunkSize);
-        const maxChunkY = Math.floor((relY + radius) / chunkSize);
-        const minChunkZ = Math.floor((relZ - radius) / chunkSize);
-        const maxChunkZ = Math.floor((relZ + radius) / chunkSize);
-
-        const blocks = [];
-        
-        for (let cx = minChunkX; cx <= maxChunkX; cx++) {
-            for (let cy = minChunkY; cy <= maxChunkY; cy++) {
-                for (let cz = minChunkZ; cz <= maxChunkZ; cz++) {
-                    const chunkKey = `${cx},${cy},${cz}`;
-                    const chunkBlocks = projection.blockChunks.get(chunkKey);
-                    if (chunkBlocks) {
-                        for (const block of chunkBlocks) {
-                            blocks.push(block);
-                        }
-                    }
-                }
-            }
-        }
-
-        return blocks;
+    getBlocksInRadius(projection, centerX, centerY, centerZ, radius) {
+        return SpatialIndexUtils.getBlocksInRadius(projection, centerX, centerY, centerZ, radius);
     }
 
     wasPlacedThisTick(playerXuid, locationKey) {
