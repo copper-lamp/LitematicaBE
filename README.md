@@ -1,130 +1,127 @@
 # LitematicaBE
 
-<p align="center">
-  <img src="https://img.shields.io/badge/version-2.3.0-blue" alt="Version">
-  <img src="https://img.shields.io/badge/platform-Bedrock%20Edition-brightgreen" alt="Platform">
-  <img src="https://img.shields.io/badge/LeviLamina-1.9.x-orange" alt="Framework">
-  <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
-</p>
+<img src="https://img.shields.io/badge/version-2.4.0-blue" alt="Version">
+<img src="https://img.shields.io/badge/BDS-1.21.1-green" alt="BDS Version">
+<img src="https://img.shields.io/badge/LeviLamina-0.13.5+-orange" alt="LeviLamina">
 
-<p align="center">
-  <strong>Minecraft Bedrock Edition 建筑投影工具 — 让你的建筑效率翻倍</strong>
-</p>
+基岩版 Litematica 投影插件，支持加载 Java 版 `.litematic` 文件并在基岩版世界中显示为粒子投影。
 
-<p align="center">
-  支持加载 Java 版 Litematica 原理图，通过粒子系统在游戏中显示全息投影，辅助逐层建造。
-  <br>
-  内置轻松放置功能，自动从背包选择正确方块，大幅提升建造效率。
-</p>
-
-***
-
-## 功能特性
+## ✨ 功能特性
 
 ### 🔥 核心功能
 
 - **原理图加载** — 支持 Java 版 `.litematic` 格式
+- **原理图保存** — 将基岩版世界中的建筑保存为 `.litematic` 文件，与 Java 版互通
 - **粒子投影** — 在世界中显示半透明全息投影，不修改实际方块
 - **逐层建造** — 按 Y 层切换显示，抬头/低头即可切换
 - **旋转操作** — 支持 90° 倍数旋转投影
 - **木剑快捷操作** — 手持木剑进行所有操作，无需频繁输入指令
 
-### ⚡ 超大型投影（Mega Schematic）
+### 🎮 操作方式
 
-- 支持 **10,000,000+ 方块**的超大型建筑投影
-- 分块存储（16×16×16），内存占用恒定不随投影大小增长
-- LOD 三级细节层次渲染（NEAR / MEDIUM / FAR）
-- 视口自动裁剪，只加载玩家周围可见分块
-- 与普通投影**完全相同的渲染效果和交互体验**
+| 操作       | 说明                 |
+| -------- | ------------------ |
+| 手持木剑点击投影 | 打开操作菜单             |
+| 抬头/低头    | 切换显示层级（当开启逐层模式时）   |
+| 主菜单      | 加载/卸载原理图、调整设置、切换模式 |
 
-### 🎯 轻松放置（Easy Place）
+### 📊 显示模式
 
-- 自动从背包选择正确方块类型
-- 支持潜影盒内方块自动提取
-- 方块状态精确匹配（方向、朝向等）
-- 错误放置自动阻止并提示
+- **完整模式** — 显示投影全部内容
+- **逐层模式** — 只显示当前 Y 层，方便逐层建造
+- **Ghost 模式** — 半透明显示，可穿透查看
 
-### ✨ 其他特性
+### 🚀 性能优化
 
-- **GUI 菜单** — 游戏内可视化操作界面
-- **全服共享** — 投影对所有玩家可见
-- **材料清单导出** — 导出为 Excel 格式
-- **范围提示** — 进入投影范围自动提示
+- **Mega 模式** — 针对超大型原理图优化，使用分块存储和流式加载
+- **LOD 渲染** — 远距离降低渲染密度，提升性能
+- **智能裁剪** — 只渲染玩家视野内的方块
 
-***
+## 📦 安装
 
-## 安装要求
+### 前置要求
 
-| 依赖                          | 版本     |
-| --------------------------- | ------ |
-| BDS                         | 1.21.x |
-| LeviLamina                  | 1.9.x  |
-| legacy-script-engine-nodejs | 0.17.x |
+- [LeviLamina](https://github.com/LiteLDev/LeviLamina) 0.13.5 或更高版本
+- [legacy-script-engine-nodejs](https://github.com/LiteLDev/legacy-script-engine-nodejs) 插件
 
-**客户端需安装资源包** — 包含 658+ 方块纹理粒子，否则粒子不显示。
+### 安装步骤
 
-***
+1. 下载最新版本的 `LitematicaBE.zip`
+2. 解压到 BDS 的 `plugins/` 目录下
+3. 重启服务器
+4. 将 `.litematic` 文件放入 `plugins/LitematicaBE/schematics/` 目录
 
-## 安装步骤
+## 📝 使用指南
 
-1. 将 `LitematicaBE` 文件夹复制到 `bedrock-server/plugins/`
-2. 将 `.litematic` 原理图文件放入 `plugins/LitematicaBE/schematics/`
-3. 将资源包 `LitematicaBE.mcpack` 导入游戏客户端并启用
-4. 启动服务器
+### 加载原理图
+
+1. 进入游戏，手持木剑
+2. 输入 `/litematica` 或点击地面打开主菜单
+3. 选择"加载原理图"
+4. 选择要加载的文件
+5. 投影将显示在当前位置
+
+### 保存原理图
+
+1. 手持木剑，输入 `/litematica save` 或从菜单选择"保存原理图"
+2. 点击"开始选区"
+3. 用木剑右键点击选择第一个坐标点（pos1）
+4. 用木剑右键点击选择第二个坐标点（pos2）
+5. 输入原理图名称和描述，点击保存
+6. 文件将保存到 `plugins/LitematicaBE/schematics/` 目录
+
+   <br />
+
+## 🔧 配置文件
+
+`config.json`：
+
+```json
+{
+  "render": {
+    "particleDensity": 1.0,
+    "renderDistance": 64,
+    "ghostModeOpacity": 0.5
+  },
+  "easyPlace": {
+    "enabled": true,
+    "checkInventory": true
+  },
+  "mega": {
+    "chunkSize": 16,
+    "maxMemoryChunks": 100
+  }
+}
+```
+
+## 📂 目录结构
 
 ```
-bedrock-server/
-├── plugins/
-│   ├── LeviLamina/
-│   ├── legacy-script-engine-nodejs/
-│   └── LitematicaBE/
-│       ├── manifest.json
-│       ├── index.js
-│       ├── src/
-│       │   ├── core/
-│       │   ├── data/
-│       │   ├── easyplace/
-│       │   ├── render/
-│       │   └── ui/
-│       └── schematics/
-│           └── my_build.litematic
+plugins/LitematicaBE/
+├── manifest.json          # 插件清单
+├── index.js               # 主入口
+├── config.json            # 配置文件
+├── schematics/            # 原理图文件目录
+├── exports/               # 导出文件目录
+└── src/                   # 源代码
+    ├── core/              # 核心模块
+    ├── data/              # 数据模块
+    ├── easyplace/         # 轻松放置模块
+    ├── render/            # 渲染模块
+    ├── ui/                # UI模块
+    └── utils/             # 工具模块
 ```
 
-***
+## 🔄 更新日志
 
-## 使用方法
+### v2.4.0
 
-### 命令列表
-
-| 命令                                | 说明        |
-| --------------------------------- | --------- |
-| `/litematica` 或 `/lit`            | 打开主菜单     |
-| `/litematica load <文件名>`          | 加载原理图文件   |
-| `/litematica place`               | 在脚下放置投影   |
-| `/litematica placeat <x> <y> <z>` | 在指定坐标放置投影 |
-| `/litematica build`               | 切换到逐层建造模式 |
-| `/litematica rotate`              | 切换到旋转模式   |
-| `/litematica easyplace`           | 切换轻松放置模式  |
-| `/litematica clear`               | 清除当前投影    |
-| `/litematica list`                | 列出所有投影    |
-| `/litematica info`                | 查看当前投影信息  |
-| `/litematica remove <ID>`         | 删除指定投影    |
-| `/litematica:config get <key>`    | 查看配置项     |
-
-### 木剑操作
-
-| 操作      | 模式   | 效果      |
-| ------- | ---- | ------- |
-| 手持木剑点击  | 放置模式 | 放置投影    |
-| 手持木剑点击  | 旋转模式 | 旋转 90°  |
-| 抬头 + 点击 | 建造模式 | 上一层     |
-| 低头 + 点击 | 建造模式 | 下一层     |
-| 平视 + 点击 | 建造模式 | 全部/单层切换 |
-| 蹲下 + 点击 | 任意模式 | 打开菜单    |
-
-***
-
-## 版本更新
+- ✨ **原理图保存功能** — 将基岩版世界中的建筑保存为 Java 版 Litematica 兼容的 `.litematic` 文件
+  - 选区工具：使用木剑右键选取两个坐标点
+  - 完整的方块名称映射（基岩版 → Java 版）
+  - 方块状态自动转换
+- ✨ **NBT 序列化器** — 自定义 NBTWriter，完全兼容 Java 版 Litematica 格式
+- 🔧 修复 LitematicLoader 对 TAG\_Int\_Array 格式 Size/Position 的解析问题
 
 ### v2.3.0
 
@@ -138,26 +135,33 @@ bedrock-server/
 
 ### v2.2.0
 
-- ✨ 超大型投影支持（Mega Schematic），支持 500,000+ 方块
-- ✨ 流式加载器（StreamingLitematicLoader），避免内存溢出
-- ✨ LOD 三级细节层次渲染
-- ✨ 新增轻松放置功能（自动选方块、潜影盒提取）
-- 🐛 修复粒子位置、层切换、GUI 删除等多个问题
+- ✨ **Mega 模式** — 支持超大型原理图（100万+方块）
+- ✨ **流式加载** — 异步加载，不阻塞游戏
+- ✨ **分块存储** — 内存不足时自动转存磁盘
+
+### v2.1.0
+
+- ✨ **轻松放置模式** — 快速放置方块匹配投影
+- ✨ **方块验证** — 检查放置是否正确
+- ✨ **材料清单** — 统计所需材料
 
 ### v2.0.0
 
-- ✨ 全新架构重构
-- 🎨 GUI 菜单系统
-- ⚡ 性能优化
+- ✨ 全新架构，支持 LeviLamina
+- ✨ 粒子投影系统
+- ✨ 木剑快捷操作
+- ✨ 逐层建造模式
 
-***
+## 🤝 贡献
 
-## 许可证
+欢迎提交 Issue 和 Pull Request！
+
+## 📄 许可证
 
 MIT License
 
-***
+## 🙏 致谢
 
-<p align="center">
-  Made with ❤️ for Minecraft Bedrock Edition
-</p>
+- [Litematica](https://github.com/maruohon/litematica) — Java 版原理图模组
+- [LeviLamina](https://github.com/LiteLDev/LeviLamina) — 基岩版模组加载器
+

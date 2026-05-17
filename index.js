@@ -1,4 +1,4 @@
-// Litematica BE v2.1.0 - Minecraft Bedrock Edition Projection Tool
+// Litematica BE v2.4.0 - Minecraft Bedrock Edition Projection Tool
 // 全服共享投影系统，支持木剑操作、多模式切换
 
 // 测试zlib是否可用
@@ -27,22 +27,25 @@ const { UIManager } = require('./src/ui/UIManager');
 const { LogCleaner } = require('./src/core/LogCleaner');
 const { ConfigManager } = require('./src/core/ConfigManager');
 const { EasyPlaceManager } = require('./src/easyplace/EasyPlaceManager');
+const { SelectionTool } = require('./src/core/SelectionTool');
+const { SchematicSaver } = require('./src/core/SchematicSaver');
 
 // 导入超大型投影模块
 const { MegaSchematicManager } = require('./src/core/MegaSchematicManager');
 const { StreamingLitematicLoader } = require('./src/core/StreamingLitematicLoader');
 const { MegaProjectionRenderer } = require('./src/render/MegaProjectionRenderer');
+const { BinaryChunkStorage } = require('./src/core/BinaryChunkStorage');
 
 ll.registerPlugin(
     "LitematicaBE",
     "Minecraft Bedrock Edition projection tool with shared projections",
-    [2, 1, 0],
+    [2, 4, 0],
     {}
 );
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '2.3.0';
+const PLUGIN_VERSION = '2.4.0';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
@@ -52,12 +55,17 @@ const renderer = new ProjectionRenderer();
 const projManager = new ProjectionManager();
 const uiManager = new UIManager();
 const logCleaner = new LogCleaner();
-const easyPlaceManager = new EasyPlaceManager(projManager, dataManager);
 
-// 超大型投影全局实例
+// 超大型投影全局实例（必须在 EasyPlaceManager 之前初始化）
 const megaManager = new MegaSchematicManager();
 const streamLoader = new StreamingLitematicLoader();
 const megaRenderer = new MegaProjectionRenderer(megaManager);
+
+const easyPlaceManager = new EasyPlaceManager(projManager, dataManager, megaManager);
+
+// 选区工具和保存器实例
+const selectionTool = new SelectionTool();
+const schematicSaver = new SchematicSaver();
 
 // 全局导出供其他模块使用
 global.zlib = zlib;
@@ -69,6 +77,8 @@ global.projManager = projManager;
 global.loader = loader;
 global.logCleaner = logCleaner;
 global.easyPlaceManager = easyPlaceManager;
+global.selectionTool = selectionTool;
+global.schematicSaver = schematicSaver;
 
 // 超大型投影全局导出
 global.megaManager = megaManager;
@@ -172,6 +182,20 @@ mc.listen("onUseItemOn", (player, item, block, side, pos) => {
         return;
     }
     playerCooldowns.set(cooldownKey, now);
+
+    // 检查是否正在选区
+    if (selectionTool.isSelecting(player.xuid)) {
+        const consumed = selectionTool.handleSwordClick(player, block);
+        if (!consumed) {
+            // 选区完成，打开保存UI
+            const sel = selectionTool.getSelection(player.xuid);
+            if (sel && sel.state === 'completed') {
+                const region = selectionTool.calculateRegion(sel.pos1, sel.pos2);
+                uiManager.showSaveSchematicForm(player, region);
+            }
+        }
+        return;
+    }
 
     if (player.isSneaking) {
         uiManager.showMainMenu(player);
@@ -338,7 +362,7 @@ function handleBuildMode(player, session) {
 
         // 同步到渲染器（Mega 和普通模式统一路径）
         renderer.layerRenderMode.set(player.xuid, true);
-        renderer.currentRenderLayer.set(player.xuid, projection.renderLayer !== undefined ? projection.renderLayer : -1);
+        renderer.currentRenderLayer.set(player.xuid, projection.renderLayer !== undefined ? projection.renderLayer : 0);
     }
 
     // 获取当前俯仰角和方向
@@ -368,9 +392,9 @@ function handleBuildMode(player, session) {
             // ProjectionRenderer 同步层信息（用于 respawn）
             renderer.currentRenderLayer.set(player.xuid, newLayer);
             renderer.layerRenderMode.set(player.xuid, newLayer >= 0);
-            // 清除旧粒子并重建任务
+            // 清除旧粒子
             renderer.clearPlayerProjection(player);
-            renderer.startRender(player, result.projection, newLayer >= 0 ? newLayer : -1);
+            // 注意：不要调用 renderer.startRender，MegaProjectionRenderer.onTick 会处理渲染
 
             if (newLayer === -1) {
                 const totalBlocks = result.projection.totalBlocks || 0;
@@ -402,7 +426,7 @@ function registerCommands() {
     const cmd = mc.newCommand("litematica", "Litematica projection tool", PermType.Any, 0x80);
     const cmdShort = mc.newCommand("lit", "Litematica (Short)", PermType.Any, 0x80);
 
-    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "verify", "clear", "list", "remove", "info", "debug"]);
+    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "verify", "clear", "list", "remove", "info", "debug", "save"]);
     cmd.setEnum("FileEnum", ["file"]);
     cmd.setEnum("CoordEnum", ["x", "y", "z"]);
 
@@ -451,7 +475,7 @@ function registerCommands() {
                 dataManager.setPlayerToolMode(player.xuid, 'build');
                 uiManager.sendModeChangeTip(player, 'build');
                 output.success("§a已切换到建造模式");
-                output.success("§f抬头/低头+木剑切换层");
+                output.success("§f使用木剑（抬头/低头）切换层");
                 break;
             case "easyplace":
                 easyPlaceManager.toggle(player);
@@ -483,6 +507,10 @@ function registerCommands() {
                 break;
             case "debug":
                 handleDebugCommand(player, results.args || [], output);
+                break;
+            case "save":
+                uiManager.showSaveSchematicMenu(player);
+                output.success("§a已打开保存原理图菜单");
                 break;
             default:
                 uiManager.showMainMenu(player);
@@ -600,7 +628,7 @@ function handleLoadCommand(player, filename, output) {
         return;
     }
 
-    loadSchematicFile(filename).then(schematic => {
+    loadSchematicFile(filename, player).then(schematic => {
         if (schematic) {
             const session = getPlayerSession(player.xuid);
             session.selectedSchematic = schematic;
@@ -608,10 +636,7 @@ function handleLoadCommand(player, filename, output) {
             output.success(`§a已加载: §e${schematic.name}`);
             output.success(`§7方块数: §f${schematic.totalBlocks}`);
             output.success(`§7尺寸: §f${schematic.dimensions?.x || '?'}x${schematic.dimensions?.y || '?'}x${schematic.dimensions?.z || '?'}`);
-            output.success("§f请选择操作模式:");
-            output.success("§e  /litematica place §7- 放置模式");
-            output.success("§e  /litematica rotate §7- 旋转模式");
-            output.success("§e  /litematica build §7- 建造模式");
+            output.success("§f请先选择操作模式");
         } else {
             output.error(`§c找不到文件: ${filename}`);
         }
@@ -619,7 +644,7 @@ function handleLoadCommand(player, filename, output) {
 }
 
 function handlePlaceCommand(player, filename, output) {
-    loadSchematicFile(filename || (getPlayerSession(player.xuid).selectedSchematic?.name)).then(schematic => {
+    loadSchematicFile(filename || (getPlayerSession(player.xuid).selectedSchematic?.name), player).then(schematic => {
         if (!schematic) {
             output.error("§c没有加载的原理图");
             output.success("§f用法: /litematica place <文件名>");
@@ -675,18 +700,17 @@ function handlePlaceCommand(player, filename, output) {
             megaRenderer.initRenderState(player, schematic.schematicId, projection);
             player.tell('§6⚡ 已启用超大型投影渲染模式');
             
-            // 与普通模式使用相同的 ProjectionRenderer 渲染路径
-            renderer.layerRenderMode.set(player.xuid, true);
-            renderer.currentRenderLayer.set(player.xuid, 0);
+            // 设置 ProjectionRenderer 层信息（用于 respawn）
+            renderer.layerRenderMode.set(player.xuid, false);
+            renderer.currentRenderLayer.set(player.xuid, -1);
             renderer.showBounds(projection, player);
-            renderer.startRender(player, projection, 0);
-            // MegaProjectionRenderer.onTick 会通过 updateBlocks 将 LOD 方块数据注入渲染器
+            // 注意：不要调用 renderer.startRender，MegaProjectionRenderer.onTick 会处理渲染
         } else {
             // 普通投影渲染
-            renderer.layerRenderMode.set(player.xuid, true);
-            renderer.currentRenderLayer.set(player.xuid, 0);
+            renderer.layerRenderMode.set(player.xuid, false);
+            renderer.currentRenderLayer.set(player.xuid, -1);
             renderer.showBounds(projection, player);
-            renderer.startRender(player, projection, 0);
+            renderer.startRender(player, projection, -1);
         }
 
         output.success(`§a投影已放置: §e${schematic.name}`);
@@ -717,7 +741,7 @@ function handlePlaceAtCommand(player, x, y, z, output) {
     
     if (!schematic) {
         output.error("§c没有加载的原理图");
-        output.success("§f请先使用 /litematica load <文件名>");
+        output.success("§f打开gui或使用 /litematica load <文件名>");
         return;
     }
     
@@ -761,12 +785,12 @@ function handlePlaceAtCommand(player, x, y, z, output) {
         renderer.layerRenderMode.set(player.xuid, false);
         renderer.currentRenderLayer.set(player.xuid, -1);
         renderer.showBounds(projection, player);
-        renderer.startRender(player, projection, -1);
+        // 注意：不要调用 renderer.startRender，MegaProjectionRenderer.onTick 会处理渲染
     } else {
-        renderer.layerRenderMode.set(player.xuid, true);
-        renderer.currentRenderLayer.set(player.xuid, 0);
+        renderer.layerRenderMode.set(player.xuid, false);
+        renderer.currentRenderLayer.set(player.xuid, -1);
         renderer.showBounds(projection, player);
-        renderer.startRender(player, projection, 0);
+        renderer.startRender(player, projection, -1);
     }
     
     output.success(`§a投影已放置: §e${schematic.name}`);
@@ -775,7 +799,7 @@ function handlePlaceAtCommand(player, x, y, z, output) {
     output.success(`§7当前层: §f0 / ${projection.dimensions?.y || 1}`);
 }
 
-async function loadSchematicFile(filename) {
+async function loadSchematicFile(filename, player) {
     const filePath = SCHEMATIC_PATH + filename;
     let fullPath = null;
     
@@ -794,15 +818,10 @@ async function loadSchematicFile(filename) {
     try {
         const megaThreshold = configManager.get('megaSchematic.threshold', 30000);
         
-        // 先尝试流式加载，获取元数据判断是否需要Mega模式
         let useMegaMode = false;
         let streamResult = null;
         
         try {
-            logger.info(`[MegaSchematic] Starting stream detection for: ${fullPath}`);
-            logger.info(`[MegaSchematic] streamLoader type: ${typeof streamLoader}`);
-            logger.info(`[MegaSchematic] streamLoader is null: ${streamLoader === null}`);
-            logger.info(`[MegaSchematic] streamLoader is undefined: ${streamLoader === undefined}`);
             if (!streamLoader) {
                 throw new Error('streamLoader is not initialized');
             }
@@ -810,20 +829,27 @@ async function loadSchematicFile(filename) {
             if (streamResult && streamResult.totalEstimate > megaThreshold) {
                 useMegaMode = true;
                 logger.info(`[MegaSchematic] Auto-detected mega schematic: ${streamResult.totalEstimate} blocks (threshold: ${megaThreshold})`);
-            } else {
-                logger.info(`[MegaSchematic] Standard mode: ${streamResult?.totalEstimate || 0} blocks <= ${megaThreshold}`);
             }
         } catch (streamErr) {
             logger.error(`[MegaSchematic] Stream detection failed: ${streamErr.message}`);
-            logger.error(`[MegaSchematic] Stack: ${streamErr.stack}`);
             logger.info(`[MegaSchematic] Falling back to standard loading`);
         }
         
-        // 根据检测结果选择加载模式
         if (useMegaMode && streamResult) {
-            const megaResult = await megaManager.loadMegaSchematic(fullPath, streamResult, (blocks) => {
-                logger.info(`[MegaSchematic] Loading progress: ${blocks} blocks...`);
-            });
+            if (player) {
+                player.tell(`§6⚡ 正在加载超大型投影，这可能需要一点时间...`);
+                player.tell(`§7  方块数: ${streamResult.totalEstimate || '?'}`);
+                player.tell(`§7  正在努力压缩...`);
+            }
+            
+            const megaResult = await megaManager.loadMegaSchematic(
+                fullPath,
+                streamResult,
+                (blocks) => {
+                    logger.info(`[MegaSchematic] Loading progress: ${blocks} blocks...`);
+                },
+                player
+            );
             
             const schematic = {
                 name: megaResult.meta.name,
@@ -842,7 +868,6 @@ async function loadSchematicFile(filename) {
             logger.info(`[MegaSchematic] Loaded mega schematic: ${schematic.name}, ${megaResult.totalBlocks} blocks, ${megaResult.chunkCount} chunks`);
             return schematic;
         } else {
-            // 标准加载（小投影或检测失败时回退）
             logger.info(`[LitematicaBE] Using standard loader for: ${fullPath}`);
             const schematic = await loader.load(fullPath);
             schematic.isMega = false;
@@ -851,6 +876,9 @@ async function loadSchematicFile(filename) {
         }
     } catch (e) {
         logger.error(`[LitematicaBE] Error loading file: ${e.message}`);
+        if (player) {
+            player.tell(`§c✗ 加载失败: ${e.message}`);
+        }
         return null;
     }
 }
@@ -902,13 +930,13 @@ function showProjectionInfo(player, output) {
         if (debugInfo) {
             output.success("§6========== Mega渲染调试 ==========");
             output.success(`§e调试模式: §f${debugInfo.config.debugMode}`);
-            output.success(`§e渲染距离: §f${debugInfo.config.defaultRenderDistance}`);
+            output.success(`§e渲染距离: §f${debugInfo.config.maxRenderDistance}`);
             output.success(`§e每tick粒子: §f${debugInfo.config.maxParticlesPerTick}`);
-            output.success(`§e已加载区块: §f${debugInfo.memory.loadedChunks}`);
-            output.success(`§e可见区块: §f${debugInfo.memory.visibleChunks}`);
-            output.success(`§e待渲染: §f${debugInfo.memory.pendingRender}`);
-            output.success(`§e已渲染: §f${debugInfo.stats.totalParticles}`);
-            output.success(`§eLOD分布: §fN:${debugInfo.lodDistribution.near} M:${debugInfo.lodDistribution.medium} F:${debugInfo.lodDistribution.far}`);
+            output.success(`§e视口更新间隔: §f${debugInfo.config.viewportUpdateInterval}ms`);
+            output.success(`§e目标LOD方块: §f~${debugInfo.config.targetLODBlocks}`);
+            output.success(`§e存储格式: §f.mcmega`);
+            output.success(`§e核心区配置: §f${debugInfo.config.coreChunkRadius * 2 + 1}×${debugInfo.config.coreChunkRadius * 2 + 1} 完整渲染`);
+            output.success(`§e远处过滤率: §f${(debugInfo.config.farFilterRate * 100).toFixed(0)}%`);
         }
     }
 }
@@ -930,8 +958,8 @@ function handleDebugCommand(player, args, output) {
         
         case 'lod': {
             const enabled = args[1] === 'on' || args[1] === 'true';
-            megaRenderer.lodRenderer.setDebugMode(enabled);
-            output.success(`§aLOD调试模式: §f${enabled ? '开启' : '关闭'}`);
+            megaRenderer.setDebugMode(enabled);
+            output.success(`§aLOD调试模式（已内置到 MegaRender）: §f${enabled ? '开启' : '关闭'}`);
             break;
         }
         
@@ -960,23 +988,27 @@ function handleDebugCommand(player, args, output) {
             }
             
             output.success("§6========== Mega渲染统计 ==========");
-            output.success(`§e总粒子数: §f${stats.totalParticles}`);
-            output.success(`§e跳过数: §f${stats.particlesSkipped}`);
+            output.success(`§e已缓存方块数: §f${stats.totalCachedBlocks || 0}`);
+            output.success(`§e核心区方块: §f${stats.coreBlocks || 0}`);
+            output.success(`§e远处过滤方块: §f${stats.farBlocks || 0}`);
+            output.success(`§e总过滤方块: §f${stats.totalFilteredBlocks || 0}`);
             output.success(`§e已加载区块: §f${stats.loadedChunks}`);
             output.success(`§e可见区块: §f${stats.visibleChunks}`);
-            output.success(`§e待渲染: §f${stats.pendingRender}`);
             output.success(`§e层模式: §f${stats.isLayerMode ? '是' : '否'}`);
             if (stats.isLayerMode) {
                 output.success(`§e当前层: §f${stats.currentLayer}`);
             }
-            
+
             if (debugInfo) {
                 output.success("§6========== LOD分布 ==========");
-                const lod = debugInfo.lodDistribution;
-                output.success(`§e近距离(≤32): §f${lod.near} (${(lod.near/lod.total*100).toFixed(1)}%)`);
-                output.success(`§e中距离(≤80): §f${lod.medium} (${(lod.medium/lod.total*100).toFixed(1)}%)`);
-                output.success(`§e远距离(≤160): §f${lod.far} (${(lod.far/lod.total*100).toFixed(1)}%)`);
-                output.success(`§e已过滤: §f${lod.filtered} (${(lod.filtered/lod.total*100).toFixed(1)}%)`);
+                const st = debugInfo.stats;
+                const total = (st.coreBlocks || 0) + (st.farBlocks || 0);
+                const corePct = total > 0 ? ((st.coreBlocks / total) * 100).toFixed(1) : '0';
+                const farPct = total > 0 ? ((st.farBlocks / total) * 100).toFixed(1) : '0';
+                output.success(`§e核心区(3×3): §f${st.coreBlocks} (${corePct}%)`);
+                output.success(`§e远处(30%): §f${st.farBlocks} (${farPct}%)`);
+                output.success(`§e总计渲染: §f${total}`);
+                output.success(`§e存储格式: §f.mcmega`);
             }
             break;
         }
@@ -985,15 +1017,14 @@ function handleDebugCommand(player, args, output) {
             output.success("§6========== 当前配置 ==========");
             output.success(`§e视口更新间隔: §f${megaRenderer.viewportUpdateInterval}ms`);
             output.success(`§e每tick粒子: §f${megaRenderer.maxParticlesPerTick}`);
-            output.success(`§e渲染距离: §f${megaRenderer.defaultRenderDistance}`);
+            output.success(`§e渲染距离: §f${megaRenderer.maxRenderDistance}`);
             output.success(`§e调试模式: §f${megaRenderer.debugMode}`);
-            
-            const lodConfig = megaRenderer.lodRenderer.lodConfig;
+
             output.success("§6========== LOD配置 ==========");
-            output.success(`§eNEAR: §f≤${lodConfig.NEAR.distance}格, skip=${lodConfig.NEAR.skipRate}`);
-            output.success(`§eMEDIUM: §f≤${lodConfig.MEDIUM.distance}格, skip=${lodConfig.MEDIUM.skipRate}`);
-            output.success(`§eFAR: §f≤${lodConfig.FAR.distance}格, skip=${lodConfig.FAR.skipRate}`);
-            output.success(`§eOUTLINE: §f>${lodConfig.FAR.distance}格`);
+            output.success(`§e目标LOD方块总数: §f~10000`);
+            output.success(`§e核心区: §f3×3分块完整渲染`);
+            output.success(`§e远处过滤率: §f保留30%`);
+            output.success(`§e存储格式: §f.mcmega 二进制`);
             break;
         }
         
@@ -1107,6 +1138,8 @@ mc.listen("onLeft", (player) => {
     }
     projManager.removeActiveProjection(player.xuid);
     playerSessions.delete(player.xuid);
+    // 清理选区状态
+    if (selectionTool) selectionTool.cleanup(player.xuid);
 });
 
 // 服务器关闭时自动清理日志 - LeviLamina 不支持 onServerStop 事件

@@ -714,11 +714,21 @@ class LitematicLoader {
                          z: region.SizeZ || region.sizeZ || 0 };
                 logger.info(`parseLitematic: Constructed size from SizeX/SizeY/SizeZ`);
             }
-            
-            // Litematic格式中Size可能是负数（表示方向），需要取绝对值
-            const sizeX = Math.abs(size.x || 0);
-            const sizeY = Math.abs(size.y || 0);
-            const sizeZ = Math.abs(size.z || 0);
+
+            // 处理TAG_Int_Array格式（数组）vs 对象格式
+            let sizeX, sizeY, sizeZ;
+            if (Array.isArray(size)) {
+                // TAG_Int_Array: [x, y, z]
+                sizeX = Math.abs(size[0] || 0);
+                sizeY = Math.abs(size[1] || 0);
+                sizeZ = Math.abs(size[2] || 0);
+                logger.info(`parseLitematic: Size is array [${size[0]}, ${size[1]}, ${size[2]}]`);
+            } else {
+                // 对象格式: {x, y, z}
+                sizeX = Math.abs(size.x || 0);
+                sizeY = Math.abs(size.y || 0);
+                sizeZ = Math.abs(size.z || 0);
+            }
             
             logger.info(`Region "${regionName}": ${sizeX}x${sizeY}x${sizeZ}`);
             

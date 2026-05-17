@@ -2,7 +2,7 @@
     "entry": "index.js",
     "name": "LitematicaBE",
     "type": "lse-nodejs",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "author": "LitematicaBE",
     "description": "Minecraft Bedrock Edition projection tool with shared projections",
     "extraInfo": {},

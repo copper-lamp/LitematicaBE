@@ -1,6 +1,10 @@
 const BlockConversions = {
     bannedBlocks: [
         'minecraft:air',
+        'minecraft:water',
+        'minecraft:flowing_water',
+        'minecraft:lava',
+        'minecraft:flowing_lava',
         'minecraft:bed',
         'minecraft:piston_arm_collision',
         'minecraft:sticky_piston_arm_collision',
@@ -97,6 +101,52 @@ const BlockConversions = {
         'flower_amount': 0
     },
 
+    // 需要保留的方向/朝向状态（不要重置）
+    directionStates: [
+        'facing_direction',
+        'ground_sign_direction',
+        'torch_facing_direction',
+        'lever_direction',
+        'button_pressed_bit',
+        'open_bit',
+        'door_hinge_bit',
+        'upper_block_bit',
+        'upside_down_bit',
+        'rail_direction',
+        'weirdo_direction',
+        'vine_direction_bits',
+        'huge_mushroom_bits',
+        'wall_block_type',
+        'wood_type',
+        'stone_type',
+        'sand_type',
+        'dirt_type',
+        'color',
+        'chisel_type',
+        'pillar_axis',
+        'stripped_bit',
+        'persistent_bit',
+        'update_bit',
+        'dead_bit',
+        'occupied_bit',
+        'head_piece_bit',
+        'extinguished',
+        'age_bit',
+        'allow_underwater_bit',
+        'attached_bit',
+        'disarmed_bit',
+        'drag_down',
+        'triggered_bit',
+        'powered_bit',
+        'suspended_bit',
+        'toggle_bit',
+        'infiniburn_bit',
+        'unstable',
+        'explode_bit',
+        'output_lit_bit',
+        'output_subtract_bit'
+    ],
+
     blockToItemMap: {
         'minecraft:water': 'minecraft:water_bucket',
         'minecraft:lava': 'minecraft:lava_bucket',
@@ -135,6 +185,16 @@ const BlockConversions = {
         for (const [key, defaultValue] of Object.entries(this.resetStates)) {
             if (newStates[key] !== undefined && newStates[key] !== defaultValue) {
                 newStates[key] = defaultValue;
+            }
+        }
+        return newStates;
+    },
+
+    filterDirectionStates(blockStates) {
+        const newStates = {};
+        for (const [key, value] of Object.entries(blockStates)) {
+            if (this.directionStates.includes(key)) {
+                newStates[key] = value;
             }
         }
         return newStates;

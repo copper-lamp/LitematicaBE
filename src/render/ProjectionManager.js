@@ -24,7 +24,7 @@ class ProjectionManager {
 
         const activeProj = {
             projection: { ...projection },
-            renderLayer: projection.renderLayer !== undefined ? projection.renderLayer : -1,
+            renderLayer: projection.renderLayer !== undefined ? projection.renderLayer : 0,
             lastUpdate: Date.now(),
             playerXuid: playerId
         };

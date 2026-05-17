@@ -11,9 +11,10 @@ class EasyPlaceManager {
     static SEARCH_RADIUS = 5;
     static TICK_INTERVAL = 200;
 
-    constructor(projectionManager, dataManager) {
+    constructor(projectionManager, dataManager, megaManager) {
         this.projectionManager = projectionManager;
         this.dataManager = dataManager;
+        this.megaManager = megaManager;
         this.blockMatcher = new BlockMatcher();
         this.inventoryHelper = new InventoryHelper();
         this.positionConverter = new PositionConverter();
@@ -222,7 +223,7 @@ class EasyPlaceManager {
             }
 
             const converted = BlockConversions.convertToValid(neededBlockType, block.state || {});
-            const finalStates = BlockConversions.resetToDefaultStates(converted.states);
+        const finalStates = BlockConversions.filterDirectionStates(converted.states);
 
             const isCreative = player.gameMode === 1;
             let success = false;
@@ -280,94 +281,80 @@ class EasyPlaceManager {
             return true;
         }
 
-        if (!item) {
-            this.logDebug('EASYPLACE_NO_ITEM', { player: player.xuid });
-            return true;
-        }
-
-        // 跳过非方块物品（剑、工具等）和空方块数据
-        if (!block || !block.pos || block.pos.x === undefined) {
-            return true;
-        }
-
         const activeProj = this.projectionManager.getActiveProjectionByPlayer(player);
         if (!activeProj || !activeProj.projection) {
-            this.logDebug('EASYPLACE_NO_PROJECTION', { player: player.xuid });
             return true;
         }
-        
-        this.logDebug('EASYPLACE_TRIGGERED', {
-            player: player.xuid,
-            itemType: item.type,
-            blockPos: block?.pos,
-            side: side,
-            playerPos: player.pos
-        });
+
+        if (!block || !block.pos) {
+            return true;
+        }
 
         const projection = activeProj.projection;
         const projPos = projection.position;
         const projDim = projection.dimensions;
-        const dimid = player.pos.dimid;
+        const dimid = player.pos?.dimid ?? 0;
 
         const offsets = [
-            { x: 0, y: 1, z: 0 },
             { x: 0, y: -1, z: 0 },
+            { x: 0, y: 1, z: 0 },
             { x: 0, y: 0, z: -1 },
             { x: 0, y: 0, z: 1 },
             { x: -1, y: 0, z: 0 },
             { x: 1, y: 0, z: 0 }
         ];
         const offset = offsets[side] || offsets[0];
-        
-        const placeX = block.pos.x + offset.x;
-        const placeY = block.pos.y + offset.y;
-        const placeZ = block.pos.z + offset.z;
-        const placeDim = block.pos.dimid || dimid;
 
-        if (placeX < projPos.x || placeX >= projPos.x + projDim.x) {
-            return true;
+        let placeX = block.pos.x + offset.x;
+        let placeY = block.pos.y + offset.y;
+        let placeZ = block.pos.z + offset.z;
+        const placeDim = block.pos.dimid ?? dimid;
+
+        if (pos && typeof pos.x === 'number') {
+            const preciseX = Math.floor(pos.x);
+            const preciseY = Math.floor(pos.y);
+            const preciseZ = Math.floor(pos.z);
+            if (preciseX !== block.pos.x || preciseY !== block.pos.y || preciseZ !== block.pos.z) {
+                placeX = preciseX;
+                placeY = preciseY;
+                placeZ = preciseZ;
+            }
         }
-        if (placeY < projPos.y || placeY >= projPos.y + projDim.y) {
-            return true;
-        }
-        if (placeZ < projPos.z || placeZ >= projPos.z + projDim.z) {
+
+        const relX = placeX - projPos.x;
+        const relY = placeY - projPos.y;
+        const relZ = placeZ - projPos.z;
+
+        if (relX < 0 || relX >= projDim.x ||
+            relY < 0 || relY >= projDim.y ||
+            relZ < 0 || relZ >= projDim.z) {
             return true;
         }
 
         const currentLayer = activeProj.renderLayer;
-        if (currentLayer !== -1) {
-            const relativeY = placeY - projPos.y;
-            if (relativeY !== currentLayer) {
-                return true;
-            }
+        if (currentLayer !== -1 && relY !== currentLayer) {
+            return true;
         }
 
-        const projRelativeX = placeX - projPos.x;
-        const projRelativeY = placeY - projPos.y;
-        const projRelativeZ = placeZ - projPos.z;
-
-        // 使用方块位置索引加速查找 (O(1))
-        const projBlock = projection.blockIndex 
-            ? projection.blockIndex.get(`${projRelativeX},${projRelativeY},${projRelativeZ}`)
-            : null;
+        let projBlock = null;
+        
+        if (projection.isMega && projection.schematicId) {
+            // Mega 模式：从磁盘查询方块
+            const globalX = projPos.x + relX;
+            const globalY = projPos.y + relY;
+            const globalZ = projPos.z + relZ;
+            projBlock = this.megaManager.getBlockAt(projection.schematicId, globalX, globalY, globalZ);
+        } else if (projection.blockIndex) {
+            // 普通模式：从内存索引查询
+            projBlock = projection.blockIndex.get(`${relX},${relY},${relZ}`);
+        }
 
         if (!projBlock) {
-            this.logDebug('EASYPLACE_NO_PROJBLOCK', {
-                placePos: { x: placeX, y: placeY, z: placeZ },
-                projPos, projDim
-            });
             return true;
         }
 
         let neededBlockType = projBlock.name;
         let neededBlockState = projBlock.state || {};
-
-        this.logDebug('EASYPLACE_PROJBLOCK_FOUND', {
-            placePos: { x: placeX, y: placeY, z: placeZ },
-            neededBlockType,
-            neededBlockState,
-            itemType: item.type
-        });
 
         if (neededBlockType === 'minecraft:air') {
             return true;
@@ -375,39 +362,24 @@ class EasyPlaceManager {
 
         if (BlockConversions.isBanned(neededBlockType, placeDim)) {
             player.tell(`§c[EasyPlace] 禁止放置: ${neededBlockType}`);
-            this.logDebug('EASYPLACE_BANNED', { neededBlockType, placeDim });
             return false;
         }
 
         const converted = BlockConversions.convertToValid(neededBlockType, neededBlockState);
         neededBlockType = converted.name;
-        neededBlockState = BlockConversions.resetToDefaultStates(converted.states);
+        neededBlockState = BlockConversions.filterDirectionStates(converted.states);
 
-        this.logDebug('EASYPLACE_CONVERTED', {
-            originalType: projBlock.name,
-            convertedType: neededBlockType,
-            convertedState: neededBlockState
-        });
-
-        const isCorrectBlock = this.blockMatcher.match(item.type, neededBlockType, null, neededBlockState);
-
-        this.logDebug('EASYPLACE_MATCH_CHECK', {
-            itemType: item.type,
-            neededBlockType,
-            isCorrectBlock
-        });
-
-        if (isCorrectBlock) {
-            return true;
+        if (item) {
+            const isCorrectBlock = this.blockMatcher.match(item.type, neededBlockType, null, neededBlockState);
+            if (isCorrectBlock) {
+                return true;
+            }
         }
 
         const isCreative = player.gameMode === 1;
 
-        this.logDebug('EASYPLACE_CREATIVE_CHECK', { isCreative, gameMode: player.gameMode });
-
         if (isCreative) {
             const success = this.placeBlockAt(placeX, placeY, placeZ, placeDim, neededBlockType, neededBlockState);
-            this.logDebug('EASYPLACE_CREATIVE_RESULT', { success, placePos: { x: placeX, y: placeY, z: placeZ } });
             if (success) {
                 player.tell(`§a[EasyPlace] 已修正: ${neededBlockType}`);
                 return false;
@@ -422,8 +394,6 @@ class EasyPlaceManager {
             neededBlockState
         );
 
-        this.logDebug('EASYPLACE_INVENTORY_CHECK', { foundSlot, neededBlockType });
-
         if (foundSlot === -1) {
             const foundInShulker = this.inventoryHelper.findBlockInShulkerBoxes(
                 player,
@@ -432,11 +402,8 @@ class EasyPlaceManager {
                 neededBlockState
             );
 
-            this.logDebug('EASYPLACE_SHULKER_CHECK', { foundInShulker });
-
             if (foundInShulker === -1) {
                 const totalCount = this.inventoryHelper.countBlock(player, neededBlockType);
-                this.logDebug('EASYPLACE_NO_ITEM', { totalCount, neededBlockType });
                 if (totalCount > 0) {
                     player.tell(`§c[EasyPlace] 无法从潜隐盒提取: §e${neededBlockType}`);
                 } else {
@@ -447,7 +414,6 @@ class EasyPlaceManager {
         }
 
         const success = this.placeBlockAt(placeX, placeY, placeZ, placeDim, neededBlockType, neededBlockState);
-        this.logDebug('EASYPLACE_SURVIVAL_RESULT', { success, placePos: { x: placeX, y: placeY, z: placeZ } });
         if (success) {
             this.consumeItem(player, neededBlockType);
             player.tell(`§a[EasyPlace] 已修正: ${neededBlockType}`);
@@ -511,7 +477,7 @@ class EasyPlaceManager {
         const neededBlockState = projBlock.state || {};
         const converted = BlockConversions.convertToValid(neededBlockType, neededBlockState);
         const finalType = converted.name;
-        const finalStates = BlockConversions.resetToDefaultStates(converted.states);
+        const finalStates = BlockConversions.filterDirectionStates(converted.states);
 
         // 检查放置的方块是否正确
         const actualBlockType = block.type || block.name || '';

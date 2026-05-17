@@ -1,42 +1,39 @@
-// MegaProjectionRenderer - 超大型投影 LOD 分块管理器
-// 负责视口计算、LOD分块按需加载/卸载，方块数据提供给 ProjectionRenderer 统一渲染
-// 不直接生成粒子 —— 所有渲染由 ProjectionRenderer 处理
-// 支持 500,000+ 方块的超大型投影流畅渲染
+// MegaProjectionRenderer v3.1 — 超大型投影 LOD 渲染管理器
+// 渲染策略：仅执行一次初始渲染（~10000方块），玩家重生时才重新渲染
+// 分块大小: 32×32×32
+// 添加玩家反馈提示
 
-const { LODRenderer } = require('./LODRenderer');
+const { CHUNK_SIZE } = require('../core/BinaryChunkStorage');
 const { DebugLogger } = require('../core/DebugLogger');
 
-const CHUNK_SIZE = 16;
+const TARGET_LOD_BLOCKS = 10000;
+const CORE_CHUNK_RADIUS = 1;
+const FAR_FILTER_RATE = 0.3;
 
 class MegaProjectionRenderer {
     constructor(megaSchematicManager) {
         this.megaManager = megaSchematicManager;
-        this.lodRenderer = new LODRenderer();
         this.renderStates = new Map();
         this.tickCount = 0;
-        this.debugMode = false; // 调试模式开关
-        this.fileDebug = false; // 文件日志开关
+        this.debugMode = false;
+        this.fileDebug = false;
         this.debugLogger = null;
-        
-        // 从配置读取参数
+
         this.loadConfig();
-        
-        logger.info(`[MegaRender] Initialized - debugMode=${this.debugMode}, fileDebug=${this.fileDebug}`);
+
+        logger.info(`[MegaRender] v3.1 Initialized — palette+GZip .mcmega + render-once`);
+        this.registerRespawnListener();
     }
-    
-    /**
-     * 从 ConfigManager 加载配置
-     */
+
     loadConfig() {
         try {
             if (global.configManager) {
                 this.viewportUpdateInterval = global.configManager.get('megaRender.viewportUpdateInterval', 500);
                 this.maxParticlesPerTick = global.configManager.get('megaRender.maxParticlesPerTick', 2000);
-                this.defaultRenderDistance = global.configManager.get('megaRender.maxRenderDistance', 96);
+                this.maxRenderDistance = global.configManager.get('megaRender.maxRenderDistance', 96);
                 this.debugMode = global.configManager.get('megaRender.debug', false);
                 this.fileDebug = global.configManager.get('megaRender.fileDebug', false);
-                
-                // 初始化文件日志
+
                 if (this.fileDebug && !this.debugLogger) {
                     this.debugLogger = new DebugLogger({
                         enabled: true,
@@ -45,42 +42,42 @@ class MegaProjectionRenderer {
                         maxFiles: 5,
                         bufferSize: 50
                     });
-                    logger.info('[MegaRender] File debug logging enabled');
-                }
-                
-                // 加载LOD配置
-                const lodConfig = global.configManager.get('megaRender.lodLevels', null);
-                if (lodConfig) {
-                    this.lodRenderer.updateConfig({
-                        NEAR: { distance: lodConfig.near?.distance || 32, skipRate: lodConfig.near?.skipRate || 0 },
-                        MEDIUM: { distance: lodConfig.medium?.distance || 80, skipRate: lodConfig.medium?.skipRate || 2 },
-                        FAR: { distance: lodConfig.far?.distance || 160, skipRate: lodConfig.far?.skipRate || 4 }
-                    });
-                    logger.info(`[MegaRender] LOD config loaded: near=${lodConfig.near?.distance || 32}, medium=${lodConfig.medium?.distance || 80}, far=${lodConfig.far?.distance || 160}`);
                 }
             } else {
-                // 使用默认值
                 this.viewportUpdateInterval = 500;
                 this.maxParticlesPerTick = 2000;
-                this.defaultRenderDistance = 96;
+                this.maxRenderDistance = 96;
                 this.debugMode = false;
                 this.fileDebug = false;
             }
         } catch (e) {
-            logger.warn(`[MegaRender] Failed to load config: ${e.message}`);
+            logger.warn(`[MegaRender] Config load failed: ${e.message}`);
             this.viewportUpdateInterval = 500;
             this.maxParticlesPerTick = 2000;
-            this.defaultRenderDistance = 96;
+            this.maxRenderDistance = 96;
             this.debugMode = false;
             this.fileDebug = false;
         }
     }
-    
-    /**
-     * 记录调试日志
-     */
+
+    registerRespawnListener() {
+        mc.listen('onRespawn', (player) => {
+            if (!player || !player.xuid) return;
+            for (const [stateId, state] of this.renderStates) {
+                if (stateId.startsWith(player.xuid + '_') && state.isActive) {
+                    state.needsRespawnRender = true;
+                    state._lastSyncTime = 0;
+                    state._hasCompletedInitialRender = false;
+                    logger.info(`[MegaRender][RESPAWN] Player ${player.name} respawned, triggering re-render for ${stateId}`);
+                    if (this.debugMode) {
+                        player.tell(`§7[MegaRender] 检测到重生，重新渲染投影...`);
+                    }
+                }
+            }
+        });
+    }
+
     log(level, category, message, data = null) {
-        // WARN/ERROR level always output to console
         if (level === 'WARN' || level === 'ERROR') {
             if (data) {
                 logger.warn(`[MegaRender][${category}] ${message} ${JSON.stringify(data)}`);
@@ -89,8 +86,6 @@ class MegaProjectionRenderer {
             }
             return;
         }
-        
-        // 控制台输出（debug）
         if (this.debugMode) {
             if (data) {
                 logger.info(`[MegaRender][${category}] ${message} ${JSON.stringify(data)}`);
@@ -98,19 +93,15 @@ class MegaProjectionRenderer {
                 logger.info(`[MegaRender][${category}] ${message}`);
             }
         }
-        
-        // 文件输出
         if (this.fileDebug && this.debugLogger) {
             this.debugLogger.log(level, category, message, data);
         }
     }
 
-    /**
-     * 初始化渲染状态
-     */
+    // ==================== 状态管理 ====================
+
     initRenderState(player, schematicId, projection) {
         const stateId = `${player.xuid}_${schematicId}`;
-
         if (this.renderStates.has(stateId)) {
             return this.renderStates.get(stateId);
         }
@@ -119,39 +110,45 @@ class MegaProjectionRenderer {
             player,
             schematicId,
             projection,
-            visibleChunks: new Set(),
             loadedChunks: new Map(),
+            visibleChunkSet: new Set(),
             lastViewportUpdate: 0,
-            lastChunkLoad: 0,
+            lastSyncTime: 0,
             lastStatusLog: 0,
             isActive: true,
             isLayerMode: false,
             currentLayer: -1,
-            _needsSync: true,
+            needsSync: true,
+            needsRespawnRender: false,
+            _hasCompletedInitialRender: false,
+            _lastSyncTime: 0,
+            lastPlayerPos: player.pos ? { x: player.pos.x, y: player.pos.y, z: player.pos.z } : null,
             stats: {
                 chunksLoaded: 0,
-                lodStats: { NEAR: 0, MEDIUM: 0, FAR: 0, filtered: 0 }
+                totalCachedBlocks: 0,
+                totalFilteredBlocks: 0,
+                coreBlocks: 0,
+                farBlocks: 0
             }
         };
 
         this.renderStates.set(stateId, state);
-        
-        logger.info(`[MegaRender][INIT] State created: ${stateId} name="${projection.name}" totalBlocks=${projection.totalBlocks} isMega=${!!projection.isMega}`);
-        
-        if (this.debugMode) {
-            player.tell(`§7[Debug] MegaRender init: ${projection.name}, blocks=${projection.totalBlocks}`);
+        logger.info(`[MegaRender][INIT] State: ${stateId} name="${projection.name}" blocks=${projection.totalBlocks}`);
+
+        if (player) {
+            player.tell(`§6⚡ 超大型投影渲染已激活`);
+            player.tell(`§7  名称: §f${projection.name}`);
+            player.tell(`§7  方块数: §f${projection.totalBlocks}`);
+            player.tell(`§7  渲染策略: §fLOD动态过滤 ~${TARGET_LOD_BLOCKS}方块`);
         }
-        
+
         return state;
     }
 
-    /**
-     * 每tick调用 - 渲染循环入口
-     */
+    // ==================== 主循环 ====================
+
     onTick() {
         this.tickCount++;
-
-        const now = Date.now();
 
         for (const [stateId, state] of this.renderStates) {
             if (!state.isActive) continue;
@@ -159,276 +156,117 @@ class MegaProjectionRenderer {
             const player = state.player;
             if (!player || !player.pos) {
                 state.isActive = false;
-                logger.warn(`[MegaRender] State ${stateId} inactive: no player reference`);
                 continue;
             }
 
             const onlinePlayer = mc.getPlayer(player.xuid);
             if (!onlinePlayer) {
                 state.isActive = false;
-                logger.warn(`[MegaRender] State ${stateId} inactive: player offline`);
                 continue;
             }
-            
             state.player = onlinePlayer;
 
-            const viewportChanged = now - state.lastViewportUpdate >= this.viewportUpdateInterval;
-            if (viewportChanged) {
+            if (state.needsRespawnRender) {
+                state.needsSync = true;
+                state.needsRespawnRender = false;
+                state._hasCompletedInitialRender = false;
+            }
+
+            const now = Date.now();
+            const viewportChanged = (now - state.lastViewportUpdate) >= this.viewportUpdateInterval;
+
+            if (viewportChanged && !state._hasCompletedInitialRender) {
                 this.updateViewport(state);
                 state.lastViewportUpdate = now;
-                state._needsSync = true;
+                state.needsSync = true;
             }
-            
-            // 层模式切换或视口变化后，同步方块数据到 ProjectionRenderer
-            if (state._needsSync) {
+
+            if (state.needsSync) {
                 this.syncBlocksToRenderer(state);
-                state._needsSync = false;
+                state.needsSync = false;
             }
-            
-            if (now - state.lastStatusLog >= 2000) {
-                logger.info(`[MegaRender] status=${stateId} chunks=${state.loadedChunks.size} cachedBlocks=${this.countCachedBlocks(state)} N=${state.stats.lodStats.NEAR} M=${state.stats.lodStats.MEDIUM} F=${state.stats.lodStats.FAR}`);
+
+            if (now - state.lastStatusLog >= 5000 && this.debugMode) {
+                const st = state.stats;
+                logger.info(`[MegaRender] status=${stateId} chunks=${state.loadedChunks.size} cached=${st.totalCachedBlocks}`);
                 state.lastStatusLog = now;
             }
-            
-            if (this.debugMode && this.tickCount % 100 === 0) {
-                this.outputDebugInfo(state);
-            }
         }
-    }
-    
-    /**
-     * 统计当前缓存的方块数
-     */
-    countCachedBlocks(state) {
-        let count = 0;
-        for (const chunk of state.loadedChunks.values()) {
-            count += chunk.worldBlocks.length;
-        }
-        return count;
-    }
-    
-    /**
-     * 将当前分块中的方块数据同步给 ProjectionRenderer
-     * 应用 LOD 和 layer 过滤
-     */
-    syncBlocksToRenderer(state) {
-        const renderer = global.renderer;
-        if (!renderer || !state.player) return;
-        
-        // 严格节流：3秒内最多同步一次，确保批次渲染有足够时间完成
-        const now = Date.now();
-        if (!state._lastSyncTime) state._lastSyncTime = 0;
-        if (now - state._lastSyncTime < 3000) {
-            return;
-        }
-        
-        const allBlocks = [];
-        for (const chunk of state.loadedChunks.values()) {
-            for (const block of chunk.worldBlocks) {
-                if (state.isLayerMode && state.currentLayer >= 0 && block.pos[1] !== state.currentLayer) {
-                    continue;
-                }
-                allBlocks.push(block);
-            }
-        }
-        
-        state._lastSyncTime = now;
-        state._lastSyncBlockCount = allBlocks.length;
-        
-        logger.info(`[MegaRender][SYNC] feeding ${allBlocks.length} blocks (layerMode=${state.isLayerMode} layer=${state.currentLayer})`);
-        renderer.updateBlocks(state.player.xuid, allBlocks);
-    }
-    
-    /**
-     * 输出调试信息
-     */
-    outputDebugInfo(state) {
-        const stats = state.stats;
-        const player = state.player;
-        if (!player) return;
-        
-        const lod = stats.lodStats;
-        
-        player.tell(`§8[Debug] Chunks:${state.loadedChunks.size} Cached:${this.countCachedBlocks(state)} LOD[N:${lod.NEAR} M:${lod.MEDIUM} F:${lod.FAR}]`);
     }
 
-    /**
-     * 更新视口范围
-     * 根据LOD级别决定是否加载分块：
-     * - NEAR (≤32格): 加载全部分块
-     * - MEDIUM (32-80格): 稀疏加载分块 (每3个加载1个)
-     * - FAR (80-160格): 更稀疏加载 (每5个加载1个)
-     * - OUTLINE (>160格): 不加载分块，只显示轮廓
-     */
+    // ==================== 视口更新 ====================
+
     updateViewport(state) {
         const playerPos = state.player.pos;
         const projection = state.projection;
         const projPos = projection.position;
-
-        // LOD 距离配置
-        const LOD_NEAR = 32;
-        const LOD_MEDIUM = 80;
-        const LOD_FAR = 160;
+        const maxDist = this.maxRenderDistance;
 
         const relX = playerPos.x - projPos.x;
         const relY = playerPos.y - projPos.y;
         const relZ = playerPos.z - projPos.z;
 
-        // 计算各LOD级别的分块范围
-        const nearMinCX = Math.floor((relX - LOD_NEAR) / CHUNK_SIZE);
-        const nearMaxCX = Math.floor((relX + LOD_NEAR) / CHUNK_SIZE);
-        const nearMinCY = Math.floor((relY - LOD_NEAR) / CHUNK_SIZE);
-        const nearMaxCY = Math.floor((relY + LOD_NEAR) / CHUNK_SIZE);
-        const nearMinCZ = Math.floor((relZ - LOD_NEAR) / CHUNK_SIZE);
-        const nearMaxCZ = Math.floor((relZ + LOD_NEAR) / CHUNK_SIZE);
-
-        const mediumMinCX = Math.floor((relX - LOD_MEDIUM) / CHUNK_SIZE);
-        const mediumMaxCX = Math.floor((relX + LOD_MEDIUM) / CHUNK_SIZE);
-        const mediumMinCY = Math.floor((relY - LOD_MEDIUM) / CHUNK_SIZE);
-        const mediumMaxCY = Math.floor((relY + LOD_MEDIUM) / CHUNK_SIZE);
-        const mediumMinCZ = Math.floor((relZ - LOD_MEDIUM) / CHUNK_SIZE);
-        const mediumMaxCZ = Math.floor((relZ + LOD_MEDIUM) / CHUNK_SIZE);
-
-        const farMinCX = Math.floor((relX - LOD_FAR) / CHUNK_SIZE);
-        const farMaxCX = Math.floor((relX + LOD_FAR) / CHUNK_SIZE);
-        const farMinCY = Math.floor((relY - LOD_FAR) / CHUNK_SIZE);
-        const farMaxCY = Math.floor((relY + LOD_FAR) / CHUNK_SIZE);
-        const farMinCZ = Math.floor((relZ - LOD_FAR) / CHUNK_SIZE);
-        const farMaxCZ = Math.floor((relZ + LOD_FAR) / CHUNK_SIZE);
+        const minCX = Math.floor((relX - maxDist) / CHUNK_SIZE);
+        const maxCX = Math.floor((relX + maxDist) / CHUNK_SIZE);
+        const minCY = Math.floor((relY - maxDist) / CHUNK_SIZE);
+        const maxCY = Math.floor((relY + maxDist) / CHUNK_SIZE);
+        const minCZ = Math.floor((relZ - maxDist) / CHUNK_SIZE);
+        const maxCZ = Math.floor((relZ + maxDist) / CHUNK_SIZE);
 
         const newVisible = new Set();
-        const toLoad = [];
+        let loadedCount = 0;
 
-        // 辅助函数：计算分块中心到玩家的距离
-        const getChunkDistance = (cx, cy, cz) => {
-            const chunkCenterX = projPos.x + cx * CHUNK_SIZE + CHUNK_SIZE / 2;
-            const chunkCenterY = projPos.y + cy * CHUNK_SIZE + CHUNK_SIZE / 2;
-            const chunkCenterZ = projPos.z + cz * CHUNK_SIZE + CHUNK_SIZE / 2;
-            const dx = chunkCenterX - playerPos.x;
-            const dy = chunkCenterY - playerPos.y;
-            const dz = chunkCenterZ - playerPos.z;
-            return Math.sqrt(dx * dx + dy * dy + dz * dz);
-        };
-
-        // 辅助函数：根据距离决定是否加载分块
-        const shouldLoadChunk = (cx, cy, cz, distance) => {
-            const chunkKey = `${cx},${cy},${cz}`;
-            
-            if (distance <= LOD_NEAR) {
-                // NEAR: 全加载
-                return { shouldLoad: true, lodLevel: 'NEAR' };
-            } else if (distance <= LOD_MEDIUM) {
-                // MEDIUM: 稀疏加载 (每3个加载1个)
-                const hash = Math.abs((cx * 73856093) ^ (cy * 19349663) ^ (cz * 83492791));
-                return { shouldLoad: (hash % 3) === 0, lodLevel: 'MEDIUM' };
-            } else if (distance <= LOD_FAR) {
-                // FAR: 更稀疏加载 (每5个加载1个)
-                const hash = Math.abs((cx * 73856093) ^ (cy * 19349663) ^ (cz * 83492791));
-                return { shouldLoad: (hash % 5) === 0, lodLevel: 'FAR' };
-            } else {
-                // OUTLINE: 不加载
-                return { shouldLoad: false, lodLevel: 'OUTLINE' };
-            }
-        };
-
-        // 遍历FAR范围内的所有分块
         if (state.isLayerMode && state.currentLayer >= 0) {
             const layerCY = Math.floor(state.currentLayer / CHUNK_SIZE);
-            for (let cx = farMinCX; cx <= farMaxCX; cx++) {
-                for (let cz = farMinCZ; cz <= farMaxCZ; cz++) {
-                    const distance = getChunkDistance(cx, layerCY, cz);
-                    const { shouldLoad, lodLevel } = shouldLoadChunk(cx, layerCY, cz, distance);
+            for (let cx = minCX; cx <= maxCX; cx++) {
+                for (let cz = minCZ; cz <= maxCZ; cz++) {
                     const chunkKey = `${cx},${layerCY},${cz}`;
-                    
                     newVisible.add(chunkKey);
-                    
-                    if (shouldLoad && !state.visibleChunks.has(chunkKey)) {
-                        toLoad.push({ cx, cy: layerCY, cz, lodLevel, distance });
+                    if (!state.loadedChunks.has(chunkKey)) {
+                        this.loadChunkLOD(state, cx, layerCY, cz);
+                        loadedCount++;
                     }
                 }
             }
         } else {
-            for (let cx = farMinCX; cx <= farMaxCX; cx++) {
-                for (let cy = farMinCY; cy <= farMaxCY; cy++) {
-                    for (let cz = farMinCZ; cz <= farMaxCZ; cz++) {
-                        const distance = getChunkDistance(cx, cy, cz);
-                        const { shouldLoad, lodLevel } = shouldLoadChunk(cx, cy, cz, distance);
+            for (let cx = minCX; cx <= maxCX; cx++) {
+                for (let cy = minCY; cy <= maxCY; cy++) {
+                    for (let cz = minCZ; cz <= maxCZ; cz++) {
                         const chunkKey = `${cx},${cy},${cz}`;
-                        
                         newVisible.add(chunkKey);
-                        
-                        if (shouldLoad && !state.visibleChunks.has(chunkKey)) {
-                            toLoad.push({ cx, cy, cz, lodLevel, distance });
+                        if (!state.loadedChunks.has(chunkKey)) {
+                            this.loadChunkLOD(state, cx, cy, cz);
+                            loadedCount++;
                         }
                     }
                 }
             }
         }
 
-        // 加载新分块
-        let nearCount = 0, mediumCount = 0, farCount = 0;
-        for (const { cx, cy, cz, lodLevel, distance } of toLoad) {
-            this.loadChunk(state, cx, cy, cz, lodLevel);
-            if (lodLevel === 'NEAR') nearCount++;
-            else if (lodLevel === 'MEDIUM') mediumCount++;
-            else if (lodLevel === 'FAR') farCount++;
-        }
-
-        // 卸载不再可见的分块
-        const unloadedCount = state.visibleChunks.size;
-        for (const oldChunk of state.visibleChunks) {
+        for (const oldChunk of state.visibleChunkSet) {
             if (!newVisible.has(oldChunk)) {
                 this.unloadChunk(state, oldChunk);
             }
         }
 
-        state.visibleChunks = newVisible;
-        
-        const totalLoaded = nearCount + mediumCount + farCount;
-        if (totalLoaded > 0 || unloadedCount > newVisible.size) {
-            logger.info(`[MegaRender][VIEWPORT] visible=${newVisible.size} loaded=${totalLoaded} N=${nearCount} M=${mediumCount} F=${farCount} unloaded=${unloadedCount - newVisible.size}`);
-        }
+        state.visibleChunkSet = newVisible;
     }
 
-    /**
-     * 加载一个分块到内存
-     * @param {string} lodLevel - 'NEAR', 'MEDIUM', 'FAR' 用于决定分块内方块的LOD级别
-     */
-    loadChunk(state, cx, cy, cz, lodLevel = 'NEAR') {
+    // ==================== 分块加载 & LOD过滤 ====================
+
+    loadChunkLOD(state, cx, cy, cz) {
         const chunkKey = `${cx},${cy},${cz}`;
         const { schematicId, projection } = state;
 
         const chunkBlocks = this.megaManager.loadChunkFromDisk(schematicId, cx, cy, cz);
         if (!chunkBlocks || chunkBlocks.length === 0) {
-            state.visibleChunks.delete(chunkKey);
             return;
-        }
-
-        // 首次加载chunk时有日志
-        if (!state.loadedChunks.has(chunkKey)) {
-            logger.info(`[MegaRender][CHUNK] loaded=${chunkKey} blocks=${chunkBlocks.length} lod=${lodLevel}`);
         }
 
         const playerPos = state.player.pos;
         const projPos = projection.position;
 
-        // 根据分块的LOD级别决定如何处理方块
-        let blocksToProcess;
-        
-        if (lodLevel === 'NEAR') {
-            // NEAR: 处理所有方块
-            blocksToProcess = chunkBlocks;
-        } else if (lodLevel === 'MEDIUM') {
-            // MEDIUM: 稀疏采样 (每2个取1个)
-            blocksToProcess = chunkBlocks.filter((_, i) => i % 2 === 0);
-        } else if (lodLevel === 'FAR') {
-            // FAR: 更稀疏采样 (每4个取1个)
-            blocksToProcess = chunkBlocks.filter((_, i) => i % 4 === 0);
-        } else {
-            blocksToProcess = chunkBlocks;
-        }
-
-        const worldBlocks = blocksToProcess.map(block => {
+        const worldBlocks = chunkBlocks.map(block => {
             const wx = projPos.x + block.pos[0];
             const wy = projPos.y + block.pos[1];
             const wz = projPos.z + block.pos[2];
@@ -436,109 +274,178 @@ class MegaProjectionRenderer {
             const dy = wy - playerPos.y;
             const dz = wz - playerPos.z;
             return {
-                ...block,
+                pos: block.pos,
+                name: block.name,
+                state: block.state || {},
                 worldPos: [wx, wy, wz],
                 distance: Math.sqrt(dx * dx + dy * dy + dz * dz)
             };
         });
 
-        // 统计
-        const beforeCount = chunkBlocks.length;
-        const afterCount = worldBlocks.length;
-        
-        this.log('DEBUG', 'LOD', `Chunk ${chunkKey} [${lodLevel}]`, { 
-            before: beforeCount, 
-            after: afterCount,
-            sampling: lodLevel
-        });
-
         state.loadedChunks.set(chunkKey, {
             raw: chunkBlocks,
             worldBlocks: worldBlocks,
-            lodLevel: lodLevel,
+            cx, cy, cz,
             loadedAt: Date.now()
         });
 
         state.stats.chunksLoaded++;
+
+        if (state.stats.chunksLoaded <= 5 && this.debugMode) {
+            logger.info(`[MegaRender][CHUNK] loaded ${chunkKey} blocks=${chunkBlocks.length}`);
+        }
     }
 
-    /**
-     * 卸载一个分块
-     */
     unloadChunk(state, chunkKey) {
-        if (state.loadedChunks.has(chunkKey)) {
-            state.loadedChunks.delete(chunkKey);
+        state.loadedChunks.delete(chunkKey);
+    }
+
+    // ==================== 方块同步 & LOD过滤 ====================
+
+    /**
+     * 将当前分块中的方块经LOD过滤后同步到 ProjectionRenderer
+     * 仅执行一次初始渲染，之后只在重生时重新渲染
+     */
+    syncBlocksToRenderer(state) {
+        const renderer = global.renderer;
+        if (!renderer || !state.player) return;
+
+        const now = Date.now();
+        if (!state._lastSyncTime) state._lastSyncTime = 0;
+
+        if (state._hasCompletedInitialRender && !state.needsRespawnRender) {
+            return;
+        }
+
+        const chunks = Array.from(state.loadedChunks.values());
+        if (chunks.length === 0) return;
+
+        const playerPos = state.player.pos;
+        const projPos = state.projection.position;
+        const playerCX = Math.floor((playerPos.x - projPos.x) / CHUNK_SIZE);
+        const playerCZ = Math.floor((playerPos.z - projPos.z) / CHUNK_SIZE);
+
+        let allBlocks = [];
+        let coreBlockCount = 0;
+        let farBlockCount = 0;
+
+        // 收集所有可见分块
+        const visibleChunks = chunks;
+        const nonAirChunks = visibleChunks.filter(c => c.worldBlocks.length > 0);
+        
+        // 计算所有非空分块数量，用于平均配额分配
+        const chunkCount = nonAirChunks.length;
+        // 平均每个分块的配额
+        const quotaPerChunk = chunkCount > 0 ? Math.floor(TARGET_LOD_BLOCKS / chunkCount) : TARGET_LOD_BLOCKS;
+
+        for (const chunk of visibleChunks) {
+            if (chunk.worldBlocks.length === 0) continue;
+
+            let filtered;
+            if (state.isLayerMode && state.currentLayer >= 0) {
+                // currentLayer 是世界坐标，chunk.worldBlocks 中的 pos 也是世界坐标（相对投影原点）
+                // 需要找到对应层的方块
+                filtered = chunk.worldBlocks.filter(b => b.worldPos[1] === state.currentLayer);
+            } else {
+                filtered = chunk.worldBlocks;
+            }
+
+            // 所有分块采取平均过滤
+            if (state.isLayerMode) {
+                // 层模式：使用密度过滤
+                const kept = this.densityFilter(filtered, FAR_FILTER_RATE);
+                farBlockCount += kept.length;
+                allBlocks.push(...kept);
+            } else {
+                // 普通模式：平均配额过滤
+                const quotaFiltered = this.quotaFilter(filtered, quotaPerChunk);
+                farBlockCount += quotaFiltered.length;
+                allBlocks.push(...quotaFiltered);
+            }
+        }
+
+        state.stats.totalCachedBlocks = allBlocks.length;
+        state.stats.totalFilteredBlocks = farBlockCount;
+        state.stats.coreBlocks = coreBlockCount;
+        state.stats.farBlocks = farBlockCount;
+
+        state._lastSyncTime = now;
+        state._hasCompletedInitialRender = true;
+
+        logger.info(`[MegaRender][SYNC] total=${allBlocks.length} core=${coreBlockCount} far=${farBlockCount}`);
+
+        if (allBlocks.length > 0) {
+            renderer.updateBlocks(state.player.xuid, allBlocks);
+
+            if (state.player && !state.player._megaRenderNotified) {
+                state.player.tell(`§a✓ LOD渲染就绪`);
+                state.player.tell(`§7  渲染方块: §f${allBlocks.length} (核心${coreBlockCount} + 远处${farBlockCount})`);
+                state.player.tell(`§7  粒子重生时自动刷新`);
+                state.player._megaRenderNotified = true;
+            }
         }
     }
 
-    /**
-     * 获取维度名称
-     */
-    getDimensionName(dimension) {
-        switch (dimension) {
-            case 1: return 'the_nether';
-            case 2: return 'the_end';
-            default: return 'overworld';
+    isCoreChunk(chunk, playerCX, playerCZ, state) {
+        const dx = Math.abs(chunk.cx - playerCX);
+        const dz = Math.abs(chunk.cz - playerCZ);
+        return dx <= CORE_CHUNK_RADIUS && dz <= CORE_CHUNK_RADIUS;
+    }
+
+    quotaFilter(blocks, quota) {
+        if (quota <= 0) return [];
+        if (blocks.length <= quota) return blocks;
+
+        const sorted = [...blocks].sort((a, b) => a.distance - b.distance);
+
+        const step = Math.max(1, Math.floor(blocks.length / quota));
+        const result = [];
+        for (let i = 0; i < sorted.length && result.length < quota; i += step) {
+            result.push(sorted[i]);
         }
+
+        return result;
     }
 
-    /**
-     * 检查方块是否在玩家可见范围内
-     */
-    isInPlayerRange(player, block) {
-        const pp = player.pos;
-        if (!pp) return false;
+    densityFilter(blocks, keepRate) {
+        if (keepRate >= 1.0) return [...blocks];
+        if (keepRate <= 0 || blocks.length === 0) return [];
 
-        const [wx, wy, wz] = block.worldPos;
-        const dx = wx - pp.x;
-        const dy = wy - pp.y;
-        const dz = wz - pp.z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz) <= this.defaultRenderDistance;
+        const sorted = [...blocks].sort((a, b) => a.distance - b.distance);
+        const keepCount = Math.max(1, Math.floor(sorted.length * keepRate));
+        const step = Math.max(1, Math.floor(sorted.length / keepCount));
+
+        const result = [];
+        for (let i = 0; i < sorted.length && result.length < keepCount; i += step) {
+            result.push(sorted[i]);
+        }
+        return result;
     }
 
-    /**
-     * 切换到层次渲染模式
-     */
+    // ==================== 层模式 ====================
+
     setLayerMode(stateId, layerY) {
         const state = this.renderStates.get(stateId);
         if (!state) return false;
 
         state.isLayerMode = true;
         state.currentLayer = layerY;
-        state._needsSync = true;
+        state.needsSync = true;
+        state._hasCompletedInitialRender = false;
+        if (state.player) state.player._megaRenderNotified = false;
 
         logger.info(`[MegaRender][LAYER] stateId=${stateId} layer=${layerY}`);
-        
-        if (this.debugMode && state.player) {
-            state.player.tell(`§7[Debug] Layer mode: ${layerY}`);
-        }
-        
+
         return true;
     }
 
-    /**
-     * 停止渲染
-     */
-    stopRender(stateId) {
-        const state = this.renderStates.get(stateId);
-        if (!state) return;
+    // ==================== 轻松放置查询 ====================
 
-        state.isActive = false;
-        const chunkCount = state.loadedChunks.size;
-        this.renderStates.delete(stateId);
-        logger.info(`[MegaRender][STOP] stopped=${stateId} chunks=${chunkCount}`);
-    }
-
-    /**
-     * 获取查询范围内的方块（用于轻松放置）
-     */
     getBlocksInRadius(stateId, worldCenterX, worldCenterY, worldCenterZ, radius) {
         const state = this.renderStates.get(stateId);
         if (!state) return [];
 
-        const projection = state.projection;
-        const projPos = projection.position;
-
+        const projPos = state.projection.position;
         const relX = worldCenterX - projPos.x;
         const relY = worldCenterY - projPos.y;
         const relZ = worldCenterZ - projPos.z;
@@ -546,32 +453,37 @@ class MegaProjectionRenderer {
         return this.megaManager.getBlocksNear(state.schematicId, relX, relY, relZ, radius);
     }
 
-    /**
-     * 获取渲染统计
-     */
+    // ==================== 管理 ====================
+
+    stopRender(stateId) {
+        const state = this.renderStates.get(stateId);
+        if (!state) return;
+        const chunkCount = state.loadedChunks.size;
+        state.isActive = false;
+        this.renderStates.delete(stateId);
+        logger.info(`[MegaRender][STOP] ${stateId} chunks=${chunkCount}`);
+    }
+
+    clearAll() {
+        this.renderStates.clear();
+    }
+
     getStats(stateId) {
         const state = this.renderStates.get(stateId);
         if (!state) return null;
-
         return {
             ...state.stats,
             loadedChunks: state.loadedChunks.size,
-            visibleChunks: state.visibleChunks.size,
+            visibleChunks: state.visibleChunkSet.size,
             isLayerMode: state.isLayerMode,
             currentLayer: state.currentLayer
         };
     }
-    
-    /**
-     * 获取详细调试信息
-     */
+
     getDebugInfo(stateId) {
         const state = this.renderStates.get(stateId);
         if (!state) return null;
-        
         const player = state.player;
-        const lod = state.stats.lodStats;
-        
         return {
             stateId,
             isActive: state.isActive,
@@ -584,47 +496,30 @@ class MegaProjectionRenderer {
                 schematicId: state.projection.schematicId
             },
             stats: state.stats,
-            lodDistribution: {
-                near: lod.NEAR,
-                medium: lod.MEDIUM,
-                far: lod.FAR,
-                filtered: lod.filtered,
-                total: lod.NEAR + lod.MEDIUM + lod.FAR + lod.filtered
-            },
-            memory: {
-                loadedChunks: state.loadedChunks.size,
-                visibleChunks: state.visibleChunks.size,
-                pendingRender: state.pendingRender.length,
-                renderedPositions: state.renderedPositions.size,
-                placedPositions: state.placedPositions.size
-            },
             config: {
                 viewportUpdateInterval: this.viewportUpdateInterval,
                 maxParticlesPerTick: this.maxParticlesPerTick,
-                defaultRenderDistance: this.defaultRenderDistance,
+                maxRenderDistance: this.maxRenderDistance,
+                targetLODBlocks: TARGET_LOD_BLOCKS,
+                storageFormat: 'mcmega_v2 (palette+GZip)',
+                chunkSize: CHUNK_SIZE,
                 debugMode: this.debugMode
             }
         };
     }
 
-    /**
-     * 清除所有渲染状态
-     */
-    clearAll() {
-        this.renderStates.clear();
+    outputDebugInfo(state) {
+        const player = state.player;
+        if (!player) return;
+        const st = state.stats;
+        player.tell(`§8[D] chunks:${state.loadedChunks.size} cached:${st.totalCachedBlocks} core:${st.coreBlocks} far:${st.farBlocks} rendered:${state._hasCompletedInitialRender}`);
     }
-    
-    /**
-     * 切换调试模式
-     */
+
     setDebugMode(enabled) {
         this.debugMode = enabled;
         this.log('INFO', 'CONFIG', `Debug mode: ${enabled}`);
     }
-    
-    /**
-     * 切换文件日志模式
-     */
+
     setFileDebug(enabled) {
         this.fileDebug = enabled;
         if (enabled && !this.debugLogger) {
@@ -638,10 +533,7 @@ class MegaProjectionRenderer {
         }
         this.log('INFO', 'CONFIG', `File debug: ${enabled}`);
     }
-    
-    /**
-     * 刷新日志到文件
-     */
+
     flushLogs() {
         if (this.debugLogger) {
             this.debugLogger.flush();

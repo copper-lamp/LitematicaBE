@@ -75,9 +75,10 @@ class UIManager {
     showMainMenu(player) {
         const fm = mc.newSimpleForm();
         fm.setTitle('Litematica BE');
-        fm.setContent('投影工具 v2.1.0\n选择一个操作：');
+        fm.setContent('Litematica BE v2.4.0\n选择一个操作：');
 
         fm.addButton('加载投影');
+        fm.addButton('保存投影');
         fm.addButton('投影管理');
         fm.addButton('投影操作');
         fm.addButton('关于投影');
@@ -90,12 +91,15 @@ class UIManager {
                     this.showLoadProjection(player);
                     break;
                 case 1:
-                    this.showProjectionManage(player);
+                    this.showSaveSchematicMenu(player);
                     break;
                 case 2:
-                    this.showProjectionOperations(player);
+                    this.showProjectionManage(player);
                     break;
                 case 3:
+                    this.showProjectionOperations(player);
+                    break;
+                case 4:
                     this.showAbout(player);
                     break;
             }
@@ -106,24 +110,156 @@ class UIManager {
         const fm = mc.newSimpleForm();
         fm.setTitle('关于投影');
         fm.setContent(
-            'Litematica BE\n\n' +
-            '版本: 2.1.0\n\n' +
-            '功能说明:\n' +
-            '- 加载原理图文件\n' +
-            '- 使用粒子显示投影\n' +
-            '- 逐层渲染模式\n' +
-            '- 木剑切换层\n' +
-            '- 轻松放置辅助\n\n' +
-            '使用方法:\n' +
-            '- 手持木剑蹲下点击打开菜单\n' +
-            '- 逐层模式下用木剑切换层\n' +
-            '- 抬头向上切换，低头向下切换'
+            '§6§lLitematica BE§r\n\n' +
+            '§7版本: §f2.4.0\n\n' +
+            '§e§l功能说明:§r\n' +
+            '§f• 加载原理图 (.litematic)\n' +
+            '§f• 保存原理图\n' +
+            '§f• 逐层渲染\n' +
+            '§f• 木剑换层\n' +
+            '§f• 轻松放置\n' +
+            '§f• 投影打印机§r\n\n' +
+            '§e§l使用教学:§r\n' +
+            '§a1. §f手持§6木剑§f蹲下点击打开主菜单\n' +
+            '§a2. §f选择"浏览新原理图"加载.litematic文件\n' +
+            '§a3. §f投影会放置在玩家脚下位置\n' +
+            '§a4. §f在 §e投影操作 §f开启逐层建造模式\n' +
+            '§a5. §f逐层模式下，§6抬头向上§f切换下层，§6低头向下§f切换上层\n' +
+            '§a6. §f手持材料对准投影即可轻松放置\n' +
+            '§a7. §f开启投影打印机可自动快速放置方块§r\n\n' +
+            '§e§l开发者信息:§r\n' +
+            '§f开发团队: copper-lamp\n' +
+            '§fGitHub: §bhttps://github.com/copper-lamp/LitematicaBE§r\n\n' +
+            '§f本项目为公益开源项目，与java版Litematica兼容\n' +
+            '§e§lBug反馈:§r\n' +
+            '§f如果遇到问题，请前往GitHub仓库提交Issue，我们会尽快修复\n' +
+            '§f加入QQ群 861900673 反馈问题§r'
         );
         fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
             this.showMainMenu(player);
         });
+    }
+
+    // ==================== 保存原理图菜单 ====================
+
+    showSaveSchematicMenu(player) {
+        const fm = mc.newSimpleForm();
+        fm.setTitle('保存原理图');
+        fm.setContent('使用木剑选取两个坐标点，将选区保存为.litematic文件\n\n作者将自动设置为您的玩家ID');
+
+        fm.addButton('开始选区');
+        fm.addButton('返回主菜单');
+
+        player.sendForm(fm, (player, data) => {
+            if (data === null) {
+                this.showMainMenu(player);
+                return;
+            }
+
+            switch (data) {
+                case 0:
+                    this.startSchematicSelection(player);
+                    break;
+                case 1:
+                default:
+                    this.showMainMenu(player);
+                    break;
+            }
+        });
+    }
+
+    startSchematicSelection(player) {
+        const selectionTool = global.selectionTool;
+        if (!selectionTool) {
+            player.tell('§c错误: 选区工具未初始化');
+            return;
+        }
+
+        selectionTool.startSelection(player);
+        //player.tell('§a选区模式已启动');
+        //player.tell('§7使用木剑右键点击方块选择坐标');
+    }
+
+    /**
+     * 显示保存原理图UI表单（选区完成后调用）
+     */
+    showSaveSchematicForm(player, region) {
+        const fm = mc.newCustomForm();
+        fm.setTitle('保存原理图');
+        fm.addLabel(
+            `选区范围: (${region.minX}, ${region.minY}, ${region.minZ}) ， (${region.maxX}, ${region.maxY}, ${region.maxZ})\n` +
+            `尺寸: ${region.maxX - region.minX + 1}×${region.maxY - region.minY + 1}×${region.maxZ - region.minZ + 1}\n` +
+            `作者: ${player.name}`
+        );
+        fm.addInput('原理图名称', '输入原理图名称...', '');
+        fm.addInput('描述（可选）', '输入描述...', '');
+
+        player.sendForm(fm, (player, data) => {
+            if (data === null || data === undefined) {
+                player.tell('§c保存已取消');
+                const selectionTool = global.selectionTool;
+                if (selectionTool) selectionTool.cleanup(player.xuid);
+                return;
+            }
+
+            const fileName = data[1] ? String(data[1]).trim() : '';
+            const description = data[2] ? String(data[2]).trim() : '';
+
+            if (!fileName) {
+                player.tell('§c错误: 原理图名称不能为空');
+                this.showSaveSchematicForm(player, region);
+                return;
+            }
+
+            // 验证文件名
+            if (!/^[a-zA-Z0-9_\-\u4e00-\u9fa5]+$/.test(fileName)) {
+                player.tell('§c错误: 名称只能包含字母、数字、下划线、横线和中文');
+                this.showSaveSchematicForm(player, region);
+                return;
+            }
+
+            this.doSaveSchematic(player, region, fileName, description);
+        });
+    }
+
+    /**
+     * 执行保存原理图
+     */
+    async doSaveSchematic(player, region, fileName, description) {
+        const schematicSaver = global.schematicSaver;
+        const selectionTool = global.selectionTool;
+
+        if (!schematicSaver) {
+            player.tell('§c错误: 保存器未初始化');
+            return;
+        }
+
+        player.tell('§a正在扫描方块...');
+
+        try {
+            const result = await schematicSaver.saveSchematic(
+                region,
+                player.dim,
+                fileName,
+                player.name,
+                description
+            );
+
+            player.tell(`§a原理图保存成功!`);
+            player.tell(`§7文件: §f${result.fileName}.litematic`);
+            player.tell(`§7方块数: §f${result.blockCount}`);
+            player.tell(`§7尺寸: §f${result.dimensions.x}×${result.dimensions.y}×${result.dimensions.z}`);
+
+            // 清理选区状态
+            if (selectionTool) selectionTool.cleanup(player.xuid);
+
+        } catch (e) {
+            player.tell(`§c保存失败: ${e.message}`);
+            logger.error(`[UIManager] saveSchematic error: ${e.message}`);
+            logger.error(`[UIManager] Stack: ${e.stack}`);
+        }
     }
 
     showSchematicBrowser(player, onSelect = null) {
