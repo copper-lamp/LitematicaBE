@@ -60,8 +60,15 @@ class StreamingLitematicLoader {
         
         logger.info(`[StreamLoader] NBT parsed successfully, keys: ${Object.keys(nbtData).join(', ')}`);
 
+        const path = require('path');
+        let metaName = (nbtData.Metadata && nbtData.Metadata.Name) || '';
+        if (!metaName || metaName === 'Unnamed' || metaName.trim() === '') {
+            // 回退到文件名
+            metaName = path.basename(filePath, path.extname(filePath)) || 'Unnamed';
+        }
+
         const meta = {
-            name: (nbtData.Metadata && nbtData.Metadata.Name) || 'Unknown',
+            name: metaName,
             author: (nbtData.Metadata && nbtData.Metadata.Author) || 'Unknown',
             description: (nbtData.Metadata && nbtData.Metadata.Description) || '',
             version: nbtData.Version || 0,
@@ -220,13 +227,16 @@ class StreamingLitematicLoader {
                 if (fs && fs.readFile) {
                     fs.readFile(filePath, (err, buffer) => {
                         if (err) {
-                            resolve(this.decodeFileContent(File.readFrom(filePath)));
+                            logger.warn(`[StreamLoader] fs.readFile failed: ${err.message}, trying File.readFrom`);
+                            const rawContent = File.readFrom(filePath);
+                            resolve(rawContent ? this.decodeFileContent(rawContent) : null);
                         } else {
                             resolve(new Uint8Array(buffer));
                         }
                     });
                 } else {
-                    resolve(this.decodeFileContent(File.readFrom(filePath)));
+                    const rawContent = File.readFrom(filePath);
+                    resolve(rawContent ? this.decodeFileContent(rawContent) : null);
                 }
             } catch (e) {
                 logger.error(`[StreamLoader] Read error: ${e.message}`);
@@ -298,11 +308,24 @@ class StreamingLitematicLoader {
         }
     }
 
-    parseCompoundLite(data, startOffset) {
+    parseCompoundLite(data, startOffset, depth = 0) {
+        // 防止过深递归
+        if (depth > 100) {
+            logger.warn(`[StreamLoader] Max recursion depth reached at offset ${startOffset}`);
+            return { result: {}, newOffset: startOffset };
+        }
+
         const result = {};
         let offset = startOffset;
+        let tagCount = 0;
+        const MAX_TAGS = 100000;
 
         while (offset < data.length) {
+            if (tagCount++ > MAX_TAGS) {
+                logger.warn(`[StreamLoader] Max tag count reached at offset ${offset}`);
+                break;
+            }
+
             const tagType = data[offset++];
             if (tagType === 0) break;
 
@@ -316,7 +339,7 @@ class StreamingLitematicLoader {
                 offset += nameLen;
             }
 
-            const r = this.readTagLite(data, offset, tagType);
+            const r = this.readTagLite(data, offset, tagType, depth);
             offset = r.newOffset;
 
             if (tagName) {
@@ -326,7 +349,7 @@ class StreamingLitematicLoader {
         return { result, newOffset: offset };
     }
 
-    readTagLite(data, offset, type) {
+    readTagLite(data, offset, type, depth = 0) {
         let value = null;
         switch (type) {
             case 1: value = data[offset]; offset += 1; break;
@@ -390,7 +413,7 @@ class StreamingLitematicLoader {
                 break;
             }
             case 10: {
-                const parsed = this.parseCompoundLite(data, offset);
+                const parsed = this.parseCompoundLite(data, offset, depth + 1);
                 value = parsed.result;
                 offset = parsed.newOffset;
                 break;

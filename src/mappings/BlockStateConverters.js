@@ -56,12 +56,16 @@ const TORCH_JAVA_TO_BE = { east: 'east', west: 'west', south: 'south', north: 'n
 // Java: mode=compare/subtract -> BE: output_subtract_bit=0/1
 
 // === LEVER FACING ===
-const LEVER_JAVA_TO_BE = { north: 'south', south: 'north', east: 'west', west: 'east', up_x: 'up_north_south', up_z: 'up_east_west', down_x: 'down_north_south', down_z: 'down_east_west' };
+// Java lever facing: lever is on this face, handle extends outward
+// BE lever_direction: handle points in this direction (opposite face attachment)
+// e.g., Java facing=north (lever on north face, handle extends north) → BE lever_direction=north
+const LEVER_JAVA_TO_BE = { north: 'north', south: 'south', east: 'east', west: 'west', up_x: 'up_north_south', up_z: 'up_east_west', down_x: 'down_north_south', down_z: 'down_east_west' };
 
 // === BUTTON FACING ===
+// Java: face=wall/floor/ceiling + facing=direction. BE: facing_direction numeric.
+// BE_FACING_BUTTON: { down:0, up:1, south:2, north:3, east:4, west:5 }
 const BUTTON_JAVA_FACING_TO_BE = {
-    north: 3, south: 2, east: 4, west: 1, up: 0, down: 5,
-    ceiling: 0, floor: 5
+    north: 2, south: 3, east: 5, west: 4
 };
 
 // === BED DIRECTION ===
@@ -212,8 +216,16 @@ class BlockStateConverters {
         // Stone button / wooden button
         if (javaName.includes('_button')) {
             be.button_pressed_bit = (js.powered === 'true' || js.pressed === 'true') ? 1 : 0;
-            be.facing_direction = BUTTON_JAVA_FACING_TO_BE[facing] !== undefined ? BUTTON_JAVA_FACING_TO_BE[facing] : 0;
+            const face = js.face || 'wall';
+            if (face === 'ceiling') {
+                be.facing_direction = 0;  // button on ceiling → down
+            } else if (face === 'floor') {
+                be.facing_direction = 1;  // button on floor → up
+            } else {
+                be.facing_direction = BUTTON_JAVA_FACING_TO_BE[facing] !== undefined ? BUTTON_JAVA_FACING_TO_BE[facing] : 2;
+            }
             delete be.facing;
+            delete be.face;
             delete be.pressed;
             return;
         }
@@ -288,8 +300,17 @@ class BlockStateConverters {
 
         // Buttons
         if (mapping.b && mapping.b.includes('button') && bs.facing_direction !== undefined) {
-            const reverse = { 0: 'up', 1: 'west', 2: 'south', 3: 'north', 4: 'east', 5: 'down' };
-            java.facing = reverse[bs.facing_direction] || 'up';
+            const dir = bs.facing_direction;
+            // 0=down(ceiling), 1=up(floor), 2=south(attached north), 3=north(attached south), 4=east(attached west), 5=west(attached east)
+            if (dir === 0) {
+                java.face = 'ceiling';
+            } else if (dir === 1) {
+                java.face = 'floor';
+            } else {
+                java.face = 'wall';
+                const reverse = { 2: 'north', 3: 'south', 4: 'west', 5: 'east' };
+                java.facing = reverse[dir] || 'north';
+            }
             delete java.facing_direction;
             return;
         }
@@ -320,6 +341,22 @@ class BlockStateConverters {
     // ========== SPECIAL CONVERTERS ==========
 
     _applySpecialConverters(javaName, js, be) {
+        // === COLOR EXTRACTION: 从Java块名中提取颜色（羊毛/陶瓦/混凝土/玻璃/地毯/旗帜等）===
+        const COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray',
+                        'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black'];
+        // 需要在BE中设置color状态的方块类型
+        const COLOR_BLOCK_TYPES = ['wool', 'carpet', 'terracotta', 'concrete', 'concrete_powder',
+                                   'stained_glass', 'stained_glass_pane', 'banner', 'wall_banner',
+                                   'bed', 'shulker_box', 'candle', 'candle_cake'];
+        const coloredBlockType = COLOR_BLOCK_TYPES.find(t => javaName.endsWith('_' + t));
+        if (coloredBlockType) {
+            const baseName = '_' + coloredBlockType;
+            const prefix = javaName.replace('minecraft:', '').replace(baseName, '');
+            if (COLORS.includes(prefix)) {
+                be.color = prefix;
+            }
+        }
+
         // DOORS: wooden, iron, copper, and wood-type doors
         if (javaName.endsWith('_door')) {
             const facing = js.facing || 'north';
@@ -644,7 +681,7 @@ class BlockStateConverters {
 
         // LEVER
         if (beBlockId === 'lever' && bs.lever_direction) {
-            const reverse = { 'south': 'north', 'north': 'south', 'east': 'west', 'west': 'east',
+            const reverse = { 'north': 'north', 'south': 'south', 'east': 'east', 'west': 'west',
                 'up_north_south': 'north', 'up_east_west': 'east',
                 'down_north_south': 'north', 'down_east_west': 'east' };
             java.facing = reverse[bs.lever_direction] || 'north';

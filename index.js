@@ -854,8 +854,14 @@ async function loadSchematicFile(filename, player) {
                 player
             );
             
+            const path = require('path');
+            let megaName = megaResult.meta.name;
+            if (!megaName || megaName === 'Unknown' || megaName === 'Unnamed' || megaName.trim() === '') {
+                megaName = path.basename(fullPath, path.extname(fullPath)) || 'Unnamed';
+            }
+
             const schematic = {
-                name: megaResult.meta.name,
+                name: megaName,
                 author: megaResult.meta.author,
                 description: megaResult.meta.description || '',
                 dimensions: megaResult.meta.dimensions,
@@ -1101,25 +1107,57 @@ function handleVerifyCommand(player, output) {
     output.success("§7正在验证投影...");
 
     const results = blockVerifier.verifyProjection(projection);
-
-    output.success("§6========== 验证结果 ==========");
-    output.success(`§e总方块数: §f${results.total}`);
-    output.success(`§a完全匹配: §f${results.match}`);
-    output.success(`§e状态错误: §f${results.typeMatch}`);
-    output.success(`§c错误方块: §f${results.noMatch}`);
-    output.success(`§b缺失方块: §f${results.missing}`);
-
     const matchPercent = results.total > 0 ? ((results.match / results.total) * 100).toFixed(1) : 0;
-    output.success(`§7完成度: §f${matchPercent}%`);
 
-    if (results.blocks.length > 0 && results.blocks.length <= 10) {
-        output.success("§7问题方块:");
-        for (const block of results.blocks) {
-            const color = block.level === 1 ? "§c" : (block.level === 2 ? "§e" : "§b");
-            output.success(`  ${color}(${block.position.x}, ${block.position.y}, ${block.position.z}) - ${block.levelName}`);
+    output.success("§6========== 投影验证结果 ==========");
+    output.success(`§e总方块数: §f${results.total}`);
+    output.success(`§a完全匹配: §f${results.match} 个 (§a${matchPercent}%§f)`);
+    output.success(`§e状态错误: §f${results.typeMatch} 个`);
+    output.success(`§c错误方块: §f${results.noMatch} 个`);
+    output.success(`§b缺失方块: §f${results.missing} 个`);
+
+    // 多余方块检测
+    if (projection.dimensions && projection.position) {
+        const volume = projection.dimensions.x * projection.dimensions.y * projection.dimensions.z;
+        if (volume <= 100000) {
+            output.success("§7正在检测多余方块...");
+            try {
+                const extraResult = blockVerifier.detectExtraBlocks(projection);
+                output.success(`§6多余方块: §f${extraResult.extraCount} 个 §7(扫描了 ${extraResult.totalScanned} 格)`);
+            } catch (e) {
+                output.success("§7多余方块检测跳过（投影区域过大）");
+            }
+        } else {
+            output.success("§7提示：投影过大(>10万格)，使用 §f/lit verify §7命令仅显示基本验证");
+            output.success("§7建议通过 GUI 菜单执行完整验证（含多余方块检测）");
         }
-    } else if (results.blocks.length > 10) {
-        output.success(`§7共有 ${results.blocks.length} 个问题方块`);
+    }
+
+    // 问题方块汇总
+    const totalProblems = results.noMatch + results.typeMatch + results.missing;
+    if (totalProblems > 0) {
+        output.success(`§7问题方块合计: §f${totalProblems} 个`);
+        if (totalProblems <= 10) {
+            output.success("§7--- 问题方块列表 ---");
+            for (const block of results.blocks) {
+                const color = block.level === 1 ? "§c" : (block.level === 2 ? "§e" : "§b");
+                output.success(`  ${color}(${block.position.x}, ${block.position.y}, ${block.position.z}) - ${block.levelName}`);
+            }
+        } else {
+            output.success(`§7共 ${totalProblems} 个问题方块，建议通过 GUI 菜单查看详情`);
+        }
+
+        // 自动标记问题方块
+        try {
+            const marked = blockVerifier.markProblemBlocks(player, results.blocks, 15000);
+            if (marked > 0) {
+                output.success(`§a已自动标记 ${marked} 个问题方块（§c红=错误 §e黄=状态 §b蓝=缺失§r），持续15秒`);
+            }
+        } catch (e) {
+            // 标记失败不影响主流程
+        }
+    } else {
+        output.success("§a全部方块验证通过！");
     }
 }
 
