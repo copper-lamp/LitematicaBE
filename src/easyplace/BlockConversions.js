@@ -103,6 +103,7 @@ const BlockConversions = {
 
     // 需要保留的方向/朝向状态（不要重置）
     directionStates: [
+        // Bedrock Edition directional/visual state keys
         'facing_direction',
         'ground_sign_direction',
         'torch_facing_direction',
@@ -144,7 +145,14 @@ const BlockConversions = {
         'unstable',
         'explode_bit',
         'output_lit_bit',
-        'output_subtract_bit'
+        'output_subtract_bit',
+        // Java Edition directional/visual state keys (Mega mode compatibility)
+        'facing', 'axis', 'half', 'shape', 'type', 'hinge', 'face', 'rotation',
+        'open', 'extended', 'powered', 'lit', 'attached', 'part', 'mode', 'in_wall',
+        'north', 'south', 'east', 'west', 'up', 'down', 'waterlogged', 'snowy',
+        'eye', 'has_book', 'occupied', 'instrument', 'note', 'signal_fire',
+        'hatch', 'eggs', 'pickles', 'candles', 'charges', 'layers', 'persistent',
+        'enabled', 'triggered', 'level'
     ],
 
     blockToItemMap: {
