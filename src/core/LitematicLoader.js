@@ -22,6 +22,180 @@ try {
 class LitematicLoader {
     constructor() {
         this.schematics = new Map();
+        this._initTagHandlers();
+    }
+
+    /**
+     * 初始化NBT标签处理器注册表
+     * 统一管理所有12种NBT标签类型的读写和跳过逻辑，消除重复代码
+     * - size !== null: 固定大小标签，read/skip 直接使用
+     * - size === null: 动态大小标签，read 返回 { value, size }，skip 返回新 offset
+     */
+    _initTagHandlers() {
+        this._TAG_HANDLERS = {
+            // TAG_Byte (1)
+            1: {
+                size: 1,
+                read: (data, offset) => data[offset]
+            },
+            // TAG_Short (2)
+            2: {
+                size: 2,
+                read: (data, offset) => {
+                    let value = (data[offset] << 8) | data[offset + 1];
+                    return value > 32767 ? value - 65536 : value;
+                }
+            },
+            // TAG_Int (3)
+            3: {
+                size: 4,
+                read: (data, offset) => {
+                    let value = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+                    return value > 2147483647 ? value - 4294967296 : value;
+                }
+            },
+            // TAG_Long (4) - 使用BigInt避免JS Number符号溢出
+            4: {
+                size: 8,
+                read: (data, offset) => {
+                    let longVal = 0n;
+                    for (let j = 0; j < 8; j++) {
+                        longVal = (longVal << 8n) | BigInt(data[offset + j]);
+                    }
+                    return longVal;
+                }
+            },
+            // TAG_Float (5)
+            5: {
+                size: 4,
+                read: (data, offset) => {
+                    const buf = new ArrayBuffer(4);
+                    new Uint8Array(buf).set(data.slice(offset, offset + 4));
+                    return new DataView(buf).getFloat32(0);
+                }
+            },
+            // TAG_Double (6)
+            6: {
+                size: 8,
+                read: (data, offset) => {
+                    const buf = new ArrayBuffer(8);
+                    new Uint8Array(buf).set(data.slice(offset, offset + 8));
+                    return new DataView(buf).getFloat64(0);
+                }
+            },
+            // TAG_Byte_Array (7) - 动态大小
+            7: {
+                size: null,
+                read: (data, offset) => {
+                    const len = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+                    const value = Array.from(data.slice(offset + 4, offset + 4 + len));
+                    return { value, size: 4 + len };
+                },
+                skip: (data, offset) => {
+                    const len = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+                    return offset + 4 + len;
+                }
+            },
+            // TAG_String (8) - 动态大小
+            8: {
+                size: null,
+                read: (data, offset) => {
+                    const len = (data[offset] << 8) | data[offset + 1];
+                    const value = len > 0
+                        ? new TextDecoder().decode(data.slice(offset + 2, offset + 2 + len))
+                        : '';
+                    return { value, size: 2 + len };
+                },
+                skip: (data, offset) => {
+                    const len = (data[offset] << 8) | data[offset + 1];
+                    return offset + 2 + len;
+                }
+            },
+            // TAG_List (9) - 动态大小
+            9: {
+                size: null,
+                read: (data, offset) => {
+                    const listType = data[offset];
+                    const listLen = (data[offset + 1] << 24) | (data[offset + 2] << 16) | (data[offset + 3] << 8) | data[offset + 4];
+                    let cur = offset + 5;
+                    const value = [];
+                    for (let i = 0; i < listLen; i++) {
+                        const { value: item, newOffset } = this.readTagValue(data, cur, listType);
+                        value.push(item);
+                        cur = newOffset;
+                    }
+                    return { value, size: cur - offset };
+                },
+                skip: (data, offset) => {
+                    const listType = data[offset];
+                    const listLen = (data[offset + 1] << 24) | (data[offset + 2] << 16) | (data[offset + 3] << 8) | data[offset + 4];
+                    let cur = offset + 5;
+                    for (let i = 0; i < listLen; i++) {
+                        cur = this.skipTagValue(data, cur, listType);
+                    }
+                    return cur;
+                }
+            },
+            // TAG_Compound (10) - 动态大小
+            10: {
+                size: null,
+                read: (data, offset) => {
+                    const { result, newOffset } = this.parseCompoundContent(data, offset);
+                    return { value: result, size: newOffset - offset };
+                },
+                skip: (data, offset) => {
+                    let cur = offset;
+                    while (cur < data.length) {
+                        const t = data[cur++];
+                        if (t === 0) break;
+                        const n = (data[cur] << 8) | data[cur + 1];
+                        cur += 2 + n;
+                        cur = this.skipTagValue(data, cur, t);
+                    }
+                    return cur;
+                }
+            },
+            // TAG_Int_Array (11) - 动态大小
+            11: {
+                size: null,
+                read: (data, offset) => {
+                    const len = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+                    let cur = offset + 4;
+                    const value = [];
+                    for (let i = 0; i < len; i++) {
+                        value.push((data[cur] << 24) | (data[cur + 1] << 16) | (data[cur + 2] << 8) | data[cur + 3]);
+                        cur += 4;
+                    }
+                    return { value, size: 4 + len * 4 };
+                },
+                skip: (data, offset) => {
+                    const len = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+                    return offset + 4 + len * 4;
+                }
+            },
+            // TAG_Long_Array (12) - 动态大小
+            12: {
+                size: null,
+                read: (data, offset) => {
+                    const len = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+                    let cur = offset + 4;
+                    const value = [];
+                    for (let i = 0; i < len; i++) {
+                        let laVal = 0n;
+                        for (let j = 0; j < 8; j++) {
+                            laVal = (laVal << 8n) | BigInt(data[cur + j]);
+                        }
+                        value.push(laVal);
+                        cur += 8;
+                    }
+                    return { value, size: 4 + len * 8 };
+                },
+                skip: (data, offset) => {
+                    const len = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+                    return offset + 4 + len * 8;
+                }
+            }
+        };
     }
 
     _safeNumber(val) {
@@ -318,7 +492,7 @@ class LitematicLoader {
             offset += nameLen;
             
             // 解析compound内容
-            const result = this.parseCompoundContent(data, offset);
+            const { result } = this.parseCompoundContent(data, offset);
             
             logger.info(`Parsed NBT keys: ${Object.keys(result).length}`);
             if (result.Version !== undefined) {
@@ -339,6 +513,7 @@ class LitematicLoader {
     }
     
     // 解析Compound内容 (不包含type和name)
+    // 返回 { result, newOffset } 便于调用方获取解析后的偏移量
     parseCompoundContent(data, startOffset) {
         const result = {};
         let offset = startOffset;
@@ -371,300 +546,44 @@ class LitematicLoader {
             }
         }
         
-        return result;
+        return { result, newOffset: offset };
     }
     
-    // 读取tag值
+    // 读取tag值 - 基于TAG_HANDLERS注册表统一处理
     readTagValue(data, offset, type) {
-        let value = null;
-        
-        switch (type) {
-            case 1: // TAG_Byte
-                value = data[offset];
-                offset += 1;
-                break;
-                
-            case 2: // TAG_Short
-                value = (data[offset] << 8) | data[offset + 1];
-                if (value > 32767) value -= 65536;
-                offset += 2;
-                break;
-                
-            case 3: // TAG_Int
-                value = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                if (value > 2147483647) value -= 4294967296;
-                offset += 4;
-                break;
-                
-            case 4: // TAG_Long
-                // 大端序读取：使用BigInt逐字节构建，避免JS Number符号溢出
-                let longVal = 0n;
-                for (let j = 0; j < 8; j++) {
-                    longVal = (longVal << 8n) | BigInt(data[offset + j]);
-                }
-                value = longVal;
-                offset += 8;
-                break;
-                
-            case 5: // TAG_Float
-                const floatBuf = new ArrayBuffer(4);
-                new Uint8Array(floatBuf).set(data.slice(offset, offset + 4));
-                value = new DataView(floatBuf).getFloat32(0);
-                offset += 4;
-                break;
-                
-            case 6: // TAG_Double
-                const doubleBuf = new ArrayBuffer(8);
-                new Uint8Array(doubleBuf).set(data.slice(offset, offset + 8));
-                value = new DataView(doubleBuf).getFloat64(0);
-                offset += 8;
-                break;
-                
-            case 7: // TAG_Byte_Array
-                const baLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                offset += 4;
-                value = Array.from(data.slice(offset, offset + baLen));
-                offset += baLen;
-                break;
-                
-            case 8: // TAG_String
-                const strLen = (data[offset] << 8) | data[offset + 1];
-                offset += 2;
-                if (strLen > 0) {
-                    value = new TextDecoder().decode(data.slice(offset, offset + strLen));
-                    offset += strLen;
-                } else {
-                    value = '';
-                }
-                break;
-                
-            case 9: // TAG_List
-                const listType = data[offset++];
-                const listLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                offset += 4;
-                value = [];
-                for (let i = 0; i < listLen; i++) {
-                    const { value: item, newOffset } = this.readTagValue(data, offset, listType);
-                    value.push(item);
-                    offset = newOffset;
-                }
-                break;
-                
-            case 10: // TAG_Compound
-                value = this.parseCompoundContent(data, offset);
-                // 找到END tag后的offset
-                let tempOffset = offset;
-                let depth = 1;
-                while (tempOffset < data.length && depth > 0) {
-                    const t = data[tempOffset++];
-                    if (t === 0) {
-                        depth--;
-                    } else if (t === 10) {
-                        // 跳过名字
-                        const n = (data[tempOffset] << 8) | data[tempOffset + 1];
-                        tempOffset += 2 + n;
-                        depth++;
-                    } else {
-                        // 跳过名字
-                        const n = (data[tempOffset] << 8) | data[tempOffset + 1];
-                        tempOffset += 2 + n;
-                        // 跳过值
-                        const skip = this.skipTagValue(data, tempOffset, t);
-                        if (skip > 0) tempOffset = skip;
-                        else break;
-                    }
-                }
-                offset = tempOffset;
-                break;
-                
-            case 11: // TAG_Int_Array
-                const iaLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                offset += 4;
-                value = [];
-                for (let i = 0; i < iaLen; i++) {
-                    value.push((data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3]);
-                    offset += 4;
-                }
-                break;
-                
-            case 12: // TAG_Long_Array
-                const laLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                offset += 4;
-                value = [];
-                for (let i = 0; i < laLen; i++) {
-                    // 大端序读取：使用BigInt逐字节构建，避免JS Number符号溢出
-                    let laVal = 0n;
-                    for (let j = 0; j < 8; j++) {
-                        laVal = (laVal << 8n) | BigInt(data[offset + j]);
-                    }
-                    value.push(laVal);
-                    offset += 8;
-                }
-                break;
-                
-            default:
-                logger.warn(`Unknown NBT tag type: ${type} at offset ${offset}`);
-                return { value: null, newOffset: offset };
+        const handler = this._TAG_HANDLERS[type];
+        if (!handler) {
+            logger.warn(`Unknown NBT tag type: ${type} at offset ${offset}`);
+            return { value: null, newOffset: offset };
         }
         
-        return { value, newOffset: offset };
+        if (handler.size !== null) {
+            // 固定大小标签
+            const value = handler.read(data, offset);
+            return { value, newOffset: offset + handler.size };
+        } else {
+            // 动态大小标签，read返回 { value, size }
+            const { value, size } = handler.read(data, offset);
+            return { value, newOffset: offset + size };
+        }
     }
     
-    // 跳过tag值 (用于计算offset)
+    // 跳过tag值 (用于计算offset) - 基于TAG_HANDLERS注册表统一处理
     skipTagValue(data, offset, type) {
         try {
-            switch (type) {
-                case 1: return offset + 1;
-                case 2: return offset + 2;
-                case 3: return offset + 4;
-                case 4: return offset + 8;
-                case 5: return offset + 4;
-                case 6: return offset + 8;
-                case 7:
-                    const baLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                    return offset + 4 + baLen;
-                case 8:
-                    const strLen = (data[offset] << 8) | data[offset + 1];
-                    return offset + 2 + strLen;
-                case 9:
-                    const listType = data[offset];
-                    const listLen = (data[offset + 1] << 24) | (data[offset + 2] << 16) | (data[offset + 3] << 8) | data[offset + 4];
-                    let listOffset = offset + 5;
-                    for (let i = 0; i < listLen; i++) {
-                        listOffset = this.skipTagValue(data, listOffset, listType);
-                    }
-                    return listOffset;
-                case 10:
-                    let compoundOffset = offset;
-                    while (compoundOffset < data.length) {
-                        const t = data[compoundOffset++];
-                        if (t === 0) break;
-                        const n = (data[compoundOffset] << 8) | data[compoundOffset + 1];
-                        compoundOffset += 2 + n;
-                        compoundOffset = this.skipTagValue(data, compoundOffset, t);
-                    }
-                    return compoundOffset;
-                case 11:
-                    const iaLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                    return offset + 4 + iaLen * 4;
-                case 12:
-                    const laLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                    return offset + 4 + laLen * 8;
-                default:
-                    return -1;
+            const handler = this._TAG_HANDLERS[type];
+            if (!handler) {
+                return -1;
+            }
+            
+            if (handler.size !== null) {
+                return offset + handler.size;
+            } else {
+                return handler.skip(data, offset);
             }
         } catch (e) {
             return -1;
         }
-    }
-    
-    // 解析NBT值
-    parseNbtValue(data, offset, type) {
-        let value = null;
-        let newOffset = offset;
-        
-        try {
-            switch (type) {
-                case 1: // BYTE
-                    value = data[offset];
-                    newOffset = offset + 1;
-                    break;
-                case 2: // SHORT
-                    value = (data[offset] << 8) | data[offset + 1];
-                    if (value > 32767) value -= 65536;
-                    newOffset = offset + 2;
-                    break;
-                case 3: // INT
-                    value = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                    if (value > 2147483647) value -= 4294967296;
-                    newOffset = offset + 4;
-                    break;
-                case 4: // LONG
-                    value = BigInt(0);
-                    for (let i = 0; i < 8; i++) {
-                        value = (value << 8n) | BigInt(data[offset + i]);
-                    }
-                    newOffset = offset + 8;
-                    break;
-                case 5: // FLOAT
-                    const floatBuf = new ArrayBuffer(4);
-                    const floatView = new DataView(floatBuf);
-                    for (let i = 0; i < 4; i++) {
-                        floatView.setUint8(i, data[offset + i]);
-                    }
-                    value = floatView.getFloat32(0);
-                    newOffset = offset + 4;
-                    break;
-                case 6: // DOUBLE
-                    const doubleBuf = new ArrayBuffer(8);
-                    const doubleView = new DataView(doubleBuf);
-                    for (let i = 0; i < 8; i++) {
-                        doubleView.setUint8(i, data[offset + i]);
-                    }
-                    value = doubleView.getFloat64(0);
-                    newOffset = offset + 8;
-                    break;
-                case 7: // BYTE_ARRAY
-                    const baLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                    value = Array.from(data.slice(offset + 4, offset + 4 + baLen));
-                    newOffset = offset + 4 + baLen;
-                    break;
-                case 8: // STRING
-                    const strLen = (data[offset] << 8) | data[offset + 1];
-                    if (strLen > 0 && offset + 2 + strLen <= data.length) {
-                        try {
-                            value = new TextDecoder().decode(data.slice(offset + 2, offset + 2 + strLen));
-                        } catch (e) { value = ''; }
-                    }
-                    newOffset = offset + 2 + strLen;
-                    break;
-                case 9: // LIST
-                    const listType = data[offset];
-                    const listLen = (data[offset + 1] << 24) | (data[offset + 2] << 16) | (data[offset + 3] << 8) | data[offset + 4];
-                    value = [];
-                    let listOffset = offset + 5;
-                    for (let i = 0; i < listLen && listOffset < data.length; i++) {
-                        const { value: itemVal, newOffset: itemOffset } = this.parseNbtValue(data, listOffset, listType);
-                        value.push(itemVal);
-                        listOffset = itemOffset;
-                    }
-                    newOffset = listOffset;
-                    break;
-                case 10: // COMPOUND
-                    value = this.parseNbtCompound(data, offset - 3); // 回退3字节因为函数开头会跳过
-                    newOffset = offset; // Compound内部已经处理完毕
-                    break;
-                case 11: // INT_ARRAY
-                    const iaLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                    value = [];
-                    for (let i = 0; i < iaLen; i++) {
-                        const iv = (data[offset + 4 + i * 4] << 24) | (data[offset + 5 + i * 4] << 16) | 
-                                   (data[offset + 6 + i * 4] << 8) | data[offset + 7 + i * 4];
-                        value.push(iv);
-                    }
-                    newOffset = offset + 4 + iaLen * 4;
-                    break;
-                case 12: // LONG_ARRAY
-                    const laLen = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
-                    value = [];
-                    for (let i = 0; i < laLen; i++) {
-                        let lv = BigInt(0);
-                        for (let j = 0; j < 8; j++) {
-                            lv = (lv << 8n) | BigInt(data[offset + 4 + i * 8 + j]);
-                        }
-                        value.push(Number(lv));
-                    }
-                    newOffset = offset + 4 + laLen * 8;
-                    break;
-                default:
-                    logger.warn(`Unknown NBT type: ${type}`);
-                    newOffset = offset;
-            }
-        } catch (e) {
-            logger.warn(`Error parsing NBT value type ${type}: ${e.message}`);
-        }
-        
-        return { value, newOffset };
     }
 
     /**

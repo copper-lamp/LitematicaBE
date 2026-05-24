@@ -3,10 +3,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const { bidirectionalConverter } = require('../mappings/BidirectionalBlockConverter');
 
 class UIManager {
     constructor() {
         this.actionBarMessages = new Map();
+        this.lastVerifyResults = new Map();
         this.schematicsDir = './plugins/LitematicaBE/schematics/';
         this.startActionBarLoop();
         this.ensureSchematicsDir();
@@ -330,15 +332,6 @@ class UIManager {
         fm.addInput(`Y = ${defaultY}`, `${defaultY}`, `${defaultY}`);
         fm.addInput(`Z = ${defaultZ}`, `${defaultZ}`, `${defaultZ}`);
 
-        // OP + 创造模式：直接放置全部方块选项
-        const isCreative = player.gameMode === 1;
-        const isOp = typeof player.isOP === 'function' ? player.isOP() : false;
-        const showDirectPlace = isCreative && isOp;
-        if (showDirectPlace) {
-            fm.addLabel('--- 管理员功能 ---');
-            fm.addSwitch('直接放置全部方块（setblock）', false);
-        }
-
         fm.addLabel('点击提交放置投影');
 
         player.sendForm(fm, (player, data) => {
@@ -358,18 +351,12 @@ class UIManager {
                 z: parseInt(inputZ) || defaultZ
             };
 
-            // 读取直接放置开关（在3个input之后）
-            let directPlace = false;
-            if (showDirectPlace) {
-                directPlace = data[labelCount + 3] === true;
-            }
-
-            this.executePlaceSchematic(player, schematic, loadedSchematic, placePos, directPlace);
+            this.executePlaceSchematic(player, schematic, loadedSchematic, placePos);
         });
     }
 
     // 执行实际的投影放置
-    executePlaceSchematic(player, schematic, loadedSchematic, placePos, directPlace = false) {
+    executePlaceSchematic(player, schematic, loadedSchematic, placePos) {
         const dataManager = global.dataManager;
         const renderer = global.renderer;
         const megaRenderer = global.megaRenderer;
@@ -396,14 +383,6 @@ class UIManager {
                 } catch (copyErr) {
                     logger.warn(`[LitematicaBE] 复制原始文件失败: ${copyErr.message}`);
                 }
-            }
-
-            // 直接放置全部方块（OP+创造模式专用）
-            if (directPlace) {
-                player.tell('正在直接放置全部方块，请稍候...');
-                this.directPlaceAllBlocks(player, loadedSchematic, placePos);
-                player.tell('直接放置完成');
-                return;
             }
 
             const projection = {
@@ -468,17 +447,18 @@ class UIManager {
     }
 
     // 直接放置全部方块（OP+创造模式）
-    async directPlaceAllBlocks(player, loadedSchematic, placePos) {
+    async directPlaceAllBlocks(player, data, placePos) {
         const dimid = player.pos.dimid;
-        const isMega = loadedSchematic.isMega && loadedSchematic.schematicId;
+        const isMega = data.isMega && data.schematicId;
+        const origin = placePos || data.position;
 
         let blocks;
         if (isMega) {
             const megaManager = global.megaManager;
-            const chunkFiles = megaManager.storage.listChunkFiles(loadedSchematic.schematicId);
+            const chunkFiles = megaManager.storage.listChunkFiles(data.schematicId);
             blocks = [];
             for (const { cx, cy, cz } of chunkFiles) {
-                const chunkBlocks = megaManager.loadChunkFromDisk(loadedSchematic.schematicId, cx, cy, cz);
+                const chunkBlocks = megaManager.loadChunkFromDisk(data.schematicId, cx, cy, cz);
                 if (chunkBlocks) {
                     for (const b of chunkBlocks) {
                         blocks.push({
@@ -490,11 +470,11 @@ class UIManager {
                 }
             }
         } else {
-            blocks = loadedSchematic.blocks || [];
+            blocks = data.blocks || [];
         }
 
         if (blocks.length === 0) {
-            player.tell('没有找到方块数据');
+            player.tell('§c没有找到方块数据');
             return;
         }
 
@@ -506,9 +486,9 @@ class UIManager {
 
         for (let i = 0; i < blocks.length; i++) {
             const block = blocks[i];
-            const wx = placePos.x + block.pos[0];
-            const wy = placePos.y + block.pos[1];
-            const wz = placePos.z + block.pos[2];
+            const wx = origin.x + (block.pos ? block.pos[0] : 0);
+            const wy = origin.y + (block.pos ? block.pos[1] : 0);
+            const wz = origin.z + (block.pos ? block.pos[2] : 0);
 
             const blockName = block.name;
             const blockState = block.state || {};
@@ -516,39 +496,33 @@ class UIManager {
             if (!blockName || blockName.includes('air')) continue;
             if (BlockConversions.isBanned(blockName, dimid)) continue;
 
-            const converted = BlockConversions.convertToValid(blockName, blockState);
-            const finalName = converted.name;
-            const finalStates = BlockConversions.filterDirectionStates(converted.states);
-
-            let cmd = `setblock ${wx} ${wy} ${wz} ${finalName}`;
-            if (finalStates && Object.keys(finalStates).length > 0) {
-                const parts = [];
-                for (const [k, v] of Object.entries(finalStates)) {
-                    const sv = typeof v === 'string' ? `"${v}"` : String(v);
-                    parts.push(`"${k}"=${sv}`);
-                }
-                cmd += ` [${parts.join(',')}]`;
-            }
-
             try {
-                const result = mc.runcmdEx(cmd);
-                if (result && result.success) {
+                const blockNbt = bidirectionalConverter.buildBlockNbt(blockName, blockState);
+                const result = mc.setBlock(wx, wy, wz, dimid, blockNbt);
+                if (result) {
                     placed++;
                 } else {
-                    errors++;
+                    // 回退：尝试无状态的简化放置
+                    const converted = bidirectionalConverter.javaToBedrock({ name: blockName, states: blockState });
+                    const fallbackResult = mc.setBlock(wx, wy, wz, dimid, converted.name, 0);
+                    if (fallbackResult) {
+                        placed++;
+                    } else {
+                        errors++;
+                    }
                 }
             } catch (e) {
                 errors++;
             }
 
             if ((i + 1) % batchSize === 0 && i + 1 < total) {
-                player.tell(`放置进度: ${i + 1}/${total} (${((i + 1) / total * 100).toFixed(0)}%)`);
+                player.tell(`§7放置进度: ${i + 1}/${total} (${((i + 1) / total * 100).toFixed(0)}%)`);
                 await new Promise(r => setImmediate(r));
             }
         }
 
         logger.info(`[LitematicaBE] 直接放置完成: ${placed} 成功, ${errors} 失败, 总计 ${total} 个目标方块`);
-        player.tell(`完成: ${placed} 个方块已放置${errors > 0 ? `, ${errors} 个失败` : ''}`);
+        player.tell(`§a完成: ${placed} 个方块已放置${errors > 0 ? `, §c${errors} 个失败` : ''}`);
     }
 
     async loadAndPlaceSchematic(player, schematic) {
@@ -664,6 +638,7 @@ class UIManager {
             fm.addButton('加载投影');
         }
         fm.addButton('查看材料清单');
+        fm.addButton('直接放置全部方块');
         fm.addButton('删除投影');
         fm.addButton('返回');
 
@@ -685,9 +660,25 @@ class UIManager {
                     this.showMaterialList(player, projection);
                     break;
                 case 2:
-                    this.confirmDeleteProjection(player, projection);
+                    // 直接放置全部方块（需要OP+创造模式）
+                    const isCreative = player.gameMode === 1;
+                    const isOp = typeof player.isOP === 'function' ? player.isOP() : false;
+                    if (!isCreative || !isOp) {
+                        player.tell('§c此功能需要创造模式且具有OP权限');
+                        this.showProjectionDetail(player, projection);
+                        return;
+                    }
+                    player.tell('§a正在直接放置全部方块，请稍候...');
+                    this.directPlaceAllBlocks(player, projection);
+                    // 放置完成后返回详情页
+                    setTimeout(() => {
+                        this.showProjectionDetail(player, projection);
+                    }, 1000);
                     break;
                 case 3:
+                    this.confirmDeleteProjection(player, projection);
+                    break;
+                case 4:
                 default:
                     this.showLoadProjection(player);
                     break;
@@ -1092,39 +1083,234 @@ class UIManager {
         }
 
         const projection = activeProj.projection;
+        player.tell('§7正在验证投影，请稍候...');
+
+        // 执行核心验证
         const results = blockVerifier.verifyProjection(projection);
+
+        // 执行多余方块检测（异步不阻塞，但会稍慢）
+        let extraResult = null;
+        try {
+            extraResult = blockVerifier.detectExtraBlocks(projection);
+        } catch (e) {
+            logger.warn(`[UIManager] Extra blocks detection skipped: ${e.message}`);
+        }
+
+        // 保存验证结果供后续标注使用
+        const allProblems = [...results.blocks];
+        if (extraResult && extraResult.extraBlocks.length > 0) {
+            for (const eb of extraResult.extraBlocks) {
+                allProblems.push({
+                    position: eb.position,
+                    level: 'extra',
+                    levelName: '多余方块'
+                });
+            }
+        }
+        const lastResult = {
+            projection,
+            results,
+            extraResult,
+            allProblems,
+            timestamp: Date.now()
+        };
+        this.lastVerifyResults.set(player.xuid, lastResult);
 
         const matchPercent = results.total > 0 ? ((results.match / results.total) * 100).toFixed(1) : 0;
 
-        const fm = mc.newSimpleForm();
-        fm.setTitle('验证结果');
-        fm.setContent(
-            `投影: ${projection.name}\n\n` +
-            `§e总方块数: §f${results.total}\n` +
-            `§a完全匹配: §f${results.match}\n` +
-            `§e状态错误: §f${results.typeMatch}\n` +
-            `§c错误方块: §f${results.noMatch}\n` +
-            `§b缺失方块: §f${results.missing}\n\n` +
-            `§7完成度: §f${matchPercent}%`
-        );
+        let content = `投影: ${projection.name}\n\n`;
+        content += `§e总方块数: §f${results.total}\n`;
+        content += `§a完全匹配: §f${results.match}\n`;
+        content += `§e状态错误: §f${results.typeMatch}\n`;
+        content += `§c错误方块: §f${results.noMatch}\n`;
+        content += `§b缺失方块: §f${results.missing}\n`;
 
-        if (results.blocks.length > 0 && results.blocks.length <= 20) {
-            let blockList = '\n§7问题方块列表:\n';
-            for (const block of results.blocks.slice(0, 10)) {
-                const color = block.level === 1 ? '§c' : (block.level === 2 ? '§e' : '§b');
-                blockList += `${color}(${block.position.x}, ${block.position.y}, ${block.position.z})\n`;
+        if (extraResult) {
+            content += `§6多余方块: §f${extraResult.extraCount}`;
+            if (extraResult.totalScanned >= 50000) {
+                content += ` §7(已扫描${extraResult.totalScanned}格)`;
             }
-            if (results.blocks.length > 10) {
-                blockList += `§7... 还有 ${results.blocks.length - 10} 个`;
-            }
-            fm.setContent(fm.content + blockList);
+            content += '\n';
         }
 
+        content += `\n§7完成度: §f${matchPercent}%\n`;
+        content += `§7问题方块合计: §f${allProblems.length} 个`;
+
+        // 简要问题分布
+        if (allProblems.length > 0) {
+            const sampleCount = Math.min(allProblems.length, 5);
+            content += '\n\n§7问题方块示例:\n';
+            for (let i = 0; i < sampleCount; i++) {
+                const b = allProblems[i];
+                const colorChar = b.level === 'extra' ? '§6' : 
+                    (b.level === 1 ? '§c' : (b.level === 2 ? '§e' : '§b'));
+                const name = b.levelName || (b.level === 'extra' ? '多余方块' : '未知');
+                content += `${colorChar}  ${name} @ (${b.position.x}, ${b.position.y}, ${b.position.z})\n`;
+            }
+            if (allProblems.length > 5) {
+                content += `§7  ... 还有 ${allProblems.length - 5} 个问题方块`;
+            }
+        }
+
+        const fm = mc.newSimpleForm();
+        fm.setTitle('验证结果');
+        fm.setContent(content);
+
+        if (allProblems.length > 0) {
+            fm.addButton('标注问题方块');
+        }
+        fm.addButton('详细问题列表');
+        fm.addButton('刷新验证');
         fm.addButton('返回');
 
         player.sendForm(fm, (player, data) => {
-            this.showProjectionOperations(player);
+            if (data === null) {
+                this.showProjectionOperations(player);
+                return;
+            }
+
+            const saved = this.lastVerifyResults.get(player.xuid);
+            const hasProblems = allProblems.length > 0;
+            const markBtn = hasProblems ? 0 : -1;          // "标注"按钮
+            const detailBtn = hasProblems ? 1 : 0;          // "详细问题列表"
+            const refreshBtn = hasProblems ? 2 : 1;         // "刷新验证"
+            const backBtn = hasProblems ? 3 : 2;            // "返回"
+
+            if (hasProblems && data === markBtn) {
+                // 标注问题方块
+                if (!saved) {
+                    player.tell('§c验证结果已过期，请重新验证');
+                    this.showProjectionOperations(player);
+                    return;
+                }
+                const marked = blockVerifier.markProblemBlocks(player, saved.allProblems);
+                if (marked > 0) {
+                    setTimeout(() => this.showProjectionOperations(player), 1000);
+                } else {
+                    player.tell('§c无法标记问题方块（可能所有问题位置均未加载）');
+                    setTimeout(() => this.showProjectionOperations(player), 1000);
+                }
+            } else if (data === detailBtn) {
+                // 详细问题列表
+                this.showVerificationDetail(player);
+            } else if (data === refreshBtn) {
+                // 刷新
+                this.showVerifyResult(player);
+            } else {
+                this.showProjectionOperations(player);
+            }
         });
+    }
+
+    /**
+     * 显示验证详细问题列表
+     */
+    showVerificationDetail(player) {
+        const saved = this.lastVerifyResults.get(player.xuid);
+        if (!saved) {
+            player.tell('§c验证结果已过期，请重新验证');
+            this.showProjectionOperations(player);
+            return;
+        }
+
+        const allProblems = saved.allProblems;
+        if (allProblems.length === 0) {
+            player.tell('§a没有检测到问题方块');
+            this.showVerifyResult(player);
+            return;
+        }
+
+        const pageSize = 8;
+        const totalPages = Math.ceil(allProblems.length / pageSize);
+        let currentPage = 0;
+
+        const showPage = () => {
+            const start = currentPage * pageSize;
+            const end = Math.min(start + pageSize, allProblems.length);
+            const pageBlocks = allProblems.slice(start, end);
+
+            const fm = mc.newSimpleForm();
+            fm.setTitle(`问题方块 (${currentPage + 1}/${totalPages})`);
+
+            let content = '';
+            for (let i = 0; i < pageBlocks.length; i++) {
+                const b = pageBlocks[i];
+                const idx = start + i + 1;
+                let catName = b.levelName;
+                if (b.level === 'extra') catName = '§6多余方块';
+                else if (b.level === 1) catName = '§c错误方块';
+                else if (b.level === 2) catName = '§e状态错误';
+                else if (b.level === 4) catName = '§b缺失方块';
+
+                content += `${idx}. ${catName}§r @ (${b.position.x}, ${b.position.y}, ${b.position.z})\n`;
+            }
+
+            content += `\n§7共 ${allProblems.length} 个问题方块`;
+
+            fm.setContent(content);
+
+            // 每个问题方块一个按钮用于传送
+            for (let i = 0; i < pageBlocks.length; i++) {
+                fm.addButton(`传送到 #${start + i + 1}`);
+            }
+
+            if (currentPage < totalPages - 1) {
+                fm.addButton('下一页 ▶');
+            }
+            if (currentPage > 0) {
+                fm.addButton('◀ 上一页');
+            }
+
+            fm.addButton('标注全部问题方块');
+            fm.addButton('返回');
+
+            player.sendForm(fm, (player, data) => {
+                if (data === null) {
+                    this.showVerifyResult(player);
+                    return;
+                }
+
+                const teleCount = pageBlocks.length;
+                const nextBtn = currentPage < totalPages - 1 ? teleCount : -1;
+                const prevBtn = (currentPage < totalPages - 1 ? teleCount + 1 : teleCount);
+                if (currentPage === totalPages - 1) {
+                    // no next button
+                }
+                const markAllBtn = teleCount + (currentPage < totalPages - 1 ? 1 : 0) + (currentPage > 0 ? 1 : 0);
+                const backBtn = markAllBtn + 1;
+
+                if (data < teleCount) {
+                    // 传送到问题方块
+                    const target = pageBlocks[data];
+                    const wx = target.position.x;
+                    const wy = target.position.y + 1;
+                    const wz = target.position.z;
+                    try {
+                        mc.runcmdEx(`tp "${player.name}" ${wx} ${wy} ${wz}`);
+                    } catch (e) {
+                        player.tell(`§c传送失败: ${e.message}`);
+                    }
+                    this.showVerificationDetail(player);
+                } else if (data === teleCount && currentPage < totalPages - 1) {
+                    currentPage++;
+                    showPage();
+                } else if (data === teleCount + (currentPage < totalPages - 1 ? 1 : 0) && currentPage > 0) {
+                    currentPage--;
+                    showPage();
+                } else if (data === markAllBtn) {
+                    const blockVerifier = global.blockVerifier;
+                    const marked = blockVerifier.markProblemBlocks(player, allProblems);
+                    if (marked > 0) {
+                        player.tell('§a已标注全部问题方块');
+                    }
+                    this.showVerifyResult(player);
+                } else {
+                    this.showVerifyResult(player);
+                }
+            });
+        };
+
+        showPage();
     }
 }
 

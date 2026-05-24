@@ -279,6 +279,126 @@ class BlockVerifier {
         }
         return blocks;
     }
+
+    /**
+     * 检测多余方块 — 世界中存在但投影中没有的方块
+     * @param {Object} projection 投影对象
+     * @param {number} maxScan 最大扫描数量（默认50000，防止过大投影卡死）
+     * @returns {Object} { blocks: [...] }
+     */
+    detectExtraBlocks(projection, maxScan = 50000) {
+        const result = { totalScanned: 0, extraCount: 0, extraBlocks: [] };
+        if (!projection || !projection.position || !projection.dimensions) {
+            return result;
+        }
+
+        const pos = projection.position;
+        const dims = projection.dimensions;
+        const dimid = projection.dimension || 0;
+
+        // 构建投影方块位置集合（O(1)查找）
+        const projPosSet = new Set();
+        let blocksToIndex = projection.blocks;
+        if (projection.isMega && projection.schematicId && global.megaManager) {
+            blocksToIndex = this._getMegaBlocks(projection);
+        }
+
+        for (const block of blocksToIndex) {
+            if (block.name && block.name !== 'minecraft:air') {
+                const wx = pos.x + (block.pos ? block.pos[0] : 0);
+                const wy = pos.y + (block.pos ? block.pos[1] : 0);
+                const wz = pos.z + (block.pos ? block.pos[2] : 0);
+                projPosSet.add(`${wx},${wy},${wz}`);
+            }
+        }
+
+        // 扫描投影区域的世界方块
+        let scanned = 0;
+        for (let dx = 0; dx < dims.x && scanned < maxScan; dx++) {
+            for (let dz = 0; dz < dims.z && scanned < maxScan; dz++) {
+                for (let dy = 0; dy < dims.y && scanned < maxScan; dy++) {
+                    scanned++;
+                    const wx = pos.x + dx;
+                    const wy = pos.y + dy;
+                    const wz = pos.z + dz;
+                    const key = `${wx},${wy},${wz}`;
+
+                    if (projPosSet.has(key)) continue; // 投影中有此方块，跳过
+
+                    try {
+                        const worldBlock = mc.getBlock(wx, wy, wz, dimid);
+                        if (worldBlock && worldBlock.type && worldBlock.type !== 'minecraft:air') {
+                            result.extraBlocks.push({
+                                position: { x: wx, y: wy, z: wz },
+                                type: worldBlock.type,
+                                states: worldBlock.blockState || {}
+                            });
+                            result.extraCount++;
+                        }
+                    } catch (e) {
+                        // 区块未加载，忽略
+                    }
+                }
+            }
+        }
+
+        result.totalScanned = scanned;
+        return result;
+    }
+
+    /**
+     * 标记问题方块 — 在世界中生成彩色粒子标记
+     * @param {Object} player 玩家对象
+     * @param {Array} problemBlocks 问题方块列表 [{ position: {x,y,z}, level: 1|2|4 }]
+     * @param {number} duration 标记持续时间（毫秒），默认 30000
+     */
+    markProblemBlocks(player, problemBlocks, duration = 30000) {
+        if (!problemBlocks || problemBlocks.length === 0) return;
+
+        const dimid = player.pos.dimid;
+        let count = 0;
+        const maxMark = 200; // 最多标记200个，防止卡服
+
+        // 颜色映射: NO_MATCH(1)=红, TYPE_MATCH(2)=黄, MISSING(4)=蓝
+        const colorMap = {
+            [VerificationLevel.NO_MATCH]: { r: 1.0, g: 0.0, b: 0.0 },   // 错误方块 → 红色
+            [VerificationLevel.TYPE_MATCH]: { r: 1.0, g: 1.0, b: 0.0 },   // 状态错误 → 黄色
+            [VerificationLevel.MISSING]: { r: 0.0, g: 0.0, b: 1.0 },      // 缺失 → 蓝色
+            extra: { r: 1.0, g: 0.5, b: 0.0 }                              // 多余方块 → 橙色
+        };
+
+        for (const block of problemBlocks) {
+            if (count >= maxMark) break;
+
+            const pos = block.position;
+            const wx = pos.x + 0.5;
+            const wy = pos.y + 0.5;
+            const wz = pos.z + 0.5;
+
+            const color = colorMap[block.level] || colorMap.extra;
+
+            // 生成标记粒子（使用 endrod 粒子，显眼且持久）
+            try {
+                mc.spawnParticle(wx, wy, wz, dimid, 'minecraft:balloon_gas', 
+                    color.r, color.g, color.b, 1.0, 0);
+                count++;
+            } catch (e) {
+                // 粒子生成失败，静默跳过
+            }
+        }
+
+        if (count > 0) {
+            player.tell(`§a已标记 ${count} 个问题方块（§c红色=错误 §e黄色=状态错误 §b蓝色=缺失 §6橙色=多余），持续 ${Math.floor(duration / 1000)} 秒`);
+        }
+
+        // 定时清除标记的引用（粒子的视觉效果会自然消散）
+        const clearMsg = () => {
+            try { player.tell('§7问题方块标记已清除'); } catch (e) {}
+        };
+        setTimeout(clearMsg, duration);
+
+        return count;
+    }
 }
 
 module.exports = { BlockVerifier, VerificationLevel, VerificationColors };
