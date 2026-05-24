@@ -1,0 +1,112 @@
+{
+  "render": {
+    "mode": "particle",  // 投影模式: particle=生成粒子, setblock=放置方块
+    "opacity": 0.6,  // 粒子透明度 (0.0-1.0) （已弃用）
+    "particleSize": 0.5,  // 粒子大小 (0.1-1.0)（已弃用）
+    "particlesPerFrame": 500,  // 每帧渲染粒子数
+    "renderFrameInterval": 16,  // 渲染帧间隔 (毫秒)
+    "layerRenderEnabled": false,  // 启用逐层渲染（默认关闭）
+    "defaultStartLayer": "max"  // 默认起始层: max=顶层, 0=底层
+  },
+
+  "particleRespawn": {
+    "enabled": true,  // 启用粒子重生
+    "lifetime": 40,  // 粒子生命周期 (秒)
+    "respawnBuffer": 2,  // 重生提前时间 (秒)
+    "checkInterval": 1000  // 检查间隔 (毫秒)
+  },
+
+  "easyPlace": {
+    "enabled": true,  // 启用轻松放置
+    "checkInterval": 500,  // 检测间隔 (毫秒)
+    "successMessage": "✓ 方块放置正确",  // 成功提示消息
+    "errorMessage": "✗ 方块类型错误"  // 错误提示消息
+  },
+
+  "layerSwitch": {
+    "cooldown": 200,  // 操作冷却时间 (毫秒)
+    "lookUpThreshold": -10,  // 俯视角度阈值 (度)
+    "lookDownThreshold": 10,  // 仰视角度阈值 (度)
+    "defaultDirection": "down"  // 默认切换方向: up=向上, down=向下
+  },
+
+  "nearbyPrompt": {
+    "enabled": true,  // 启用附近提示
+    "checkInterval": 30000,  // 检测间隔 (毫秒)
+    "cooldown": 300000,  // 提示冷却时间 (毫秒)
+    "range": 50  // 检测范围 (方块)
+  },
+
+  "logCleaner": {
+    "enabled": true,  // 启用自动清理
+    "scanInterval": 60000,  // 扫描间隔 (毫秒)
+    "backupEnabled": true,  // 启用文件备份
+    "maxBackupFiles": 10,  // 最大备份文件数
+    "patterns": [  // 渲染日志匹配模式
+      "litematica:block_",
+      "Spawning particle",
+      "litematica:.*particle",
+      "execute in.*particle",
+      "render"
+    ]
+  },
+
+  "gui": {
+    "titleColor": "§l§6",  // 菜单标题颜色
+    "buttonColor": "§l",  // 按钮颜色
+    "textColor": "§f",  // 提示文字颜色
+    "successColor": "§a",  // 成功消息颜色
+    "errorColor": "§c"  // 错误消息颜色
+  },
+
+  "projection": {
+    "defaultLayer": -1,  // 默认渲染层: -1=所有层
+    "showBounds": true,  // 显示边界框
+    "boundsColor": "#00FF00",  // 边界框颜色
+    "mirrorX": false,  // 默认镜像X轴
+    "mirrorZ": false,  // 默认镜像Z轴
+    "rotation": 0  // 默认旋转角度
+  },
+
+  "performance": {
+    "maxActiveProjections": 10,  // 最大同时渲染投影数
+    "maxCachedBlocks": 100000,  // 最大缓存方块数
+    "monitorEnabled": false,  // 启用性能监控
+    "monitorInterval": 5000  // 监控间隔 (毫秒)
+  },
+
+  "megaSchematic": {
+    "threshold": 30000,  // 超大型投影阈值（超过此方块数自动启用Mega模式）
+    "enabled": true,  // 启用超大型投影支持
+    "chunkSize": 16,  // 分块大小
+    "batchInsertSize": 5000,  // 批量写入大小
+    "lruCacheSize": 200,  // LRU缓存分块数
+    "storagePath": "./plugins/LitematicaBE/mega_schematics/"  // 存储路径
+  },
+
+  "megaRender": {
+    "maxParticlesPerTick": 2000,  // 每tick最大粒子数
+    "maxRenderDistance": 96,  // 最大渲染距离
+    "viewportUpdateInterval": 500,  // 视口更新间隔（毫秒）
+    "debug": false,  // 控制台调试模式
+    "fileDebug": true,  // 文件日志模式（自动记录到文件，便于分析）
+    "autoTest": {  // 自动测试配置
+      "enabled": true,  // 启用自动测试
+      "testOnStartup": true,  // 启动时自动开始测试
+      "testDuration": 300000,  // 测试持续时间（毫秒，默认5分钟）
+      "logStatsInterval": 5000,  // 统计日志输出间隔（毫秒）
+      "testScenarios": [  // 测试场景
+        "load_time",      // 加载时间测试
+        "memory_usage",   // 内存使用测试
+        "render_fps",     // 渲染帧率测试
+        "lod_effect",     // LOD效果测试
+        "chunk_loading"   // 分块加载测试
+      ]
+    },
+    "lodLevels": {  // LOD（细节层次）配置
+      "near": { "distance": 32, "skipRate": 0 },  // 近距离：全渲染
+      "medium": { "distance": 80, "skipRate": 2 },  // 中距离：每3个渲染1个
+      "far": { "distance": 160, "skipRate": 4 }  // 远距离：每5个渲染1个
+    }
+  }
+}

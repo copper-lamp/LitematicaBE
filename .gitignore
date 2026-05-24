@@ -1,0 +1,30 @@
+# --- 运行时数据 ---
+data/
+
+# --- 导出文件 ---
+exports/
+
+# --- 投影数据（用户生成内容） ---
+schematics/
+mega_schematics/
+
+# --- 测试文件 ---
+tests/
+
+# --- 调试文件 ---
+debug_*
+
+# --- 依赖 ---
+node_modules/
+
+# --- 系统文件 ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- IDE 配置 ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
