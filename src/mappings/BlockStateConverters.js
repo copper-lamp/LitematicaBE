@@ -215,7 +215,7 @@ class BlockStateConverters {
         // Lever - handled in special converters
         // Stone button / wooden button
         if (javaName.includes('_button')) {
-            be.button_pressed_bit = (js.powered === 'true' || js.pressed === 'true') ? 1 : 0;
+            be.button_pressed_bit = (js.powered === 'true' || js.powered === true || js.pressed === 'true' || js.pressed === true) ? 1 : 0;
             const face = js.face || 'wall';
             if (face === 'ceiling') {
                 be.facing_direction = 0;  // button on ceiling → down
@@ -361,7 +361,7 @@ class BlockStateConverters {
         if (javaName.endsWith('_door')) {
             const facing = js.facing || 'north';
             be.direction = DOOR_JAVA_TO_BE_DIR[facing] !== undefined ? DOOR_JAVA_TO_BE_DIR[facing] : 0;
-            be.open_bit = (js.open === 'true') ? 1 : 0;
+            be.open_bit = (js.open === 'true' || js.open === true) ? 1 : 0;
             if (js.half === 'upper') {
                 be.upper_block_bit = 1;
             } else {
@@ -384,7 +384,7 @@ class BlockStateConverters {
         if (javaName.endsWith('_trapdoor') || javaName === 'minecraft:iron_trapdoor' || javaName === 'minecraft:copper_trapdoor') {
             const facing = js.facing || 'north';
             be.direction = BE_CARDINAL_MAP[facing] !== undefined ? BE_CARDINAL_MAP[facing] : 0;
-            be.open_bit = (js.open === 'true') ? 1 : 0;
+            be.open_bit = (js.open === 'true' || js.open === true) ? 1 : 0;
             be.upside_down_bit = (js.half === 'top') ? 1 : 0;
             delete be.facing;
             delete be.open;
@@ -399,7 +399,7 @@ class BlockStateConverters {
             const facing = js.facing || 'north';
             be.direction = BED_JAVA_TO_BE[facing] || 3;
             be.head_piece_bit = (js.part === 'head') ? 1 : 0;
-            be.occupied_bit = (js.occupied === 'true') ? 1 : 0;
+            be.occupied_bit = (js.occupied === 'true' || js.occupied === true) ? 1 : 0;
             delete be.facing;
             delete be.part;
             delete be.occupied;
@@ -421,7 +421,7 @@ class BlockStateConverters {
                 else leverDir = 'down_east_west';
             }
             be.lever_direction = leverDir;
-            be.open_bit = (js.powered === 'true') ? 1 : 0;
+            be.open_bit = (js.powered === 'true' || js.powered === true) ? 1 : 0;
             delete be.facing;
             delete be.powered;
             return;
@@ -431,8 +431,8 @@ class BlockStateConverters {
         if (javaName.includes('fence_gate')) {
             const facing = js.facing || 'north';
             be.direction = BE_CARDINAL_MAP[facing] !== undefined ? BE_CARDINAL_MAP[facing] : 0;
-            be.open_bit = (js.open === 'true') ? 1 : 0;
-            be.in_wall_bit = (js.in_wall === 'true') ? 1 : 0;
+            be.open_bit = (js.open === 'true' || js.open === true) ? 1 : 0;
+            be.in_wall_bit = (js.in_wall === 'true' || js.in_wall === true) ? 1 : 0;
             delete be.facing;
             delete be.open;
             delete be.in_wall;
@@ -455,7 +455,7 @@ class BlockStateConverters {
             const idx = JAVA_RAIL_SHAPE.indexOf(shape);
             be.rail_direction = idx >= 0 ? BE_RAIL_DIRECTION[idx] : 0;
             if (js.powered !== undefined) {
-                be.rail_data_bit = (js.powered === 'true') ? 1 : 0;
+                be.rail_data_bit = (js.powered === 'true' || js.powered === true) ? 1 : 0;
                 delete be.powered;
             }
             delete be.shape;
@@ -466,9 +466,9 @@ class BlockStateConverters {
         if (javaName.includes('repeater') || javaName === 'minecraft:powered_repeater') {
             const delay = parseInt(js.delay || '1', 10);
             be.repeater_delay = Math.max(0, Math.min(3, delay - 1));
-            be.powered_bit = javaName.includes('powered') ? 1 : (js.powered === 'true' ? 1 : 0);
+            be.powered_bit = javaName.includes('powered') ? 1 : (js.powered === 'true' || js.powered === true ? 1 : 0);
             if (js.locked) {
-                be.locked_bit = (js.locked === 'true') ? 1 : 0;
+                be.locked_bit = (js.locked === 'true' || js.locked === true) ? 1 : 0;
                 delete be.locked;
             }
             delete be.delay;
@@ -479,7 +479,7 @@ class BlockStateConverters {
         // COMPARATOR
         if (javaName.includes('comparator')) {
             be.output_subtract_bit = (js.mode === 'subtract') ? 1 : 0;
-            be.output_lit_bit = javaName.includes('powered') ? 1 : (js.powered === 'true' ? 1 : 0);
+            be.output_lit_bit = javaName.includes('powered') ? 1 : (js.powered === 'true' || js.powered === true ? 1 : 0);
             delete be.mode;
             delete be.powered;
             return;
@@ -519,7 +519,7 @@ class BlockStateConverters {
         if (javaName.includes('candle')) {
             const candles = parseInt(js.candles || '1', 10);
             be.candles = Math.min(4, Math.max(1, candles));
-            be.lit_bit = (js.lit === 'true') ? 1 : 0;
+            be.lit_bit = (js.lit === 'true' || js.lit === true) ? 1 : 0;
             delete be.lit;
             delete be.waterlogged;
             return;
@@ -582,6 +582,49 @@ class BlockStateConverters {
         if (javaName === 'minecraft:pink_petals') {
             const growth = parseInt(js.growth || '1', 10);
             be.growth = Math.min(4, Math.max(1, growth));
+            return;
+        }
+
+        // REDSTONE WIRE: power -> redstone_signal
+        if (javaName === 'minecraft:redstone_wire') {
+            const power = parseInt(js.power || '0', 10);
+            be.redstone_signal = Math.min(15, Math.max(0, power));
+            delete be.power;
+            return;
+        }
+
+        // REDSTONE TORCH / WALL TORCH: lit handled at block-name level (tryPlaceBlock)
+        // Just clean up the lit state so it doesn't pollute the BE command
+        if (javaName.includes('redstone_torch')) {
+            delete be.lit;
+            return;
+        }
+
+        // OBSERVER: powered -> powered_bit
+        if (javaName === 'minecraft:observer') {
+            be.powered_bit = (js.powered === 'true' || js.powered === true) ? 1 : 0;
+            delete be.powered;
+            return;
+        }
+
+        // PISTON / STICKY_PISTON: extended -> extended_bit
+        if (javaName === 'minecraft:piston' || javaName === 'minecraft:sticky_piston') {
+            be.extended_bit = (js.extended === 'true' || js.extended === true) ? 1 : 0;
+            delete be.extended;
+            return;
+        }
+
+        // DISPENSER / DROPPER: triggered -> triggered_bit
+        if (javaName === 'minecraft:dispenser' || javaName === 'minecraft:dropper') {
+            be.triggered_bit = (js.triggered === 'true' || js.triggered === true) ? 1 : 0;
+            delete be.triggered;
+            return;
+        }
+
+        // HOPPER: enabled -> toggle_bit (inverted: enabled=true -> toggle_bit=0)
+        if (javaName === 'minecraft:hopper') {
+            be.toggle_bit = (js.enabled === 'true' || js.enabled === true) ? 0 : 1;
+            delete be.enabled;
             return;
         }
     }
@@ -763,6 +806,51 @@ class BlockStateConverters {
         if (beBlockId === 'copper_bulb' && bs.lit_bit !== undefined) {
             java.lit = bs.lit_bit === 1 ? 'true' : 'false';
             delete java.lit_bit;
+            return;
+        }
+
+        // REDSTONE WIRE: redstone_signal → power
+        if (beBlockId === 'redstone_wire' && bs.redstone_signal !== undefined) {
+            java.power = String(bs.redstone_signal);
+            delete java.redstone_signal;
+            return;
+        }
+
+        // OBSERVER: powered_bit → powered
+        if (beBlockId === 'observer' && bs.powered_bit !== undefined) {
+            java.powered = bs.powered_bit === 1 ? 'true' : 'false';
+            delete java.powered_bit;
+            return;
+        }
+
+        // PISTON / STICKY_PISTON: extended_bit → extended
+        if ((beBlockId === 'piston' || beBlockId === 'sticky_piston') && bs.extended_bit !== undefined) {
+            java.extended = bs.extended_bit === 1 ? 'true' : 'false';
+            delete java.extended_bit;
+            return;
+        }
+
+        // DISPENSER / DROPPER: triggered_bit → triggered
+        if ((beBlockId === 'dispenser' || beBlockId === 'dropper') && bs.triggered_bit !== undefined) {
+            java.triggered = bs.triggered_bit === 1 ? 'true' : 'false';
+            delete java.triggered_bit;
+            return;
+        }
+
+        // HOPPER: toggle_bit → enabled (inverted: toggle_bit=0 → enabled=true)
+        if (beBlockId === 'hopper' && bs.toggle_bit !== undefined) {
+            java.enabled = bs.toggle_bit === 0 ? 'true' : 'false';
+            delete java.toggle_bit;
+            return;
+        }
+
+        // REDSTONE TORCH: unlit_redstone_torch → lit=false
+        if (beBlockId === 'unlit_redstone_torch') {
+            java.lit = 'false';
+            return;
+        }
+        if (beBlockId === 'redstone_torch') {
+            java.lit = 'true';
             return;
         }
     }

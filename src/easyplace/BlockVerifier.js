@@ -1,3 +1,6 @@
+const { BlockStateConverters } = require('../mappings/BlockStateConverters');
+const { BlockMappingRegistry } = require('../mappings/BlockMappingRegistry');
+
 const VerificationLevel = Object.freeze({
     UNKNOWN: 0,
     NO_MATCH: 1,
@@ -32,6 +35,8 @@ class BlockVerifier {
             'facing'
         ];
         this.verifyChunkSize = 5000; // 每tick验证方块数，避免卡顿
+        this.stateConverter = new BlockStateConverters();
+        this.blockRegistry = new BlockMappingRegistry();
     }
 
     verify(worldBlock, projectionBlock) {
@@ -53,11 +58,15 @@ class BlockVerifier {
             return VerificationLevel.MISSING;
         }
 
-        if (worldType !== projType) {
+        // Convert Java block name to BE name for comparison
+        const mapping = this.blockRegistry.getMapping(projType);
+        const beProjType = mapping ? this.normalizeBlockName(mapping.b) : projType;
+
+        if (worldType !== beProjType) {
             return VerificationLevel.NO_MATCH;
         }
 
-        if (this.exactMatch(worldBlock, projectionBlock)) {
+        if (this.exactMatch(worldBlock, projectionBlock, beProjType)) {
             return VerificationLevel.MATCH;
         }
 
@@ -68,23 +77,30 @@ class BlockVerifier {
         return VerificationLevel.NO_MATCH;
     }
 
-    exactMatch(worldBlock, projectionBlock) {
+    exactMatch(worldBlock, projectionBlock, beProjTypeHint) {
         const worldType = this.normalizeBlockName(worldBlock.type || worldBlock.name || '');
         const projType = this.normalizeBlockName(projectionBlock.name);
 
-        if (worldType !== projType) {
+        // Convert Java name to BE name for comparison
+        const mapping = this.blockRegistry.getMapping(projType);
+        const beProjType = beProjTypeHint || (mapping ? this.normalizeBlockName(mapping.b) : projType);
+
+        if (worldType !== beProjType) {
             return false;
         }
 
         const worldStates = worldBlock.blockState || worldBlock.states || {};
-        const projStates = projectionBlock.state || {};
+        const javaStates = projectionBlock.state || {};
 
-        const importantStates = this.getImportantStates(projType);
-        
+        // Convert Java states to BE states for fair comparison
+        const projStates = this.stateConverter.convertJavaToBedrock(projType, javaStates);
+
+        const importantStates = this.getImportantStates(beProjType);
+
         for (const key of importantStates) {
             const worldValue = worldStates[key];
             const projValue = projStates[key];
-            
+
             if (worldValue !== projValue) {
                 return false;
             }
@@ -102,69 +118,85 @@ class BlockVerifier {
 
     getImportantStates(blockName) {
         const baseName = blockName.replace('minecraft:', '');
-        
+
+        // BE state names for verification
         const stateMap = {
             'stone': [],
             'dirt': [],
             'grass_block': ['snowy'],
             'planks': [],
-            'log': ['axis'],
-            'leaves': ['persistent', 'distance'],
-            'stairs': ['facing', 'half', 'shape'],
-            'slab': ['type', 'waterlogged'],
-            'fence': ['waterlogged'],
-            'fence_gate': ['facing', 'in_wall', 'open'],
-            'door': ['facing', 'half', 'hinge', 'open', 'powered'],
-            'trapdoor': ['facing', 'half', 'open', 'powered', 'waterlogged'],
-            'button': ['facing', 'face', 'powered'],
-            'lever': ['facing', 'face', 'powered'],
-            'pressure_plate': ['powered'],
-            'redstone_wire': ['power'],
-            'redstone_torch': ['lit'],
-            'redstone_lamp': ['lit'],
-            'repeater': ['facing', 'powered', 'delay'],
-            'comparator': ['facing', 'powered', 'mode'],
-            'piston': ['facing', 'extended'],
-            'sticky_piston': ['facing', 'extended'],
-            'observer': ['facing', 'powered'],
-            'dispenser': ['facing', 'triggered'],
-            'dropper': ['facing', 'triggered'],
-            'hopper': ['facing', 'enabled'],
-            'chest': ['facing', 'waterlogged'],
-            'ender_chest': ['facing', 'waterlogged'],
-            'furnace': ['facing', 'lit'],
-            'blast_furnace': ['facing', 'lit'],
-            'smoker': ['facing', 'lit'],
-            'bed': ['facing', 'part', 'occupied'],
-            'banner': ['facing', 'rotation'],
-            'sign': ['facing', 'rotation', 'waterlogged'],
-            'wall_sign': ['facing', 'waterlogged'],
-            'torch': ['facing'],
-            'wall_torch': ['facing'],
-            'ladder': ['facing', 'waterlogged'],
-            'vine': ['facing'],
+            'log': ['pillar_axis'],
+            'leaves': ['persistent_bit', 'update_bit'],
+            'stairs': ['weirdo_direction', 'upside_down_bit'],
+            'slab': ['top_slot_bit'],
+            'fence': [],
+            'fence_gate': ['direction', 'in_wall_bit', 'open_bit'],
+            'door': ['direction', 'upper_block_bit', 'door_hinge_bit', 'open_bit'],
+            'trapdoor': ['direction', 'upside_down_bit', 'open_bit'],
+            'button': ['facing_direction', 'button_pressed_bit'],
+            'lever': ['lever_direction', 'open_bit'],
+            'pressure_plate': ['redstone_signal'],
+            'redstone_wire': ['redstone_signal'],
+            'redstone_torch': ['torch_facing_direction'],
+            'redstone_lamp': [],
+            'repeater': ['direction', 'powered_bit', 'repeater_delay'],
+            'comparator': ['direction', 'output_lit_bit', 'output_subtract_bit'],
+            'piston': ['facing_direction', 'extended_bit'],
+            'sticky_piston': ['facing_direction', 'extended_bit'],
+            'observer': ['facing_direction', 'powered_bit'],
+            'dispenser': ['facing_direction', 'triggered_bit'],
+            'dropper': ['facing_direction', 'triggered_bit'],
+            'hopper': ['facing_direction', 'toggle_bit'],
+            'chest': ['facing_direction'],
+            'ender_chest': ['facing_direction'],
+            'furnace': ['facing_direction', 'lit'],
+            'blast_furnace': ['facing_direction', 'lit'],
+            'smoker': ['facing_direction', 'lit'],
+            'bed': ['direction', 'head_piece_bit', 'occupied_bit'],
+            'banner': ['ground_sign_direction'],
+            'sign': ['ground_sign_direction'],
+            'wall_sign': ['facing_direction'],
+            'torch': ['torch_facing_direction'],
+            'wall_torch': ['torch_facing_direction'],
+            'ladder': ['facing_direction'],
+            'vine': ['vine_direction_bits'],
             'crafting_table': [],
-            'anvil': ['facing', 'damage'],
-            'grindstone': ['facing', 'attachment'],
-            'stonecutter': ['facing'],
-            'loom': ['facing'],
-            'barrel': ['facing', 'open'],
-            'smoker': ['facing', 'lit'],
-            'blast_furnace': ['facing', 'lit'],
-            'campfire': ['facing', 'lit', 'signal_fire', 'waterlogged'],
-            'soul_campfire': ['facing', 'lit', 'signal_fire', 'waterlogged'],
-            'lantern': ['hanging', 'waterlogged'],
-            'soul_lantern': ['hanging', 'waterlogged'],
-            'bell': ['facing', 'attachment', 'powered'],
-            'lectern': ['facing', 'has_book', 'powered'],
-            'composter': ['level'],
-            'cauldron': ['level'],
-            'water_cauldron': ['level'],
+            'anvil': ['direction', 'damage'],
+            'grindstone': ['direction', 'attachment'],
+            'stonecutter': ['direction'],
+            'loom': ['direction'],
+            'barrel': ['facing_direction', 'open_bit'],
+            'campfire': ['direction', 'lit', 'extinguished'],
+            'soul_campfire': ['direction', 'lit', 'extinguished'],
+            'lantern': ['hanging'],
+            'soul_lantern': ['hanging'],
+            'bell': ['direction', 'attachment', 'toggle_bit'],
+            'lectern': ['direction', 'powered_bit'],
+            'composter': ['composter_fill_level'],
+            'cauldron': ['fill_level'],
+            'water_cauldron': ['fill_level'],
             'lava_cauldron': [],
-            'powder_snow_cauldron': ['level']
+            'powder_snow_cauldron': ['fill_level'],
+            'concrete': ['color'],
+            'wool': ['color'],
+            'carpet': ['color'],
+            'terracotta': ['color'],
+            'stained_glass': ['color'],
+            'stained_glass_pane': ['color'],
+            'shulker_box': ['color'],
+            'candle': ['color', 'candles', 'lit_bit'],
+            'candle_cake': ['lit_bit']
         };
 
-        return stateMap[baseName] || [];
+        // Also check for suffix matches (e.g., oak_stairs -> stairs)
+        const keys = Object.keys(stateMap);
+        for (const key of keys) {
+            if (baseName.endsWith('_' + key) || baseName === key) {
+                return stateMap[key];
+            }
+        }
+
+        return [];
     }
 
     normalizeBlockName(name) {
@@ -207,7 +239,8 @@ class BlockVerifier {
             blocksToVerify = this._getMegaBlocks(projection);
         }
 
-        for (const projBlock of blocksToVerify) {
+        for (let i = 0; i < blocksToVerify.length; i++) {
+            const projBlock = blocksToVerify[i];
             if (projBlock.name === 'minecraft:air') {
                 continue;
             }

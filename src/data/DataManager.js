@@ -143,6 +143,21 @@ class DataManager {
      * 删除投影
      */
     removeProjection(id) {
+        const projection = this.projections.get(id);
+
+        // Delete mega schematic chunk files if this is a mega projection
+        if (projection && projection.isMega && projection.schematicId) {
+            try {
+                const megaManager = global.megaManager;
+                if (megaManager) {
+                    megaManager.deleteSchematic(projection.schematicId);
+                    logger.info(`[DataManager] Deleted mega schematic chunks for: ${projection.schematicId}`);
+                }
+            } catch (e) {
+                logger.error(`[DataManager] Failed to delete mega schematic chunks: ${e.message}`);
+            }
+        }
+
         const result = this.projections.delete(id);
         if (result) {
             this.saveProjections();
