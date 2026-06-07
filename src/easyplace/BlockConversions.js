@@ -59,7 +59,6 @@ const BlockConversions = {
         'minecraft:lit_redstone_ore': 'minecraft:redstone_ore',
         'minecraft:lit_deepslate_redstone_ore': 'minecraft:deepslate_redstone_ore',
         'minecraft:lit_redstone_lamp': 'minecraft:redstone_lamp',
-        'minecraft:unlit_redstone_torch': 'minecraft:redstone_torch',
         'minecraft:powered_comparator': 'minecraft:unpowered_comparator',
         'minecraft:powered_repeater': 'minecraft:unpowered_repeater'
     },
@@ -210,13 +209,52 @@ const BlockConversions = {
         const normalized = this.normalize(blockName);
         const allowedStates = this.whitelistedBlockStates[normalized];
         if (!allowedStates) return true;
-        
+
         for (const [key, expectedValue] of Object.entries(allowedStates)) {
             if (states[key] !== expectedValue) {
                 return false;
             }
         }
         return true;
+    },
+
+    buildSetBlockCommand(x, y, z, blockName, blockStates) {
+        let cmd = `setblock ${x} ${y} ${z} ${blockName}`;
+
+        if (blockStates && Object.keys(blockStates).length > 0) {
+            const stateParts = [];
+            for (const [key, value] of Object.entries(blockStates)) {
+                let stateValue;
+                if (typeof value === 'string') {
+                    stateValue = `"${value}"`;
+                } else if (typeof value === 'boolean') {
+                    stateValue = value ? 'true' : 'false';
+                } else if (typeof value === 'number' && (value === 1 || value === 0)) {
+                    const boolStates = new Set([
+                        'button_pressed_bit', 'open_bit', 'door_hinge_bit', 'upper_block_bit',
+                        'upside_down_bit', 'powered_bit', 'output_lit_bit', 'output_subtract_bit',
+                        'triggered_bit', 'attached_bit', 'disarmed_bit', 'suspended_bit',
+                        'toggle_bit', 'infiniburn_bit', 'explode_bit', 'age_bit',
+                        'allow_underwater_bit', 'dead_bit', 'occupied_bit', 'head_piece_bit',
+                        'extinguished', 'persistent_bit', 'stripped_bit', 'update_bit',
+                        'lit_bit', 'in_wall_bit', 'locked_bit', 'rail_data_bit', 'extended_bit'
+                    ]);
+                    if (boolStates.has(key)) {
+                        stateValue = value === 1 ? 'true' : 'false';
+                    } else {
+                        stateValue = String(value);
+                    }
+                } else {
+                    stateValue = String(value);
+                }
+                stateParts.push(`"${key}"=${stateValue}`);
+            }
+            if (stateParts.length > 0) {
+                cmd += ` [${stateParts.join(',')}]`;
+            }
+        }
+
+        return cmd;
     }
 };
 

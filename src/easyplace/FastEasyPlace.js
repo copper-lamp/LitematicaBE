@@ -1,10 +1,14 @@
 const { BlockConversions } = require('./BlockConversions');
 const { InventoryHelper } = require('./InventoryHelper');
 const { SpatialIndexUtils } = require('./SpatialIndexUtils');
+const { BlockStateConverters } = require('../mappings/BlockStateConverters');
+const { BlockMappingRegistry } = require('../mappings/BlockMappingRegistry');
+const { PlacementLogger } = require('./PlacementLogger');
 
 class FastEasyPlace {
     static SEARCH_RADIUS = 5;
-    static TICK_INTERVAL = 200;
+    static TICK_INTERVAL = 50;
+    static MAX_PLACES_PER_TICK = 5;
 
     constructor(projectionManager, dataManager) {
         this.projectionManager = projectionManager;
@@ -15,6 +19,8 @@ class FastEasyPlace {
         this.placedLocations = new Map();
         this.tickInterval = null;
         this.debugMode = false;
+        this.placementLogger = new PlacementLogger();
+        this.logFailures = true;
     }
 
     enable(player) {
@@ -118,8 +124,14 @@ class FastEasyPlace {
             return;
         }
 
+        let placedThisTick = 0;
         for (const target of targetBlocks) {
-            this.tryPlaceBlock(player, target, projection);
+            if (placedThisTick >= FastEasyPlace.MAX_PLACES_PER_TICK) {
+                break;
+            }
+            if (this.tryPlaceBlock(player, target, projection)) {
+                placedThisTick++;
+            }
         }
     }
 
@@ -193,38 +205,71 @@ class FastEasyPlace {
 
     tryPlaceBlock(player, target, projection) {
         const { location, projBlock, locationKey } = target;
+        const javaName = projBlock.name;
+        const javaStates = projBlock.state || {};
 
-        if (BlockConversions.isBanned(projBlock.name, player.pos.dimid)) {
+        if (BlockConversions.isBanned(javaName, player.pos.dimid)) {
             return false;
         }
 
-        if (!BlockConversions.isWhitelistedState(projBlock.name, projBlock.state || {})) {
+        if (!BlockConversions.isWhitelistedState(javaName, javaStates)) {
             return false;
         }
 
-        const convertedBlock = BlockConversions.convertToValid(projBlock.name, projBlock.state || {});
+        // 1. Java name -> BE name
+        const registry = new BlockMappingRegistry();
+        const mapping = registry.getMapping(javaName);
+        const beName = mapping ? mapping.b : javaName;
+
+        // 2. Java states -> BE states
+        const stateConverter = new BlockStateConverters();
+        const beStates = stateConverter.convertJavaToBedrock(javaName, javaStates);
+
+        // 3. Apply banned-to-valid mapping and reset default states
+        const convertedBlock = BlockConversions.convertToValid(beName, beStates);
+
+        // 4. Redstone torch lit state -> block rename (unlit is a separate BE block)
+        if (javaName === 'minecraft:redstone_torch' || javaName === 'minecraft:redstone_wall_torch') {
+            if (javaStates.lit === 'false' || javaStates.lit === false) {
+                convertedBlock.name = 'unlit_redstone_torch';
+            }
+        }
+
         const finalStates = BlockConversions.resetToDefaultStates(convertedBlock.states);
 
         const isCreative = player.gameMode === 1;
 
-        let success;
+        let result;
         if (isCreative) {
-            success = this.placeBlockCreative(player, location, convertedBlock.name, finalStates);
+            result = this.placeBlockCreative(player, location, convertedBlock.name, finalStates);
         } else {
-            success = this.placeBlockSurvival(player, location, convertedBlock.name, finalStates);
+            result = this.placeBlockSurvival(player, location, convertedBlock.name, finalStates);
         }
 
-        if (success) {
+        if (result.success) {
             this.markAsPlaced(player.xuid, locationKey);
+            if (this.logFailures) {
+                this.placementLogger.logSuccess();
+            }
+        } else if (this.logFailures && result.error) {
+            this.placementLogger.logFailure(
+                player.name,
+                javaName,
+                convertedBlock.name,
+                javaStates,
+                finalStates,
+                result.cmd || '',
+                result.error
+            );
         }
 
-        return success;
+        return result.success;
     }
 
     placeBlockCreative(player, location, blockName, blockStates) {
         try {
             if (!blockName || typeof blockName !== 'string') {
-                return false;
+                return { success: false, error: 'Invalid block name' };
             }
             
             const x = Math.floor(location.x);
@@ -236,7 +281,7 @@ class FastEasyPlace {
             if (block) {
                 const existingType = block.type || block.name || '';
                 if (existingType !== 'minecraft:air') {
-                    return false;
+                    return { success: false, error: `Target occupied by ${existingType}` };
                 }
             }
 
@@ -252,19 +297,17 @@ class FastEasyPlace {
                 if (this.debugMode) {
                     player.tell(`§a[Printer] 放置: ${blockName}`);
                 }
-                return true;
+                return { success: true };
             }
+            return { success: false, cmd, error: `setblock failed: ${result.output || 'unknown error'}` };
         } catch (e) {
-            if (this.debugMode) {
-                logger.error(`[FastEasyPlace] Creative place error: ${e.message}`);
-            }
+            return { success: false, error: `Exception: ${e.message}` };
         }
-        return false;
     }
 
     buildSetBlockCommand(x, y, z, blockName, blockStates) {
         let cmd = `setblock ${x} ${y} ${z} ${blockName}`;
-        
+
         if (blockStates && Object.keys(blockStates).length > 0) {
             const stateParts = [];
             for (const [key, value] of Object.entries(blockStates)) {
@@ -273,6 +316,22 @@ class FastEasyPlace {
                     stateValue = `"${value}"`;
                 } else if (typeof value === 'boolean') {
                     stateValue = value ? 'true' : 'false';
+                } else if (typeof value === 'number' && (value === 1 || value === 0)) {
+                    // BE boolean states often use true/false instead of 1/0
+                    const boolStates = new Set([
+                        'button_pressed_bit', 'open_bit', 'door_hinge_bit', 'upper_block_bit',
+                        'upside_down_bit', 'powered_bit', 'output_lit_bit', 'output_subtract_bit',
+                        'triggered_bit', 'attached_bit', 'disarmed_bit', 'suspended_bit',
+                        'toggle_bit', 'infiniburn_bit', 'explode_bit', 'age_bit',
+                        'allow_underwater_bit', 'dead_bit', 'occupied_bit', 'head_piece_bit',
+                        'extinguished', 'persistent_bit', 'stripped_bit', 'update_bit',
+                        'lit_bit', 'in_wall_bit', 'locked_bit', 'rail_data_bit', 'extended_bit'
+                    ]);
+                    if (boolStates.has(key)) {
+                        stateValue = value === 1 ? 'true' : 'false';
+                    } else {
+                        stateValue = String(value);
+                    }
                 } else {
                     stateValue = String(value);
                 }
@@ -282,7 +341,7 @@ class FastEasyPlace {
                 cmd += ` [${stateParts.join(',')}]`;
             }
         }
-        
+
         return cmd;
     }
 
@@ -306,12 +365,12 @@ class FastEasyPlace {
             );
 
             if (foundInShulker === -1) {
-                return false;
+                return { success: false, error: `No ${blockName} in inventory` };
             }
 
             const selected = this.inventoryHelper.selectBlock(player, itemType, blockStates);
             if (!selected) {
-                return false;
+                return { success: false, error: `Failed to select ${blockName}` };
             }
         } else {
             const selectedSlot = this.inventoryHelper.getSelectedSlot(player);
@@ -326,7 +385,7 @@ class FastEasyPlace {
     placeBlockWithItemConsume(player, location, blockName, blockStates, itemType) {
         try {
             if (!blockName || typeof blockName !== 'string') {
-                return false;
+                return { success: false, error: 'Invalid block name' };
             }
             
             const x = Math.floor(location.x);
@@ -338,7 +397,7 @@ class FastEasyPlace {
             if (block) {
                 const existingType = block.type || block.name || '';
                 if (existingType !== 'minecraft:air') {
-                    return false;
+                    return { success: false, error: `Target occupied by ${existingType}` };
                 }
             }
 
@@ -353,14 +412,12 @@ class FastEasyPlace {
                     state.placedCount++;
                 }
 
-                return true;
+                return { success: true };
             }
+            return { success: false, cmd, error: `setblock failed: ${result.output || 'unknown error'}` };
         } catch (e) {
-            if (this.debugMode) {
-                logger.error(`[FastEasyPlace] Survival place error: ${e.message}`);
-            }
+            return { success: false, error: `Exception: ${e.message}` };
         }
-        return false;
     }
 
     consumeItem(player, itemType) {
@@ -403,6 +460,18 @@ class FastEasyPlace {
             enabled: state.enabled,
             placedCount: state.placedCount || 0
         };
+    }
+
+    getPlacementFailureStats() {
+        return this.placementLogger.getSummary();
+    }
+
+    resetPlacementFailureStats() {
+        this.placementLogger.reset();
+    }
+
+    setLogFailures(enabled) {
+        this.logFailures = enabled;
     }
 
     cleanup() {

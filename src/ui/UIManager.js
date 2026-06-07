@@ -452,76 +452,124 @@ class UIManager {
         const isMega = data.isMega && data.schematicId;
         const origin = placePos || data.position;
 
-        let blocks;
-        if (isMega) {
-            const megaManager = global.megaManager;
-            const chunkFiles = megaManager.storage.listChunkFiles(data.schematicId);
-            blocks = [];
-            for (const { cx, cy, cz } of chunkFiles) {
-                const chunkBlocks = megaManager.loadChunkFromDisk(data.schematicId, cx, cy, cz);
-                if (chunkBlocks) {
-                    for (const b of chunkBlocks) {
-                        blocks.push({
-                            pos: [b.pos[0], b.pos[1], b.pos[2]],
-                            name: b.name,
-                            state: b.state || {}
-                        });
-                    }
-                }
-            }
-        } else {
-            blocks = data.blocks || [];
-        }
-
-        if (blocks.length === 0) {
-            player.tell('§c没有找到方块数据');
-            return;
-        }
-
         const { BlockConversions } = require('../easyplace/BlockConversions');
+        const { BlockStateConverters } = require('../mappings/BlockStateConverters');
+        const { BlockMappingRegistry } = require('../mappings/BlockMappingRegistry');
+
+        const stateConverter = new BlockStateConverters();
+        const registry = new BlockMappingRegistry();
+
         let placed = 0;
         let errors = 0;
-        const batchSize = 200;
-        const total = blocks.length;
+        const batchSize = 2000;
+        let batchCounter = 0;
 
-        for (let i = 0; i < blocks.length; i++) {
-            const block = blocks[i];
+        const processBlock = (block) => {
             const wx = origin.x + (block.pos ? block.pos[0] : 0);
             const wy = origin.y + (block.pos ? block.pos[1] : 0);
             const wz = origin.z + (block.pos ? block.pos[2] : 0);
 
-            const blockName = block.name;
-            const blockState = block.state || {};
+            const javaName = block.name;
+            const javaStates = block.state || {};
 
-            if (!blockName || blockName.includes('air')) continue;
-            if (BlockConversions.isBanned(blockName, dimid)) continue;
+            if (!javaName || javaName.includes('air')) return;
+            if (BlockConversions.isBanned(javaName, dimid)) return;
+            if (!BlockConversions.isWhitelistedState(javaName, javaStates)) return;
 
             try {
-                const blockNbt = bidirectionalConverter.buildBlockNbt(blockName, blockState);
-                const result = mc.setBlock(wx, wy, wz, dimid, blockNbt);
-                if (result) {
+                const mapping = registry.getMapping(javaName);
+                let beName = mapping ? mapping.b : javaName;
+
+                const beStates = stateConverter.convertJavaToBedrock(javaName, javaStates);
+
+                const converted = BlockConversions.convertToValid(beName, beStates);
+
+                if (javaName === 'minecraft:redstone_torch' || javaName === 'minecraft:redstone_wall_torch') {
+                    if (javaStates.lit === 'false' || javaStates.lit === false) {
+                        converted.name = 'unlit_redstone_torch';
+                    }
+                }
+
+                const finalStates = BlockConversions.resetToDefaultStates(converted.states);
+
+                const cmd = BlockConversions.buildSetBlockCommand(wx, wy, wz, converted.name, finalStates);
+                const result = mc.runcmdEx(cmd);
+
+                if (result.success) {
                     placed++;
                 } else {
-                    // 回退：尝试无状态的简化放置
-                    const converted = bidirectionalConverter.javaToBedrock({ name: blockName, states: blockState });
-                    const fallbackResult = mc.setBlock(wx, wy, wz, dimid, converted.name, 0);
-                    if (fallbackResult) {
-                        placed++;
-                    } else {
-                        errors++;
-                    }
+                    errors++;
                 }
             } catch (e) {
                 errors++;
             }
+        };
 
-            if ((i + 1) % batchSize === 0 && i + 1 < total) {
-                player.tell(`§7放置进度: ${i + 1}/${total} (${((i + 1) / total * 100).toFixed(0)}%)`);
-                await new Promise(r => setImmediate(r));
+        if (isMega) {
+            const megaManager = global.megaManager;
+            const chunkFiles = megaManager.storage.listChunkFiles(data.schematicId);
+
+            if (!chunkFiles || chunkFiles.length === 0) {
+                player.tell('§c没有找到分块数据');
+                return;
+            }
+
+            let totalBlocks = 0;
+            const meta = megaManager.getMeta(data.schematicId);
+            if (meta && meta.totalBlocks) {
+                totalBlocks = meta.totalBlocks;
+            } else {
+                player.tell('§e警告: 无法获取方块总数，将显示进度百分比');
+            }
+
+            player.tell(`§a开始分块放置 ${totalBlocks > 0 ? totalBlocks.toLocaleString() : '?'} 个方块...`);
+            player.tell(`§7共 ${chunkFiles.length} 个分块`);
+
+            let chunkIdx = 0;
+            for (const { cx, cy, cz } of chunkFiles) {
+                const chunkBlocks = megaManager.loadChunkFromDisk(data.schematicId, cx, cy, cz);
+                if (!chunkBlocks) continue;
+
+                for (const b of chunkBlocks) {
+                    processBlock(b);
+                    batchCounter++;
+
+                    if (batchCounter >= batchSize) {
+                        batchCounter = 0;
+                        await new Promise(r => setImmediate(r));
+                    }
+                }
+
+                chunkIdx++;
+                if (chunkIdx % 20 === 0 && chunkIdx < chunkFiles.length) {
+                    const pct = totalBlocks > 0
+                        ? Math.floor(placed / totalBlocks * 100)
+                        : Math.floor(chunkIdx / chunkFiles.length * 100);
+                    player.tell(`§7进度: ${chunkIdx}/${chunkFiles.length} 分块 (${pct}%), 已放置 ${placed.toLocaleString()}`);
+                }
+            }
+
+            await new Promise(r => setImmediate(r));
+        } else {
+            const blocks = data.blocks || [];
+            if (blocks.length === 0) {
+                player.tell('§c没有找到方块数据');
+                return;
+            }
+
+            player.tell(`§a开始放置 ${blocks.length.toLocaleString()} 个方块...`);
+
+            for (let i = 0; i < blocks.length; i++) {
+                processBlock(blocks[i]);
+                batchCounter++;
+
+                if (batchCounter >= batchSize && i + 1 < blocks.length) {
+                    batchCounter = 0;
+                    await new Promise(r => setImmediate(r));
+                }
             }
         }
 
-        logger.info(`[LitematicaBE] 直接放置完成: ${placed} 成功, ${errors} 失败, 总计 ${total} 个目标方块`);
         player.tell(`§a完成: ${placed} 个方块已放置${errors > 0 ? `, §c${errors} 个失败` : ''}`);
     }
 

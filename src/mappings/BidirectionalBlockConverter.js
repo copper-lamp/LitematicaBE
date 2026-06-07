@@ -182,9 +182,27 @@ class BidirectionalBlockConverter {
                 blockNbt.setString("name", bedrock.name);
                 const statesNbt = new NbtCompound();
                 for (const [k, v] of Object.entries(bedrock.states)) {
-                    if (typeof v === 'boolean') statesNbt.setByte(k, v ? 1 : 0);
-                    else if (typeof v === 'number') statesNbt.setInt(k, v);
-                    else statesNbt.setString(k, String(v));
+                    if (typeof v === 'boolean') {
+                        statesNbt.setByte(k, v ? 1 : 0);
+                    } else if (typeof v === 'number') {
+                        // BE boolean states (ending with _bit) should use setByte, not setInt
+                        const boolStates = new Set([
+                            'button_pressed_bit', 'open_bit', 'door_hinge_bit', 'upper_block_bit',
+                            'upside_down_bit', 'powered_bit', 'output_lit_bit', 'output_subtract_bit',
+                            'triggered_bit', 'attached_bit', 'disarmed_bit', 'suspended_bit',
+                            'toggle_bit', 'infiniburn_bit', 'explode_bit', 'age_bit',
+                            'allow_underwater_bit', 'dead_bit', 'occupied_bit', 'head_piece_bit',
+                            'extinguished', 'persistent_bit', 'stripped_bit', 'update_bit',
+                            'lit_bit', 'in_wall_bit', 'locked_bit', 'rail_data_bit'
+                        ]);
+                        if (boolStates.has(k) && (v === 1 || v === 0)) {
+                            statesNbt.setByte(k, v);
+                        } else {
+                            statesNbt.setInt(k, v);
+                        }
+                    } else {
+                        statesNbt.setString(k, String(v));
+                    }
                 }
                 blockNbt.setTag("states", statesNbt);
                 blockNbt.setInt("version", 17959425);

@@ -1,4 +1,4 @@
-// Litematica BE v2.4.4 - Minecraft Bedrock Edition Projection Tool
+// Litematica BE v2.5.1 - Minecraft Bedrock Edition Projection Tool
 // 全服共享投影系统，支持木剑操作、多模式切换
 
 // 测试zlib是否可用
@@ -41,13 +41,13 @@ const { BinaryChunkStorage } = require('./src/core/BinaryChunkStorage');
 ll.registerPlugin(
     "LitematicaBE",
     "Minecraft Bedrock Edition projection tool with shared projections",
-    [2, 4, 4],
+    [2, 5, 1],
     {}
 );
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '2.4.4';
+const PLUGIN_VERSION = '2.5.1';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
@@ -434,7 +434,7 @@ function registerCommands() {
     const cmd = mc.newCommand("litematica", "Litematica projection tool", PermType.Any, 0x80);
     const cmdShort = mc.newCommand("lit", "Litematica (Short)", PermType.Any, 0x80);
 
-    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "verify", "materials", "clear", "list", "remove", "info", "debug", "save"]);
+    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "verify", "materials", "clear", "list", "remove", "info", "debug", "save", "failures"]);
     cmd.setEnum("FileEnum", ["file"]);
     cmd.setEnum("CoordEnum", ["x", "y", "z"]);
 
@@ -490,6 +490,9 @@ function registerCommands() {
                 break;
             case "printer":
                 easyPlaceManager.toggleFastPlace(player);
+                break;
+            case "failures":
+                handleFailuresCommand(player, output);
                 break;
             case "verify":
                 handleVerifyCommand(player, output);
@@ -1051,6 +1054,26 @@ function handleDebugCommand(player, args, output) {
             output.success("§e/lit debug config §f- 显示当前配置");
             break;
     }
+}
+
+function handleFailuresCommand(player, output) {
+    const stats = easyPlaceManager.getPlacementFailureStats();
+    if (!stats) {
+        output.success("§7暂无放置失败统计");
+        return;
+    }
+    output.success("§6========== 一键放置失败统计 ==========");
+    output.success(`§e总尝试: §f${stats.totalAttempts} §e失败: §f${stats.totalFailures} §e失败率: §f${stats.failureRate}`);
+    output.success(`§e持续时间: §f${stats.sessionDuration}秒`);
+    if (stats.topFailures && stats.topFailures.length > 0) {
+        output.success("§c--- 失败最多的方块 (前20) ---");
+        for (const f of stats.topFailures) {
+            const javaShort = f.javaName.replace('minecraft:', '');
+            const beShort = f.beName.replace('minecraft:', '');
+            output.success(`§c${f.count}次 §f${javaShort} → §7${beShort} §f(${f.lastError})`);
+        }
+    }
+    output.success("§7详细日志: plugins/LitematicaBE/logs/placement_failures_YYYY-MM-DD.log");
 }
 
 function listProjections(player, output) {

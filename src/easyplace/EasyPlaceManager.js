@@ -4,6 +4,9 @@ const { InventoryHelper } = require('./InventoryHelper');
 const { BlockConversions } = require('./BlockConversions');
 const { bidirectionalConverter } = require('../mappings/BidirectionalBlockConverter');
 const { SpatialIndexUtils } = require('./SpatialIndexUtils');
+const { BlockStateConverters } = require('../mappings/BlockStateConverters');
+const { BlockMappingRegistry } = require('../mappings/BlockMappingRegistry');
+const { PlacementLogger } = require('./PlacementLogger');
 const fs = require('fs');
 const path = require('path');
 
@@ -24,6 +27,8 @@ class EasyPlaceManager {
         this.tickInterval = null;
         this.debugMode = true;
         this.debugLogPath = './logs/LitematicaBE/easyplace_debug.log';
+        this.placementLogger = new PlacementLogger();
+        this.logFailures = true;
         this.ensureDebugLogDir();
     }
 
@@ -232,23 +237,47 @@ class EasyPlaceManager {
                 continue;
             }
 
-            const converted = BlockConversions.convertToValid(neededBlockType, block.state || {});
-        const finalStates = BlockConversions.filterDirectionStates(converted.states);
+            const javaStates = block.state || {};
+
+            if (!BlockConversions.isWhitelistedState(neededBlockType, javaStates)) {
+                skippedBanned++;
+                continue;
+            }
+
+            const registry = new BlockMappingRegistry();
+            const mapping = registry.getMapping(neededBlockType);
+            let beName = mapping ? mapping.b : neededBlockType;
+
+            const stateConverter = new BlockStateConverters();
+            const beStates = stateConverter.convertJavaToBedrock(neededBlockType, javaStates);
+
+            const converted = BlockConversions.convertToValid(beName, beStates);
+
+            if (neededBlockType === 'minecraft:redstone_torch' || neededBlockType === 'minecraft:redstone_wall_torch') {
+                if (javaStates.lit === 'false' || javaStates.lit === false) {
+                    converted.name = 'unlit_redstone_torch';
+                }
+            }
+
+            const finalStates = BlockConversions.resetToDefaultStates(converted.states);
 
             const isCreative = player.gameMode === 1;
             let success = false;
+            let failReason = 'setblock失败';
 
             if (isCreative) {
-                success = this.placeBlockAt(worldX, worldY, worldZ, dimid, converted.name, finalStates);
+                success = this.fastPlaceBlockAt(worldX, worldY, worldZ, dimid, converted.name, finalStates);
             } else {
                 const foundSlot = this.inventoryHelper.findBlockInInventory(
                     player.getInventory(), converted.name, -1, finalStates
                 );
                 if (foundSlot !== -1) {
-                    success = this.placeBlockAt(worldX, worldY, worldZ, dimid, converted.name, finalStates);
+                    success = this.fastPlaceBlockAt(worldX, worldY, worldZ, dimid, converted.name, finalStates);
                     if (success) {
                         this.consumeItem(player, converted.name);
                     }
+                } else {
+                    failReason = `缺少物品: ${converted.name}`;
                 }
             }
 
@@ -257,6 +286,19 @@ class EasyPlaceManager {
                 const state = this.fastPlaceStates.get(player.xuid);
                 if (state) state.placedCount++;
                 placedCount++;
+                if (this.logFailures) {
+                    this.placementLogger.logSuccess();
+                }
+            } else if (this.logFailures) {
+                this.placementLogger.logFailure(
+                    player.name,
+                    neededBlockType,
+                    converted.name,
+                    javaStates,
+                    finalStates,
+                    '',
+                    failReason
+                );
             }
         }
 
@@ -558,6 +600,50 @@ class EasyPlaceManager {
             logger.error(`[EasyPlace] Failed to place block: ${e.message}`);
             return false;
         }
+    }
+
+    fastPlaceBlockAt(x, y, z, dimid, blockName, blockStates) {
+        try {
+            if (!blockName || typeof blockName !== 'string') {
+                return false;
+            }
+
+            const cmd = BlockConversions.buildSetBlockCommand(x, y, z, blockName, blockStates);
+            const result = mc.runcmdEx(cmd);
+
+            if (result.success) {
+                return true;
+            }
+
+            this.logDebug('FAST_PLACE_SETBLOCK_FAILED', {
+                x, y, z, dimid,
+                blockName,
+                blockStates,
+                cmd,
+                output: result.output || ''
+            });
+            return false;
+        } catch (e) {
+            this.logDebug('FAST_PLACE_EXCEPTION', {
+                x, y, z, dimid,
+                blockName,
+                blockStates,
+                error: e.message
+            });
+            return false;
+        }
+    }
+
+    getPlacementFailureStats() {
+        return this.placementLogger.getSummary();
+    }
+
+    resetPlacementFailureStats() {
+        this.placementLogger.reset();
+    }
+
+    setLogFailures(enabled) {
+        this.logFailures = enabled;
     }
 
     consumeItem(player, itemType) {
