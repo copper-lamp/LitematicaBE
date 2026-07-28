@@ -492,10 +492,17 @@ class UIManager {
 
                 const finalStates = BlockConversions.resetToDefaultStates(converted.states);
 
-                const cmd = BlockConversions.buildSetBlockCommand(wx, wy, wz, converted.name, finalStates);
-                const result = mc.runcmdEx(cmd);
+                // 使用 NBT 方式放置方块（更可靠，支持颜色等状态）
+                let success = false;
+                try {
+                    const blockNbt = bidirectionalConverter.buildBlockNbt(converted.name, finalStates);
+                    success = mc.setBlock(wx, wy, wz, dimid, blockNbt);
+                } catch (nbtError) {
+                    // NBT 方式失败，回退到简单放置
+                    success = mc.setBlock(wx, wy, wz, dimid, converted.name, 0);
+                }
 
-                if (result.success) {
+                if (success) {
                     placed++;
                 } else {
                     errors++;

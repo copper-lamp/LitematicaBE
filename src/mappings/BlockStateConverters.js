@@ -92,32 +92,36 @@ class BlockStateConverters {
      * @returns {object} bedrock states
      */
     convertJavaToBedrock(javaName, javaStates) {
-        if (!javaStates || Object.keys(javaStates).length === 0) return {};
-
-        const mapping = registry.getMapping(javaName);
-        const stateMap = mapping ? mapping.s : null;
-        const flags = mapping ? mapping.f : 0;
-        const cat = mapping ? mapping.c : null;
         const be = {};
+        const states = javaStates || {};
 
-        // 1. Apply name mappings from the registry (e.g., axis -> pillar_axis)
-        if (stateMap) {
-            for (const [jk, bk] of Object.entries(stateMap)) {
-                if (jk in javaStates) {
-                    be[bk] = javaStates[jk];
+        // Always apply special converters first (for color extraction, etc.)
+        // This handles cases where javaStates is empty but color info is in the block name
+        this._applySpecialConverters(javaName, states, be);
+
+        // Only process state mappings if we have actual states to convert
+        if (Object.keys(states).length > 0) {
+            const mapping = registry.getMapping(javaName);
+            const stateMap = mapping ? mapping.s : null;
+            const flags = mapping ? mapping.f : 0;
+            const cat = mapping ? mapping.c : null;
+
+            // 1. Apply name mappings from the registry (e.g., axis -> pillar_axis)
+            if (stateMap) {
+                for (const [jk, bk] of Object.entries(stateMap)) {
+                    if (jk in states) {
+                        be[bk] = states[jk];
+                    }
                 }
+            } else {
+                Object.assign(be, states);
             }
-        } else {
-            Object.assign(be, javaStates);
-        }
 
-        // 2. Apply directional converters if flagged
-        if (flags & 1) {
-            this._convertFacing(javaName, javaStates, be, cat);
+            // 2. Apply directional converters if flagged
+            if (flags & 1) {
+                this._convertFacing(javaName, states, be, cat);
+            }
         }
-
-        // 3. Handle special converters by name pattern
-        this._applySpecialConverters(javaName, javaStates, be);
 
         // 4. Remove Java-only states that have been fully handled by special converters
         // (Keep them otherwise - they pass through for round-trip fidelity)

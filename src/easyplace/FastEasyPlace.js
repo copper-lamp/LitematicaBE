@@ -4,6 +4,7 @@ const { SpatialIndexUtils } = require('./SpatialIndexUtils');
 const { BlockStateConverters } = require('../mappings/BlockStateConverters');
 const { BlockMappingRegistry } = require('../mappings/BlockMappingRegistry');
 const { PlacementLogger } = require('./PlacementLogger');
+const { bidirectionalConverter } = require('../mappings/BidirectionalBlockConverter');
 
 class FastEasyPlace {
     static SEARCH_RADIUS = 5;
@@ -285,10 +286,17 @@ class FastEasyPlace {
                 }
             }
 
-            const cmd = this.buildSetBlockCommand(x, y, z, blockName, blockStates);
-            const result = mc.runcmdEx(cmd);
+            // 使用 NBT 方式放置方块（更可靠，支持颜色等状态）
+            let success = false;
+            try {
+                const blockNbt = bidirectionalConverter.buildBlockNbt(blockName, blockStates);
+                success = mc.setBlock(x, y, z, dimid, blockNbt);
+            } catch (nbtError) {
+                // NBT 方式失败，回退到简单放置
+                success = mc.setBlock(x, y, z, dimid, blockName, 0);
+            }
 
-            if (result.success) {
+            if (success) {
                 const state = this.playerStates.get(player.xuid);
                 if (state) {
                     state.placedCount++;
@@ -299,7 +307,7 @@ class FastEasyPlace {
                 }
                 return { success: true };
             }
-            return { success: false, cmd, error: `setblock failed: ${result.output || 'unknown error'}` };
+            return { success: false, error: `setblock failed` };
         } catch (e) {
             return { success: false, error: `Exception: ${e.message}` };
         }
@@ -401,10 +409,17 @@ class FastEasyPlace {
                 }
             }
 
-            const cmd = this.buildSetBlockCommand(x, y, z, blockName, blockStates);
-            const result = mc.runcmdEx(cmd);
+            // 使用 NBT 方式放置方块（更可靠，支持颜色等状态）
+            let success = false;
+            try {
+                const blockNbt = bidirectionalConverter.buildBlockNbt(blockName, blockStates);
+                success = mc.setBlock(x, y, z, dimid, blockNbt);
+            } catch (nbtError) {
+                // NBT 方式失败，回退到简单放置
+                success = mc.setBlock(x, y, z, dimid, blockName, 0);
+            }
 
-            if (result.success) {
+            if (success) {
                 this.consumeItem(player, itemType);
                 
                 const state = this.playerStates.get(player.xuid);
@@ -414,7 +429,7 @@ class FastEasyPlace {
 
                 return { success: true };
             }
-            return { success: false, cmd, error: `setblock failed: ${result.output || 'unknown error'}` };
+            return { success: false, error: `setblock failed` };
         } catch (e) {
             return { success: false, error: `Exception: ${e.message}` };
         }

@@ -232,6 +232,40 @@ mc.listen("onUseItemOn", (player, item, block, side, pos) => {
     }
 });
 
+// 监听木剑使用事件（不需要对着方块）- 用于建造模式切层
+mc.listen("onUseItem", (player, item) => {
+    // 检查是否是木剑
+    if (!item || !item.type || item.type !== 'minecraft:wooden_sword') {
+        return;
+    }
+
+    const cooldownKey = `litematica_${player.uuid}`;
+    const now = Date.now();
+    const lastUse = playerCooldowns.get(cooldownKey) || 0;
+
+    if (now - lastUse < 500) {
+        return;
+    }
+
+    // 检查是否正在选区
+    if (selectionTool.isSelecting(player.xuid)) {
+        return;
+    }
+
+    if (player.isSneaking) {
+        return;
+    }
+
+    const playerData = dataManager.getPlayerData(player.xuid);
+    const session = getPlayerSession(player.xuid);
+
+    // 只处理建造模式
+    if (playerData.toolMode === 'build') {
+        playerCooldowns.set(cooldownKey, now);
+        handleBuildMode(player, session);
+    }
+});
+
 // 监听点击空气事件（用于旋转模式和建造模式）
 // 注意：onClick 事件在 LeviLamina 中可能不可用，使用 onUseItemOn 代替
 
