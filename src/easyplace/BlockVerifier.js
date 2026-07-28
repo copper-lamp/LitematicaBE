@@ -405,49 +405,81 @@ class BlockVerifier {
      * @param {number} duration 标记持续时间（毫秒），默认 30000
      */
     markProblemBlocks(player, problemBlocks, duration = 30000) {
-        if (!problemBlocks || problemBlocks.length === 0) return;
+        if (!problemBlocks || problemBlocks.length === 0) return 0;
 
-        const dimid = player.pos.dimid;
+        const dimid = (typeof player.pos?.dimid === 'number') ? player.pos.dimid : (parseInt(player.pos?.dimid) || 0);
         let count = 0;
         const maxMark = 200; // 最多标记200个，防止卡服
 
-        // 颜色映射: NO_MATCH(1)=红, TYPE_MATCH(2)=黄, MISSING(4)=蓝
-        const colorMap = {
-            [VerificationLevel.NO_MATCH]: { r: 1.0, g: 0.0, b: 0.0 },   // 错误方块 → 红色
-            [VerificationLevel.TYPE_MATCH]: { r: 1.0, g: 1.0, b: 0.0 },   // 状态错误 → 黄色
-            [VerificationLevel.MISSING]: { r: 0.0, g: 0.0, b: 1.0 },      // 缺失 → 蓝色
-            extra: { r: 1.0, g: 0.5, b: 0.0 }                              // 多余方块 → 橙色
+        // 根据问题级别选择不同的粒子类型（使用基岩版有效粒子名）
+        const particleMap = {
+            [VerificationLevel.NO_MATCH]: 'minecraft:basic_flame_particle',    // 错误方块 → 火焰
+            [VerificationLevel.TYPE_MATCH]: 'minecraft:villager_angry',       // 状态错误 → 愤怒
+            [VerificationLevel.MISSING]: 'minecraft:blue_flame_particle',     // 缺失 → 蓝色火焰
+            extra: 'minecraft:wax_particle'                                   // 多余 → 蜡
         };
 
+        // 筛选出可标记的位置（区块已加载）
+        const validPositions = [];
         for (const block of problemBlocks) {
-            if (count >= maxMark) break;
+            if (validPositions.length >= maxMark) break;
 
             const pos = block.position;
-            const wx = pos.x + 0.5;
-            const wy = pos.y + 0.5;
-            const wz = pos.z + 0.5;
+            if (!pos || typeof pos.x !== 'number') continue;
 
-            const color = colorMap[block.level] || colorMap.extra;
-
-            // 生成标记粒子（使用 endrod 粒子，显眼且持久）
+            // 检查区块是否已加载
             try {
-                mc.spawnParticle(wx, wy, wz, dimid, 'minecraft:balloon_gas', 
-                    color.r, color.g, color.b, 1.0, 0);
-                count++;
+                const testBlock = mc.getBlock(pos.x, pos.y, pos.z, dimid);
+                // 即使返回 null（空气），只要不抛异常就说明区块已加载
+                validPositions.push(block);
             } catch (e) {
-                // 粒子生成失败，静默跳过
+                // 区块未加载，跳过此位置
             }
         }
 
-        if (count > 0) {
-            player.tell(`§a已标记 ${count} 个问题方块（§c红色=错误 §e黄色=状态错误 §b蓝色=缺失 §6橙色=多余），持续 ${Math.floor(duration / 1000)} 秒`);
+        if (validPositions.length === 0) {
+            return 0;
         }
 
-        // 定时清除标记的引用（粒子的视觉效果会自然消散）
-        const clearMsg = () => {
-            try { player.tell('§7问题方块标记已清除'); } catch (e) {}
+        // 使用 setInterval 持续生成粒子，直到持续时间结束
+        const intervalMs = 500; // 每 500ms 重新生成一次粒子
+        const maxRounds = Math.floor(duration / intervalMs);
+        let currentRound = 0;
+
+        const spawnRound = () => {
+            currentRound++;
+            for (const block of validPositions) {
+                const pos = block.position;
+                const particleType = particleMap[block.level] || particleMap.extra;
+                try {
+                    if (player.spawnParticle) {
+                        // 使用 player.spawnParticle (客户端粒子，只有该玩家可见)
+                        player.spawnParticle(particleType, {
+                            x: pos.x + 0.5,
+                            y: pos.y + 0.5,
+                            z: pos.z + 0.5
+                        });
+                    } else {
+                        // 回退到命令方式
+                        const dimName = dimid === 1 ? 'the_nether' : (dimid === 2 ? 'the_end' : 'overworld');
+                        mc.runcmd(`execute in ${dimName} positioned ${pos.x + 0.5} ${pos.y + 0.5} ${pos.z + 0.5} run particle "${particleType}" ~ ~ ~`);
+                    }
+                } catch (e) {
+                    // 粒子生成失败，静默跳过
+                }
+            }
+
+            if (currentRound < maxRounds) {
+                markTimer = setTimeout(spawnRound, intervalMs);
+            } else {
+                try { player.tell('§7问题方块标记已清除'); } catch (e) {}
+            }
         };
-        setTimeout(clearMsg, duration);
+
+        let markTimer = setTimeout(spawnRound, 0);
+        count = validPositions.length;
+
+        player.tell(`§a已标记 ${count} 个问题方块（§c火焰=错误 §e愤怒=状态错误 §b蓝焰=缺失 §6蜡粒=多余），持续 ${Math.floor(duration / 1000)} 秒`);
 
         return count;
     }

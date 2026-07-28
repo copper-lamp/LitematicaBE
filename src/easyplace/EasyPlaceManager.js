@@ -25,10 +25,12 @@ class EasyPlaceManager {
         this.fastPlaceStates = new Map();
         this.placedLocations = new Map();
         this.tickInterval = null;
-        this.debugMode = true;
+        this.debugMode = false; // 默认关闭调试模式，避免日志刷屏
         this.debugLogPath = './logs/LitematicaBE/easyplace_debug.log';
         this.placementLogger = new PlacementLogger();
         this.logFailures = true;
+        this._lastDebugLogTime = 0;
+        this._debugLogThrottleMs = 2000; // 调试日志最小间隔 2 秒
         this.ensureDebugLogDir();
     }
 
@@ -44,6 +46,13 @@ class EasyPlaceManager {
     }
 
     logDebug(message, data = null) {
+        if (!this.debugMode) return;
+
+        // 节流：同类型日志在 throttleMs 内只记录一次
+        const now = Date.now();
+        if (now - this._lastDebugLogTime < this._debugLogThrottleMs) return;
+        this._lastDebugLogTime = now;
+
         try {
             const timestamp = new Date().toISOString();
             let logLine = `[${timestamp}] ${message}`;
@@ -53,7 +62,7 @@ class EasyPlaceManager {
             logLine += '\n';
             fs.appendFileSync(this.debugLogPath, logLine);
         } catch (e) {
-            logger.error(`[EasyPlace] Failed to write debug log: ${e.message}`);
+            // 静默忽略日志写入失败
         }
     }
 

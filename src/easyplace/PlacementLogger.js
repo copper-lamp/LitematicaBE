@@ -8,6 +8,8 @@ class PlacementLogger {
         this.totalAttempts = 0;
         this.totalFailures = 0;
         this.sessionStart = Date.now();
+        this._recentLogs = new Map(); // key → timestamp，用于去重节流
+        this._logThrottleMs = 5000;   // 相同错误 5 秒内只写一次文件
         this.ensureDir();
     }
 
@@ -37,6 +39,20 @@ class PlacementLogger {
         entry.lastCmd = cmd;
         entry.lastError = errorMsg;
 
+        // 节流：相同 javaName + errorMsg 组合在 throttleMs 内只写文件一次
+        const logKey = `${javaName}|${errorMsg}`;
+        const now = Date.now();
+        const lastLogTime = this._recentLogs.get(logKey) || 0;
+        if (now - lastLogTime < this._logThrottleMs) return;
+        this._recentLogs.set(logKey, now);
+
+        // 清理过期的节流记录（避免 Map 无限增长）
+        if (this._recentLogs.size > 200) {
+            for (const [k, t] of this._recentLogs) {
+                if (now - t > this._logThrottleMs * 2) this._recentLogs.delete(k);
+            }
+        }
+
         const timestamp = new Date().toISOString();
         const line = [
             `[${timestamp}]`,
@@ -46,7 +62,8 @@ class PlacementLogger {
             `JavaStates=${JSON.stringify(javaStates)}`,
             `BEStates=${JSON.stringify(beStates)}`,
             `Command=${cmd}`,
-            `Error=${errorMsg}`
+            `Error=${errorMsg}`,
+            `RepeatCount=${entry.count}`
         ].join(' | ') + '\n';
 
         try {

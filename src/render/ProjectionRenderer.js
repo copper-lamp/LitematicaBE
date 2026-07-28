@@ -200,6 +200,8 @@ class ProjectionRenderer {
         this.particlePool = new ParticlePool(5000);
         this.frameIndex = 0;
         this.lastCleanupTime = Date.now();
+        // 层缓存：projectionId → Map<layerNumber, blocks[]>
+        this._layerCache = new Map();
         this.debugMode = false;
         this.startRenderLoop();
         this.startPlacementCheckLoop();
@@ -242,7 +244,10 @@ class ProjectionRenderer {
         }
 
         if (cleanedPlaced > 0 || cleanedParticles > 0) {
-            logger.info(`[Cleanup] placedBlocks: -${cleanedPlaced}, particles: -${cleanedParticles}`);
+            // 仅在有大量清理时输出日志
+            if (cleanedPlaced > 10 || cleanedParticles > 100) {
+                logger.info(`[Cleanup] placedBlocks: -${cleanedPlaced}, particles: -${cleanedParticles}`);
+            }
         }
     }
 
@@ -345,7 +350,8 @@ class ProjectionRenderer {
                 const maxLayer = task.projection.dimensions.y - 1;
                 const currentLayer = this.currentRenderLayer.get(playerXuid);
                 const actualLayer = (currentLayer !== undefined && currentLayer !== null) ? currentLayer : maxLayer;
-                blocksToRespawn = sourceBlocks.filter(b => b.pos[1] === actualLayer);
+                // 使用层缓存替代 filter
+                blocksToRespawn = this._getLayerBlocks(task.projection, actualLayer);
             } else {
                 blocksToRespawn = sourceBlocks;
             }
@@ -356,8 +362,6 @@ class ProjectionRenderer {
             task.respawnIndex = 0;
             task.isRespawning = true;
             task.lastParticleRespawn = now;
-
-            logger.info(`[Respawn] Queued ${blocksToRespawn.length} blocks for player ${player.name}`);
         }
     }
 
@@ -414,7 +418,6 @@ class ProjectionRenderer {
         if (task.respawnIndex >= queue.length) {
             task.isRespawning = false;
             task.respawnQueue = null;
-            logger.info(`[Respawn] Completed ${respawned} particles for ${player.name}`);
         }
     }
 
@@ -686,13 +689,48 @@ class ProjectionRenderer {
         ];
     }
 
-    startRender(player, projection, layer = -1) {
-        const allBlocks = projection.blocks;
+    /**
+     * 获取指定层的方块（使用缓存避免重复 filter）
+     * @param {Object} projection 投影对象
+     * @param {number} layer 层号，-1 表示全部
+     * @returns {Array} 方块数组
+     */
+    _getLayerBlocks(projection, layer) {
+        if (layer < 0) return projection.blocks || [];
 
-        let blocks = allBlocks;
-        if (layer >= 0) {
-            blocks = blocks.filter(b => b.pos[1] === layer);
+        // 检查缓存
+        const projId = projection.id || projection.name || 'unknown';
+        let layerMap = this._layerCache.get(projId);
+        if (!layerMap) {
+            // 首次访问：构建按层分组的索引
+            layerMap = new Map();
+            const allBlocks = projection.blocks || [];
+            for (const b of allBlocks) {
+                const y = b.pos[1];
+                if (!layerMap.has(y)) layerMap.set(y, []);
+                layerMap.get(y).push(b);
+            }
+            this._layerCache.set(projId, layerMap);
         }
+
+        return layerMap.get(layer) || [];
+    }
+
+    /**
+     * 清除指定投影的层缓存（在投影卸载或重新加载时调用）
+     */
+    clearLayerCache(projectionId) {
+        if (projectionId) {
+            this._layerCache.delete(projectionId);
+        } else {
+            this._layerCache.clear();
+        }
+    }
+
+    startRender(player, projection, layer = -1) {
+        // 使用缓存获取层方块，避免每次切层都 filter 全部方块
+        const allBlocks = projection.blocks;
+        let blocks = (layer >= 0) ? this._getLayerBlocks(projection, layer) : allBlocks;
 
         this.clearPlayerProjection(player);
         this.placedBlocks.clear();
@@ -886,6 +924,12 @@ class ProjectionRenderer {
         }
 
         this.clearPlayerProjection(player);
+
+        // 清除层缓存
+        if (task.projection) {
+            this.clearLayerCache(task.projection.id || task.projection.name);
+        }
+
         player.tell('§a投影渲染已取消');
         return true;
     }

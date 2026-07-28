@@ -112,13 +112,9 @@ class ProjectionManager {
             active.renderLayer = newLayer;
             active.lastUpdate = Date.now();
 
-            logger.info(`[ProjMgr] Layer switched for ${player.name}: ${renderLayer} -> ${newLayer}`);
-
             if (this.onLayerChange) {
                 this.onLayerChange(player, active.projection, newLayer);
             }
-        } else {
-            logger.info(`[ProjMgr] Layer unchanged for ${player.name}: ${renderLayer}`);
         }
 
         return active;
@@ -126,12 +122,28 @@ class ProjectionManager {
 
     getFilteredBlocks(projection, layer) {
         if (!projection.blocks) {
-            logger.error(`[ProjMgr] No blocks in projection ${projection.id}`);
             return [];
         }
 
         if (layer === -1) {
             return projection.blocks;
+        }
+
+        // 优先使用渲染器的层缓存
+        if (global.renderer && global.renderer._layerCache) {
+            const projId = projection.id || projection.name || 'unknown';
+            let layerMap = global.renderer._layerCache.get(projId);
+            if (!layerMap) {
+                // 构建缓存
+                layerMap = new Map();
+                for (const b of projection.blocks) {
+                    const y = b.pos[1];
+                    if (!layerMap.has(y)) layerMap.set(y, []);
+                    layerMap.get(y).push(b);
+                }
+                global.renderer._layerCache.set(projId, layerMap);
+            }
+            return layerMap.get(layer) || [];
         }
 
         return projection.blocks.filter(b => b.pos[1] === layer);
@@ -143,7 +155,8 @@ class ProjectionManager {
         let currentLayerBlocks = totalBlocks;
 
         if (currentLayer !== -1) {
-            currentLayerBlocks = projection.blocks?.filter(b => b.pos[1] === currentLayer).length || 0;
+            // 使用 getFilteredBlocks 复用层缓存
+            currentLayerBlocks = this.getFilteredBlocks(projection, currentLayer).length;
         }
 
         return {
