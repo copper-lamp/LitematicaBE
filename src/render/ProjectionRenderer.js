@@ -88,6 +88,8 @@ const TEXTURE_OVERRIDE = {
     ochre_froglight: 'ochre_froglight_top',
     verdant_froglight: 'verdant_froglight_top',
     pearlescent_froglight: 'pearlescent_froglight_top',
+    // 遮光玻璃使用普通玻璃材质作为回退
+    tinted_glass: 'glass',
 };
 
 function _stripNamespace(blockName) {
@@ -97,28 +99,10 @@ function _stripNamespace(blockName) {
     return name.replace(/[^a-z0-9_]/g, '_').replace(/_+$/, '');
 }
 
-const _COLOR_BLOCK_TYPES = ['wool', 'carpet', 'terracotta', 'concrete', 'concrete_powder',
-    'stained_glass', 'stained_glass_pane', 'banner', 'wall_banner',
-    'bed', 'shulker_box', 'candle', 'candle_cake'];
-
-const _COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray',
-    'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black'];
-
-function _isColoredBlock(name) {
-    const stripped = _stripNamespace(name);
-    for (const color of _COLORS) {
-        for (const blockType of _COLOR_BLOCK_TYPES) {
-            if (stripped === color + '_' + blockType) return true;
-        }
-    }
-    return false;
-}
-
 function mapBlockName(javaName) {
     if (!javaName) return 'missing_tile';
     const name = _stripNamespace(javaName);
     if (name in TEXTURE_OVERRIDE) return TEXTURE_OVERRIDE[name];
-    if (_isColoredBlock(javaName)) return name;
     try {
         const be = bidirectionalConverter.javaToBedrock({ name: javaName, states: {} });
         const beShort = _stripNamespace(be.name);
