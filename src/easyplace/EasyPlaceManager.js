@@ -608,21 +608,19 @@ class EasyPlaceManager {
                 return false;
             }
 
-            const cmd = BlockConversions.buildSetBlockCommand(x, y, z, blockName, blockStates);
-            const result = mc.runcmdEx(cmd);
-
-            if (result.success) {
-                return true;
+            // 使用 NBT 方式放置方块（更可靠，支持颜色等状态）
+            try {
+                const blockNbt = bidirectionalConverter.buildBlockNbt(blockName, blockStates);
+                const success = mc.setBlock(x, y, z, dimid, blockNbt);
+                if (success) {
+                    return true;
+                }
+                // NBT 方式失败，回退到简单放置
+                return mc.setBlock(x, y, z, dimid, blockName, 0);
+            } catch (nbtError) {
+                // NBT 构建失败，回退到简单放置
+                return mc.setBlock(x, y, z, dimid, blockName, 0);
             }
-
-            this.logDebug('FAST_PLACE_SETBLOCK_FAILED', {
-                x, y, z, dimid,
-                blockName,
-                blockStates,
-                cmd,
-                output: result.output || ''
-            });
-            return false;
         } catch (e) {
             this.logDebug('FAST_PLACE_EXCEPTION', {
                 x, y, z, dimid,

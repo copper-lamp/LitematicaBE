@@ -25,7 +25,6 @@ class MegaProjectionRenderer {
         this.registerRespawnListener();
     }
 
-    // ==================== 配置加载 ====================
     loadConfig() {
         try {
             if (global.configManager) {
@@ -61,7 +60,6 @@ class MegaProjectionRenderer {
         }
     }
 
-    // ==================== 玩家重生监听 ====================
     registerRespawnListener() {
         mc.listen('onRespawn', (player) => {
             if (!player || !player.xuid) return;
@@ -79,7 +77,6 @@ class MegaProjectionRenderer {
         });
     }
 
-    // ==================== 日志管理 ====================
     log(level, category, message, data = null) {
         if (level === 'WARN' || level === 'ERROR') {
             if (data) {
