@@ -1165,7 +1165,13 @@ function handleVerifyCommand(player, output) {
     const projection = activeProj.projection;
     output.success("§7正在验证投影...");
 
-    const results = blockVerifier.verifyProjection(projection);
+    let results;
+    try {
+        results = blockVerifier.verifyProjection(projection);
+    } catch (e) {
+        output.error("§c验证失败: " + e.message);
+        return;
+    }
     const matchPercent = results.total > 0 ? ((results.match / results.total) * 100).toFixed(1) : 0;
 
     output.success("§6========== 投影验证结果 ==========");

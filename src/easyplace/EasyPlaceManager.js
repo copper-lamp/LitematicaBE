@@ -197,7 +197,7 @@ class EasyPlaceManager {
         const playerPos = player.pos;
         const projPos = projection.position;
         const projDim = projection.dimensions;
-        const dimid = playerPos.dimid;
+        const dimid = (typeof playerPos.dimid === 'number') ? playerPos.dimid : (parseInt(playerPos.dimid) || 0);
 
         const centerX = playerPos.x;
         const centerY = playerPos.y;
@@ -741,19 +741,22 @@ class EasyPlaceManager {
 
             const specialConversion = BlockConversions.getSpecialConversion(consumeType);
             if (specialConversion) {
-                if (item.count === 1) {
+                if (item.count <= 1) {
                     const newItem = mc.newItem(specialConversion, 1);
                     inventory.setItem(targetSlot, newItem);
                 } else {
-                    item.count--;
+                    // LLSE_Item.count 是只读的，不能直接修改，需要创建新物品替换
+                    const reduced = mc.newItem(item.type, item.count - 1);
+                    inventory.setItem(targetSlot, reduced);
                     const newItem = mc.newItem(specialConversion, 1);
                     player.giveItem(newItem);
                 }
             } else {
-                if (item.count === 1) {
+                if (item.count <= 1) {
                     inventory.setItem(targetSlot, null);
                 } else {
-                    item.count--;
+                    const reduced = mc.newItem(item.type, item.count - 1);
+                    inventory.setItem(targetSlot, reduced);
                 }
             }
 

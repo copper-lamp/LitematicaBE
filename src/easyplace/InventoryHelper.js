@@ -249,8 +249,10 @@ class InventoryHelper {
             if (currentTargetItem && !currentTargetItem.isNull()) {
                 if (currentTargetItem.type === itemId && currentTargetItem.count < currentTargetItem.maxCount) {
                     const addCount = Math.min(count, currentTargetItem.maxCount - currentTargetItem.count);
-                    currentTargetItem.count += addCount;
-                    
+                    // LLSE_Item.count 是只读的，需要创建新物品替换
+                    const merged = mc.newItem(itemId, currentTargetItem.count + addCount);
+                    inventory.setItem(targetSlot, merged);
+
                     const remaining = count - addCount;
                     if (remaining > 0) {
                         const remainingItem = mc.newItem(itemId, remaining);

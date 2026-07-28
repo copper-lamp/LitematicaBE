@@ -1163,7 +1163,15 @@ class UIManager {
         player.tell('§7正在验证投影，请稍候...');
 
         // 执行核心验证
-        const results = blockVerifier.verifyProjection(projection);
+        let results;
+        try {
+            results = blockVerifier.verifyProjection(projection);
+        } catch (e) {
+            logger.error(`[UIManager] verifyProjection failed: ${e.message}`);
+            player.tell('§c验证失败: ' + e.message);
+            this.showProjectionOperations(player);
+            return;
+        }
 
         // 执行多余方块检测（异步不阻塞，但会稍慢）
         let extraResult = null;
