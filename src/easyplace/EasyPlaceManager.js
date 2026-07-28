@@ -60,6 +60,7 @@ class EasyPlaceManager {
     enable(player) {
         this.playerStates.set(player.xuid, {
             enabled: true,
+            correctionEnabled: true,
             placedCount: 0
         });
         player.tell('§a轻松放置已启用');
@@ -81,6 +82,37 @@ class EasyPlaceManager {
 
     isEnabled(player) {
         return this.playerStates.get(player.xuid)?.enabled || false;
+    }
+
+    enableCorrection(player) {
+        let s = this.playerStates.get(player.xuid);
+        if (!s) s = { enabled: false, correctionEnabled: false, placedCount: 0 };
+        s.correctionEnabled = true;
+        this.playerStates.set(player.xuid, s);
+        player.tell('§a投影纠错已启用');
+    }
+
+    disableCorrection(player) {
+        const s = this.playerStates.get(player.xuid);
+        if (s) s.correctionEnabled = false;
+        player.tell('§c投影纠错已禁用');
+    }
+
+    toggleCorrection(player) {
+        const s = this.playerStates.get(player.xuid);
+        const current = s?.correctionEnabled ?? false;
+        if (current) {
+            this.disableCorrection(player);
+        } else {
+            this.enableCorrection(player);
+        }
+    }
+
+    isCorrectionEnabled(player) {
+        const s = this.playerStates.get(player.xuid);
+        // 如果玩家启用了轻松放置，默认纠错也启用；兼容旧状态（没有 correctionEnabled 字段时回退到 enabled）
+        if (!s) return false;
+        return s.correctionEnabled === undefined ? s.enabled : s.correctionEnabled;
     }
 
     // 投影打印机方法
@@ -274,7 +306,7 @@ class EasyPlaceManager {
                 if (foundSlot !== -1) {
                     success = this.fastPlaceBlockAt(worldX, worldY, worldZ, dimid, converted.name, finalStates);
                     if (success) {
-                        this.consumeItem(player, converted.name);
+                        this.consumeItem(player, converted.name, foundSlot, finalStates);
                     }
                 } else {
                     failReason = `缺少物品: ${converted.name}`;
@@ -450,7 +482,7 @@ class EasyPlaceManager {
             );
 
             if (foundInShulker === -1) {
-                const totalCount = this.inventoryHelper.countBlock(player, neededBlockType);
+                const totalCount = this.inventoryHelper.countBlock(player, neededBlockType, neededBlockState);
                 if (totalCount > 0) {
                     logger.info(`[EasyPlace] 无法从潜隐盒提取: ${neededBlockType}`);
                 } else {
@@ -462,7 +494,7 @@ class EasyPlaceManager {
 
         const success = this.placeBlockAt(placeX, placeY, placeZ, placeDim, neededBlockType, neededBlockState);
         if (success) {
-            this.consumeItem(player, neededBlockType);
+            this.consumeItem(player, neededBlockType, foundSlot, neededBlockState);
             return false;
         }
 
@@ -474,6 +506,8 @@ class EasyPlaceManager {
      * 比 onUseItemOn 更可靠，能确保正确检测到放置的方块
      */
     correctBlockPlacement(player, block) {
+        if (!this.isCorrectionEnabled(player)) return;
+
         if (!block || !block.pos) {
             return;
         }
@@ -532,16 +566,51 @@ class EasyPlaceManager {
         const finalType = converted.name;
         const finalStates = BlockConversions.filterDirectionStates(converted.states);
 
-        // 检查放置的方块是否正确
+        // 检查放置的方块是否正确（优先提取实际方块的状态）
         const actualBlockType = block.type || block.name || '';
+        const actualStates = this._extractBlockStates(block);
 
-        const isCorrect = this.blockMatcher.match(actualBlockType, finalType, null, finalStates);
+        const isCorrect = this.blockMatcher.match(actualBlockType, finalType, actualStates, finalStates);
 
         if (isCorrect) return; // 方块正确，不需要修正
 
         // 方块不正确，需要修正
         this.placeBlockAt(blockX, blockY, blockZ, blockDim, finalType, finalStates);
         // 静默修正，不发送客户端提示
+    }
+
+    /**
+     * 尝试从事件回调的 block 对象中抽取实际方块状态（兼容多种 LL/LeviLamina API）
+     */
+    _extractBlockStates(block) {
+        try {
+            if (!block) return null;
+            // 常见 API 尝试顺序
+            if (typeof block.getStates === 'function') {
+                const s = block.getStates();
+                if (s && typeof s === 'object') return s;
+            }
+            if (block.states && typeof block.states === 'object' && !Array.isArray(block.states)) {
+                return block.states;
+            }
+            if (block.permutation && typeof block.permutation.getStates === 'function') {
+                const s = block.permutation.getStates();
+                if (s && typeof s === 'object') return s;
+            }
+            if (block.permutation && block.permutation.states && typeof block.permutation.states === 'object') {
+                return block.permutation.states;
+            }
+            if (typeof block.getState === 'function') {
+                // 有些 API 是逐个 getState(key) 获取，这里不做全量遍历
+                const allKeys = block.getAllStateKeys ? block.getAllStateKeys() : null;
+                if (allKeys && Array.isArray(allKeys)) {
+                    const out = {};
+                    for (const k of allKeys) out[k] = block.getState(k);
+                    return out;
+                }
+            }
+        } catch (e) {}
+        return null;
     }
 
     placeBlockAt(x, y, z, dimid, blockType, blockStates) {
@@ -644,22 +713,37 @@ class EasyPlaceManager {
         this.logFailures = enabled;
     }
 
-    consumeItem(player, itemType) {
+    consumeItem(player, itemType, foundSlot = -1, blockState = null) {
         try {
             const placeableItem = BlockConversions.getPlaceableItem(itemType);
             const consumeType = placeableItem || itemType;
 
             const inventory = player.getInventory();
-            const selectedSlot = this.inventoryHelper.getSelectedSlot(player);
-            const item = inventory.getItem(selectedSlot);
+            const searchNames = this.inventoryHelper._expandSearchNames(consumeType, blockState);
 
+            // 确定要消耗的槽位
+            let targetSlot = foundSlot;
+            if (targetSlot === -1) {
+                // 没指定，尝试当前选中槽位；若类型不匹配，则从背包找到匹配槽
+                const selectedSlot = this.inventoryHelper.getSelectedSlot(player);
+                const selectedItem = inventory.getItem(selectedSlot);
+                if (selectedItem && !selectedItem.isNull() &&
+                    this.inventoryHelper.matchBlockTypeMulti(selectedItem.type, searchNames)) {
+                    targetSlot = selectedSlot;
+                } else {
+                    targetSlot = this.inventoryHelper.findBlockInInventory(inventory, consumeType, -1, blockState);
+                }
+            }
+
+            if (targetSlot === -1) return;
+            const item = inventory.getItem(targetSlot);
             if (!item || item.isNull()) return;
 
             const specialConversion = BlockConversions.getSpecialConversion(consumeType);
             if (specialConversion) {
                 if (item.count === 1) {
                     const newItem = mc.newItem(specialConversion, 1);
-                    inventory.setItem(selectedSlot, newItem);
+                    inventory.setItem(targetSlot, newItem);
                 } else {
                     item.count--;
                     const newItem = mc.newItem(specialConversion, 1);
@@ -667,7 +751,7 @@ class EasyPlaceManager {
                 }
             } else {
                 if (item.count === 1) {
-                    inventory.setItem(selectedSlot, null);
+                    inventory.setItem(targetSlot, null);
                 } else {
                     item.count--;
                 }

@@ -19,6 +19,52 @@ class InventoryHelper {
             'minecraft:red_shulker_box',
             'minecraft:black_shulker_box'
         ];
+
+        this._COLOR_PREFIXES = [
+            'white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray',
+            'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black'
+        ];
+
+        this._COLORED_BLOCK_BASES = [
+            'wool', 'carpet', 'terracotta', 'concrete', 'concrete_powder',
+            'stained_glass', 'stained_glass_pane', 'glazed_terracotta',
+            'bed', 'candle', 'banner', 'wall_banner', 'shulker_box'
+        ];
+    }
+
+    /**
+     * 根据方块类型和状态，生成可能在玩家背包中出现的物品名列表。
+     * 对于有颜色/特殊变体的方块，基岩版背包中常使用"颜色_方块名"而不是"方块名 + 内部状态"。
+     */
+    _expandSearchNames(blockType, blockState) {
+        const norm = this.normalize(blockType);
+        const short = norm.replace(/^minecraft:/, '');
+        const results = [norm];
+
+        if (blockState && blockState.color) {
+            const color = String(blockState.color).toLowerCase();
+            for (const base of this._COLORED_BLOCK_BASES) {
+                if (short === base || short.endsWith('_' + base)) {
+                    // short 可能是 stained_glass 或 old_color_stained_glass 形式。
+                    // 取 base 之前的前缀和 color 拼接新名
+                    const prefix = short === base ? '' : short.substring(0, short.length - base.length - 1);
+                    const candidate = 'minecraft:' + (prefix ? prefix + '_' : '') + color + '_' + base;
+                    if (!results.includes(candidate)) results.push(candidate);
+                }
+            }
+        }
+
+        // 反向：如果 blockType 本身已经是 color_type 形式，则把基名也加上
+        for (const prefix of this._COLOR_PREFIXES) {
+            for (const base of this._COLORED_BLOCK_BASES) {
+                if (short === prefix + '_' + base) {
+                    const baseName = 'minecraft:' + base;
+                    if (!results.includes(baseName)) results.push(baseName);
+                }
+            }
+        }
+
+        return results;
     }
 
     selectBlock(player, blockType, blockState = null) {
@@ -77,17 +123,18 @@ class InventoryHelper {
     }
 
     findBlockInInventory(inventory, blockType, excludeSlot = -1, blockState = null) {
+        const searchNames = this._expandSearchNames(blockType, blockState);
         for (let i = 0; i < 9; i++) {
             if (i === excludeSlot) continue;
             const item = inventory.getItem(i);
-            if (item && !item.isNull() && this.matchBlockType(item.type, blockType)) {
+            if (item && !item.isNull() && this.matchBlockTypeMulti(item.type, searchNames)) {
                 return i;
             }
         }
 
         for (let i = 9; i < 36; i++) {
             const item = inventory.getItem(i);
-            if (item && !item.isNull() && this.matchBlockType(item.type, blockType)) {
+            if (item && !item.isNull() && this.matchBlockTypeMulti(item.type, searchNames)) {
                 return i;
             }
         }
@@ -140,11 +187,13 @@ class InventoryHelper {
             const items = blockEntityTag.get ? blockEntityTag.get('Items') : blockEntityTag.Items;
             if (!items || !items.length) return -1;
 
+            const searchNames = this._expandSearchNames(blockType, blockState);
+
             for (let i = 0; i < items.length; i++) {
                 const itemNbt = items[i];
                 const itemId = itemNbt.get ? itemNbt.get('id') : itemNbt.id;
                 
-                if (this.matchBlockType(itemId, blockType)) {
+                if (this.matchBlockTypeMulti(itemId, searchNames)) {
                     const slot = itemNbt.get ? itemNbt.get('Slot') : itemNbt.Slot;
                     const count = itemNbt.get ? itemNbt.get('Count') : itemNbt.Count;
                     
@@ -225,7 +274,15 @@ class InventoryHelper {
     }
 
     matchBlockType(actual, expected) {
-        return this.normalize(actual) === this.normalize(expected);
+        return this.matchBlockTypeMulti(actual, [expected]);
+    }
+
+    matchBlockTypeMulti(actual, expectedList) {
+        const normActual = this.normalize(actual);
+        for (const expected of expectedList) {
+            if (this.normalize(expected) === normActual) return true;
+        }
+        return false;
     }
 
     swapItems(inventory, slot1, slot2) {
@@ -243,24 +300,25 @@ class InventoryHelper {
         }
     }
 
-    countBlock(player, blockType) {
+    countBlock(player, blockType, blockState = null) {
         const inventory = player.getInventory();
         let count = 0;
+        const searchNames = this._expandSearchNames(blockType, blockState);
 
         for (let i = 0; i < inventory.size; i++) {
             const item = inventory.getItem(i);
             if (item && !item.isNull()) {
-                if (this.matchBlockType(item.type, blockType)) {
+                if (this.matchBlockTypeMulti(item.type, searchNames)) {
                     count += item.count;
                 } else if (this.isShulkerBox(item.type)) {
-                    count += this.countBlockInShulker(item, blockType);
+                    count += this.countBlockInShulker(item, blockType, blockState);
                 }
             }
         }
         return count;
     }
 
-    countBlockInShulker(shulkerItem, blockType) {
+    countBlockInShulker(shulkerItem, blockType, blockState = null) {
         try {
             const nbt = shulkerItem.getNbt();
             if (!nbt) return 0;
@@ -274,12 +332,14 @@ class InventoryHelper {
             const items = blockEntityTag.get ? blockEntityTag.get('Items') : blockEntityTag.Items;
             if (!items || !items.length) return 0;
 
+            const searchNames = this._expandSearchNames(blockType, blockState);
+
             let count = 0;
             for (const itemNbt of items) {
                 const itemId = itemNbt.get ? itemNbt.get('id') : itemNbt.id;
                 const itemCount = itemNbt.get ? itemNbt.get('Count') : itemNbt.Count;
                 
-                if (this.matchBlockType(itemId, blockType)) {
+                if (this.matchBlockTypeMulti(itemId, searchNames)) {
                     count += itemCount || 1;
                 }
             }
