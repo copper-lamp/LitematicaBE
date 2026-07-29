@@ -225,18 +225,32 @@ class BlockVerifier {
             blocks: []
         };
 
-        if (!projection || !projection.blocks) {
+        if (!projection) {
+            return results;
+        }
+
+        // Mega 投影可能没有 blocks 属性，但可以通过分块加载
+        const isMega = projection.isMega && projection.schematicId && global.megaManager;
+        if (!projection.blocks && !isMega) {
             return results;
         }
 
         const pos = projection.position;
-        const dim = projection.dimension;
+        if (!pos) {
+            return results;
+        }
+        // 确保 dimid 是有效数字，否则 mc.getBlock 会抛 "Wrong type of argument"
+        const dim = (typeof projection.dimension === 'number') ? projection.dimension : (parseInt(projection.dimension) || 0);
 
         // 支持 Mega 投影：通过 blockChunks / blockIndex 获取方块
         let blocksToVerify = projection.blocks;
-        if (projection.isMega && projection.schematicId && global.megaManager) {
+        if (isMega) {
             // Mega 模式下，尝试从所有分块加载方块
             blocksToVerify = this._getMegaBlocks(projection);
+        }
+
+        if (!blocksToVerify || blocksToVerify.length === 0) {
+            return results;
         }
 
         for (let i = 0; i < blocksToVerify.length; i++) {
@@ -249,7 +263,12 @@ class BlockVerifier {
             const worldY = pos.y + projBlock.pos[1];
             const worldZ = pos.z + projBlock.pos[2];
 
-            const worldBlock = mc.getBlock(worldX, worldY, worldZ, dim);
+            let worldBlock = null;
+            try {
+                worldBlock = mc.getBlock(worldX, worldY, worldZ, dim);
+            } catch (e) {
+                // 区块未加载或坐标无效，跳过
+            }
 
             const level = this.verify(worldBlock, projBlock);
 
@@ -327,7 +346,7 @@ class BlockVerifier {
 
         const pos = projection.position;
         const dims = projection.dimensions;
-        const dimid = projection.dimension || 0;
+        const dimid = (typeof projection.dimension === 'number') ? projection.dimension : (parseInt(projection.dimension) || 0);
 
         // 构建投影方块位置集合（O(1)查找）
         const projPosSet = new Set();

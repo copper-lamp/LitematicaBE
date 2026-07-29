@@ -973,11 +973,13 @@ class UIManager {
         const isLayerMode = renderer.layerRenderMode?.get(player.xuid) || false;
         const isEasyPlace = easyPlaceManager?.isEnabled(player) || false;
         const isFastPlace = easyPlaceManager?.isFastPlaceEnabled(player) || false;
+        const isCorrection = easyPlaceManager?.isCorrectionEnabled(player) || false;
         const hasActive = renderer.activeProjections?.has(player.xuid);
 
         const layerStatus = isLayerMode ? '开启' : '关闭';
         const easyStatus = isEasyPlace ? '开启' : '关闭';
         const fastStatus = isFastPlace ? '开启' : '关闭';
+        const correctionStatus = isCorrection ? '开启' : '关闭';
         const projStatus = hasActive ? '已加载' : '未加载';
 
         const fm = mc.newSimpleForm();
@@ -987,12 +989,14 @@ class UIManager {
             `逐层显示: ${layerStatus}\n` +
             `轻松放置: ${easyStatus}\n` +
             `投影打印机: ${fastStatus}\n` +
+            `投影纠错: ${correctionStatus}\n` +
             `投影状态: ${projStatus}`
         );
 
         fm.addButton(`${isLayerMode ? '关闭' : '开启'}逐层显示`);
         fm.addButton(`${isEasyPlace ? '关闭' : '开启'}轻松放置`);
         fm.addButton(`${isFastPlace ? '关闭' : '开启'}投影打印机`);
+        fm.addButton(`${isCorrection ? '关闭' : '开启'}投影纠错`);
         fm.addButton('验证投影');
         fm.addButton('取消渲染');
         fm.addButton('返回主菜单');
@@ -1014,12 +1018,15 @@ class UIManager {
                     this.toggleFastPlaceFromMenu(player);
                     break;
                 case 3:
-                    this.showVerifyResult(player);
+                    this.toggleCorrectionFromMenu(player);
                     break;
                 case 4:
-                    this.cancelRenderFromMenu(player);
+                    this.showVerifyResult(player);
                     break;
                 case 5:
+                    this.cancelRenderFromMenu(player);
+                    break;
+                case 6:
                 default:
                     this.showMainMenu(player);
                     break;
@@ -1089,6 +1096,21 @@ class UIManager {
         }, 500);
     }
 
+    toggleCorrectionFromMenu(player) {
+        const easyPlaceManager = global.easyPlaceManager;
+        if (!easyPlaceManager) {
+            player.tell('§c错误：轻松放置模块未初始化');
+            this.showProjectionOperations(player);
+            return;
+        }
+
+        easyPlaceManager.toggleCorrection(player);
+
+        setTimeout(() => {
+            this.showProjectionOperations(player);
+        }, 500);
+    }
+
     cancelRenderFromMenu(player) {
         const renderer = global.renderer;
         if (!renderer) {
@@ -1141,7 +1163,15 @@ class UIManager {
         player.tell('§7正在验证投影，请稍候...');
 
         // 执行核心验证
-        const results = blockVerifier.verifyProjection(projection);
+        let results;
+        try {
+            results = blockVerifier.verifyProjection(projection);
+        } catch (e) {
+            logger.error(`[UIManager] verifyProjection failed: ${e.message}`);
+            player.tell('§c验证失败: ' + e.message);
+            this.showProjectionOperations(player);
+            return;
+        }
 
         // 执行多余方块检测（异步不阻塞，但会稍慢）
         let extraResult = null;
