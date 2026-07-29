@@ -1,4 +1,4 @@
-// Litematica BE v2.5.1 - Minecraft Bedrock Edition Projection Tool
+// Litematica BE v2.6.0 - Minecraft Bedrock Edition Projection Tool
 // 全服共享投影系统，支持木剑操作、多模式切换
 
 // 测试zlib是否可用
@@ -47,7 +47,7 @@ ll.registerPlugin(
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '2.5.1';
+const PLUGIN_VERSION = '2.6.0';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
@@ -167,9 +167,8 @@ mc.listen("onUseItemOn", (player, item, block, side, pos) => {
 });
 
 // 方法2: afterPlaceBlock - 在放置后检测并修正（更可靠）
+// 注意：correctionEnabled 开关在 correctBlockPlacement 内部判断
 mc.listen("afterPlaceBlock", (player, block) => {
-    const enabled = easyPlaceManager.isEnabled(player);
-    if (!enabled) return;
     easyPlaceManager.correctBlockPlacement(player, block);
 });
 
@@ -468,7 +467,7 @@ function registerCommands() {
     const cmd = mc.newCommand("litematica", "Litematica projection tool", PermType.Any, 0x80);
     const cmdShort = mc.newCommand("lit", "Litematica (Short)", PermType.Any, 0x80);
 
-    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "verify", "materials", "clear", "list", "remove", "info", "debug", "save", "failures"]);
+    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "correction", "verify", "materials", "clear", "list", "remove", "info", "debug", "save", "failures"]);
     cmd.setEnum("FileEnum", ["file"]);
     cmd.setEnum("CoordEnum", ["x", "y", "z"]);
 
@@ -524,6 +523,9 @@ function registerCommands() {
                 break;
             case "printer":
                 easyPlaceManager.toggleFastPlace(player);
+                break;
+            case "correction":
+                easyPlaceManager.toggleCorrection(player);
                 break;
             case "failures":
                 handleFailuresCommand(player, output);
@@ -1163,7 +1165,13 @@ function handleVerifyCommand(player, output) {
     const projection = activeProj.projection;
     output.success("§7正在验证投影...");
 
-    const results = blockVerifier.verifyProjection(projection);
+    let results;
+    try {
+        results = blockVerifier.verifyProjection(projection);
+    } catch (e) {
+        output.error("§c验证失败: " + e.message);
+        return;
+    }
     const matchPercent = results.total > 0 ? ((results.match / results.total) * 100).toFixed(1) : 0;
 
     output.success("§6========== 投影验证结果 ==========");

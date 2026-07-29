@@ -16,12 +16,12 @@ const BE_FACING_REVERSE = { 0: 'down', 1: 'up', 2: 'north', 3: 'south', 4: 'west
 const BE_FACING_BUTTON = { down: 0, up: 1, south: 2, north: 3, east: 4, west: 5 };
 
 // DIRECTION (pumpkin, etc.)
-const BE_DIRECTION_MAP = { south: 0, north: 1, east: 2, west: 3 };
-const BE_DIRECTION_REVERSE = { 0: 'south', 1: 'north', 2: 'east', 3: 'west' };
+const BE_DIRECTION_MAP = { south: 0, west: 1, north: 2, east: 3 };
+const BE_DIRECTION_REVERSE = { 0: 'south', 1: 'west', 2: 'north', 3: 'east' };
 
 // CARDINAL (banners, signs, etc.)
-const BE_CARDINAL_MAP = { south: 0, north: 1, east: 2, west: 3 };
-const BE_CARDINAL_REVERSE = { 0: 'south', 1: 'north', 2: 'east', 3: 'west' };
+const BE_CARDINAL_MAP = { south: 0, west: 1, north: 2, east: 3 };
+const BE_CARDINAL_REVERSE = { 0: 'south', 1: 'west', 2: 'north', 3: 'east' };
 
 // === RAIL SHAPE MAPS ===
 const JAVA_RAIL_SHAPE = [
@@ -65,7 +65,7 @@ const LEVER_JAVA_TO_BE = { north: 'north', south: 'south', east: 'east', west: '
 // Java: face=wall/floor/ceiling + facing=direction. BE: facing_direction numeric.
 // BE_FACING_BUTTON: { down:0, up:1, south:2, north:3, east:4, west:5 }
 const BUTTON_JAVA_FACING_TO_BE = {
-    north: 2, south: 3, east: 5, west: 4
+    north: 3, south: 2, east: 4, west: 5
 };
 
 // === BED DIRECTION ===
@@ -78,10 +78,10 @@ const AXIS_MAP = { x: 'x', y: 'y', z: 'z' };
 const END_ROD_JAVA_TO_BE = { down: 0, up: 1, south: 2, north: 3, east: 4, west: 5 };
 
 // === ANVIL FACING ===
-const ANVIL_JAVA_TO_BE_DIR = { south: 0, north: 1, east: 2, west: 3 };
+const ANVIL_JAVA_TO_BE_DIR = { south: 0, west: 1, north: 2, east: 3 };
 
 // === BELL ATTACHMENT ===
-const BELL_JAVA_TO_BE_DIR = { south: 0, north: 1, east: 2, west: 3 };
+const BELL_JAVA_TO_BE_DIR = { south: 0, west: 1, north: 2, east: 3 };
 
 class BlockStateConverters {
 
@@ -312,7 +312,7 @@ class BlockStateConverters {
                 java.face = 'floor';
             } else {
                 java.face = 'wall';
-                const reverse = { 2: 'north', 3: 'south', 4: 'west', 5: 'east' };
+                const reverse = { 2: 'south', 3: 'north', 4: 'east', 5: 'west' };
                 java.facing = reverse[dir] || 'north';
             }
             delete java.facing_direction;
@@ -650,7 +650,7 @@ class BlockStateConverters {
 
         // TRAPDOORS
         if (beBlockId.includes('trapdoor') || beBlockId === 'iron_trapdoor' || beBlockId === 'copper_trapdoor') {
-            const reverseDir = { 0: 'south', 1: 'north', 2: 'east', 3: 'west' };
+            const reverseDir = { 0: 'south', 1: 'west', 2: 'north', 3: 'east' };
             java.facing = reverseDir[bs.direction] || 'south';
             java.open = bs.open_bit === 1 ? 'true' : 'false';
             java.half = bs.upside_down_bit === 1 ? 'top' : 'bottom';

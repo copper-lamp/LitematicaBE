@@ -139,7 +139,7 @@ class FastEasyPlace {
     findBlocksInRadius(projection, playerPos, currentLayer) {
         const results = [];
         const projPos = projection.position;
-        const dimid = playerPos.dimid;
+        const dimid = (typeof playerPos.dimid === 'number') ? playerPos.dimid : (parseInt(playerPos.dimid) || 0);
 
         const centerX = Math.floor(playerPos.x);
         const centerY = Math.floor(playerPos.y);
@@ -444,19 +444,21 @@ class FastEasyPlace {
 
         const specialConversion = BlockConversions.getSpecialConversion(itemType);
         if (specialConversion) {
-            if (item.count === 1) {
+            if (item.count <= 1) {
                 const newItem = mc.newItem(specialConversion, 1);
                 inventory.setItem(selectedSlot, newItem);
             } else {
-                item.count--;
+                const reduced = mc.newItem(item.type, item.count - 1);
+                inventory.setItem(selectedSlot, reduced);
                 const newItem = mc.newItem(specialConversion, 1);
                 player.giveItem(newItem);
             }
         } else {
-            if (item.count === 1) {
+            if (item.count <= 1) {
                 inventory.setItem(selectedSlot, null);
             } else {
-                item.count--;
+                const reduced = mc.newItem(item.type, item.count - 1);
+                inventory.setItem(selectedSlot, reduced);
             }
         }
 
