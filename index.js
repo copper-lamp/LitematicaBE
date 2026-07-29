@@ -1,4 +1,4 @@
-// Litematica BE v2.5.1 - Minecraft Bedrock Edition Projection Tool
+// Litematica BE v2.6.0 - Minecraft Bedrock Edition Projection Tool
 // 全服共享投影系统，支持木剑操作、多模式切换
 
 // 测试zlib是否可用
@@ -47,7 +47,7 @@ ll.registerPlugin(
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '2.5.1';
+const PLUGIN_VERSION = '2.6.0';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例

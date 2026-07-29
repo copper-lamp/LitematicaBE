@@ -113,7 +113,7 @@ class UIManager {
         fm.setTitle('关于投影');
         fm.setContent(
             '§6§lLitematica BE§r\n\n' +
-            '§7版本: §f2.4.2\n\n' +
+            '§7版本: §f2.6.0\n\n' +
             '§e§l功能说明:§r\n' +
             '§f• 加载原理图 (.litematic)\n' +
             '§f• 保存原理图\n' +
