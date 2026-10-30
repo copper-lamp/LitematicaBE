@@ -1,4 +1,4 @@
-// Litematica BE v2.6.0 - Minecraft Bedrock Edition Projection Tool
+// Litematica BE v3.0.0 review - Minecraft Bedrock Edition Projection Tool
 // 全服共享投影系统，支持木剑操作、多模式切换
 
 // 测试zlib是否可用
@@ -38,16 +38,27 @@ const { StreamingLitematicLoader } = require('./src/core/StreamingLitematicLoade
 const { MegaProjectionRenderer } = require('./src/render/MegaProjectionRenderer');
 const { BinaryChunkStorage } = require('./src/core/BinaryChunkStorage');
 
+// Ghost 子系统
+const { GhostBlockRegistry } = require('./src/ghost/GhostBlockRegistry');
+const { GhostGuard } = require('./src/ghost/GhostGuard');
+const { GhostProbe } = require('./src/ghost/GhostProbe');
+const { GhostExpectStore } = require('./src/ghost/GhostExpectStore');
+const { AddonVersionCheck } = require('./src/ghost/AddonVersionCheck');
+const { GhostSelfCheck } = require('./src/ghost/GhostSelfCheck');
+const { GhostRenderer } = require('./src/ghost/GhostRenderer');
+const { RenderScheduler } = require('./src/render/RenderScheduler');
+const { WorldSnapshot } = require('./src/world/WorldSnapshot');
+
 ll.registerPlugin(
     "LitematicaBE",
     "Minecraft Bedrock Edition projection tool with shared projections",
-    [2, 5, 1],
+    [3, 0, 0],
     {}
 );
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '2.6.0';
+const PLUGIN_VERSION = '3.0.0';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
@@ -73,6 +84,63 @@ const schematicSaver = new SchematicSaver();
 const blockVerifier = new BlockVerifier();
 const materialCounter = new MaterialCounter();
 
+// Ghost 子系统
+// 期望集合：记录"这一格应该有 ghost"，是玩家盖方块→破坏后能自动补回的唯一依据
+// 默认落在 plugins/LitematicaBE/data/ghost_expect.json（与本文件的相对位置固定）
+const ghostRegistry = new GhostBlockRegistry();
+const ghostExpect = new GhostExpectStore({ logger }).load();
+const ghostGuard = new GhostGuard(ghostRegistry);
+// P2.3：addon 与插件版本一致性校验。不一致时只关 ghost 写入，投影/粒子/easyplace 全部照常
+const addonCheck = new AddonVersionCheck({ logger });
+
+// 写世界前的原方块快照（data/sessions/）。启动时先收拾上次异常退出留下的会话，
+// 再补 ghost —— 顺序不能反：先还原成"原来的世界"，再按期望集合重放 ghost。
+// 注意创建顺序：GhostProbe 要用它做"先备再写"，所以必须在 ghostProbe 之前建。
+const worldSnapshot = new WorldSnapshot({
+    logger,
+    isGhost: (t) => ghostRegistry.isGhost(t),
+}).load();
+
+// P3.2：探针铺墙前逐格 record()，undo 走 snapshot.close()
+const ghostProbe = new GhostProbe(ghostRegistry, ghostExpect, addonCheck, worldSnapshot);
+
+// ═══════════════════ 渲染管线（ghost 方块取代粒子） ═══════════════════
+// 3.0.0 起投影不再 spawn 粒子，而是在世界里写 lit:g_* 真实方块
+const ghostRenderer = new GhostRenderer({
+    registry: ghostRegistry,
+    expectStore: ghostExpect,
+    addonCheck,
+    snapshot: worldSnapshot,
+    guard: ghostGuard,
+    logger,
+    writesPerTick: configManager.get('render.ghostWritesPerTick', 300),
+    maxBlocks: configManager.get('render.ghostMaxBlocks', 60000),
+    overwriteReplaceable: configManager.get('render.ghostOverwriteReplaceable', true),
+});
+
+// 投影会话层不在这里显式 attach：ProjectionRenderer 的 _gr() 会惰性取 global.ghostRenderer，
+// 这样 docs/renderer-contract.md §5 的 8 项外部访问基线不会被装配细节污染。
+
+// /litematica selfcheck —— 一条命令验证"读原状→快照→写幽灵→读回→撤销"整条链路
+const ghostSelfCheck = new GhostSelfCheck({
+    registry: ghostRegistry,
+    addonCheck,
+    snapshot: worldSnapshot,
+    logger,
+});
+ghostGuard.install({ expectStore: ghostExpect, logger });
+giCheckWiring();
+
+/** 把版本校验结果接到写闸门上（加载期一次；onServerStarted 会再校验一次） */
+function giCheckWiring() {
+    try {
+        const rep = addonCheck.run(ghostRegistry.stats());
+        ghostGuard.setWritesEnabled(rep.enabled, rep.enabled ? null : (rep.issues.find(i => i.level === 'error') || {}).message);
+    } catch (e) {
+        logger.warn(`[LitematicaBE] addon 版本校验异常: ${e && e.message ? e.message : e}`);
+    }
+}
+
 // 全局导出供其他模块使用
 global.zlib = zlib;
 global.fs = fs;
@@ -87,6 +155,14 @@ global.selectionTool = selectionTool;
 global.schematicSaver = schematicSaver;
 global.blockVerifier = blockVerifier;
 global.materialCounter = materialCounter;
+global.ghostRegistry = ghostRegistry;
+global.ghostGuard = ghostGuard;
+global.ghostProbe = ghostProbe;
+global.ghostExpect = ghostExpect;
+global.addonCheck = addonCheck;
+global.worldSnapshot = worldSnapshot;
+global.ghostSelfCheck = ghostSelfCheck;
+global.ghostRenderer = ghostRenderer;
 
 // 超大型投影全局导出
 global.megaManager = megaManager;
@@ -101,14 +177,39 @@ global.playerSessions = playerSessions;
 
 logger.info(`${PLUGIN_NAME} v${PLUGIN_VERSION} Loading...`);
 
-// 超大型投影渲染循环
-mc.listen('onTick', () => {
-    try {
-        megaRenderer.onTick();
-    } catch (e) {
-        // 静默处理，避免影响主循环
-    }
+// ═══════════════════ 统一 tick 调度器 ═══════════════════
+const renderScheduler = new RenderScheduler({
+    logger,
+    budgetMs: configManager.get('render.tickBudgetMs', 8),
 });
+global.renderScheduler = renderScheduler;
+
+renderScheduler.add('ghost-render', () => ghostRenderer.tick(), { everyTicks: 1, priority: 10 });
+renderScheduler.add('ghost-retry', () => ghostRenderer.retryPending(), { everyTicks: 20, priority: 20 });
+renderScheduler.add('easyplace-fast', () => easyPlaceManager.tickFastPlace(), { everyMs: 200, priority: 30 });
+renderScheduler.add('mega-render', () => megaRenderer.onTick(), {
+    everyTicks: 1,
+    priority: 40,
+    // 3.0.0 review 决策：超大投影暂不启用（等后续优化），任务留着但默认关
+    enabled: !!megaRenderer.enabled,
+});
+renderScheduler.add('actionbar', () => uiManager.updateActionBars(), { everyTicks: 2, priority: 60 });
+renderScheduler.add('debug-flush', () => megaRenderer.flushLogs(), { everyMs: 5000, priority: 80 });
+renderScheduler.add('log-cleaner', () => {
+    // cleanRenderLogs 是 async：同步 try/catch 抓不到 reject，必须自己兜住
+    try {
+        const p = logCleaner.cleanRenderLogs();
+        if (p && typeof p.catch === 'function') p.catch(() => { });
+    } catch (e) { /* 清理失败不影响主循环 */ }
+}, { everyMs: 60000, priority: 90 });
+renderScheduler.start();
+
+// 调度器就绪后再启动日志自动清理（LogCleaner 构造期不再自己 setInterval）
+try {
+    logCleaner.startAutoClean();
+} catch (e) {
+    logger.warn(`[LitematicaBE] 日志自动清理启动失败: ${e && e.message ? e.message : e}`);
+}
 
 // 确保目录存在
 if (!File.exists(SCHEMATIC_PATH)) {
@@ -299,7 +400,7 @@ function handlePlaceMode(player, block, pos, session) {
             y: pos.y + 1,
             z: pos.z
         },
-        dimension: player.dim,
+        dimension: (player.pos && typeof player.pos.dimid === 'number') ? player.pos.dimid : 0,
         rotation: 0,
         mirrorX: false,
         mirrorZ: false,
@@ -463,26 +564,96 @@ function handleBuildMode(player, session) {
 
 // ==================== 命令系统 ====================
 
-function registerCommands() {
+/**
+ * 命令注册簿。
+ */
+const registeredCommands = new Set();
+
+function setupCommand(label, builder) {
+    if (registeredCommands.has(label)) return true;
+    let cmd = null;
+    try {
+        cmd = builder();
+    } catch (e) {
+        logger.warn(`[LitematicaBE] 构建命令 ${label} 失败: ${e.message}`);
+        return false;
+    }
+    if (!cmd || typeof cmd.setup !== 'function') {
+        logger.warn(`[LitematicaBE] 构建命令 ${label} 失败: 未得到指令对象`);
+        return false;
+    }
+    try {
+        const ok = cmd.setup();
+        if (ok) {
+            registeredCommands.add(label);
+            logger.info(`[LitematicaBE] 命令 ${label} 已注册`);
+            return true;
+        }
+        logger.warn(`[LitematicaBE] 命令 ${label} 注册失败: setup() 返回 false`);
+        return false;
+    } catch (e) {
+        logger.warn(`[LitematicaBE] 命令 ${label} 注册异常: ${e.message}`);
+        return false;
+    }
+}
+
+/** ghost 子动作分派：主命令 `/litematica ghost` 与独立命令 `/litematica:ghost` 共用同一套逻辑 */
+function dispatchGhost(player, sub) {
+    if (!player) return false;
+    const s = String(sub === undefined || sub === null ? '' : sub).trim().toLowerCase();
+    if (s === 'undo') return ghostProbe.undo(player);
+    if (s === 'info') {
+        const ok = ghostProbe.info(player);
+        // 追加会话级诊断：有多少格正被原地形挡住（挖掉会自动补，但玩家要知道）
+        try {
+            const sum = ghostRenderer.summary();
+            if (sum.sessions) {
+                player.tell(`§7会话 §f${sum.sessions}§7 个 / 待补 §f${sum.pending}§7 格`
+                    + ` / 被原地形挡住 §f${sum.blocked}§7 格（挖掉后自动补，已补 §f${sum.counters.blockedPlaced || 0}§7 格）`);
+                for (const it of sum.list) {
+                    if (!it.blocked && !it.pending) continue;
+                    player.tell(`§7  · §f${it.name || '?'}§7 层 §f${it.layer}§7：已写 §f${it.placed}`
+                        + `§7，挡住 §f${it.blocked}§7，待补 §f${it.pending}`);
+                }
+            }
+        } catch (e) { /* 诊断失败不影响 info 本身 */ }
+        return ok;
+    }
+    if (s === 'restore') {
+        if (!addonCheck.isEnabled()) {
+            player.tell('§cghost 写入已禁用：addon 与插件版本不一致（详见 /litematica:ghost info）');
+            return false;
+        }
+        const r = ghostGuard.restoreAll('manual');
+        player.tell(`§a期望补齐：补写 §e${r.placed} §a格 / 已有方块跳过 §e${r.skipped} §a格 / 待重试 §e${r.failed}§a（共 ${r.total} 格）`);
+        if (!r.total) player.tell('§7期望集合为空：先 /litematica:ghost 铺墙');
+        if (r.failed) {
+            player.tell(`§7待恢复队列现有 ${ghostGuard.summary().pending} 格；区块未加载是主因，靠近该区域或站在旁边再执行一次即可`);
+        }
+        return true;
+    }
+    return ghostProbe.lay(player);
+}
+
+function buildMainCommand() {
     const cmd = mc.newCommand("litematica", "Litematica projection tool", PermType.Any, 0x80);
-    const cmdShort = mc.newCommand("lit", "Litematica (Short)", PermType.Any, 0x80);
 
-    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "correction", "verify", "materials", "clear", "list", "remove", "info", "debug", "save", "failures"]);
-    cmd.setEnum("FileEnum", ["file"]);
-    cmd.setEnum("CoordEnum", ["x", "y", "z"]);
+    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "correction", "verify", "materials", "clear", "list", "remove", "info", "debug", "save", "failures", "ghost", "selfcheck"]);
 
+    // 重载铁律（1.1.1 的故障根因）：
+    //   1. mandatory 参数必须出现在每一条重载里，`overload([])` 会让整条命令注册失败；
+    //   2. RawText「只能作为最后一个参数」，而且只能有一个 —— 原来 filename 与 args
+    //      都是 RawText，等于两条形态相同的重复重载，同样会被 BDS 拒收。
     cmd.mandatory("action", ParamType.Enum, "ActionEnum", 1);
-    cmd.optional("filename", ParamType.RawText);
     cmd.optional("x", ParamType.Int);
     cmd.optional("y", ParamType.Int);
     cmd.optional("z", ParamType.Int);
+    // RawText 必须最后声明，也必须是重载里的最后一项（见 LSE 命令 API 的参数类型表）
     cmd.optional("args", ParamType.RawText);
 
-    cmd.overload([]);
     cmd.overload(["ActionEnum"]);
-    cmd.overload(["ActionEnum", "filename"]);
-    cmd.overload(["ActionEnum", "x", "y", "z"]);
     cmd.overload(["ActionEnum", "args"]);
+    cmd.overload(["ActionEnum", "x", "y", "z"]);
 
     cmd.setCallback((cmd, origin, output, results) => {
         const player = origin.player;
@@ -492,16 +663,18 @@ function registerCommands() {
         }
 
         const action = results.action;
+        // 自由文本统一走 args；filename 是 1.1.1 遗留的重载参数名，这里做兼容读取
+        const argText = (results.args !== undefined && results.args !== null) ? results.args : results.filename;
 
         switch (action) {
             case "menu":
                 uiManager.showMainMenu(player);
                 break;
             case "load":
-                handleLoadCommand(player, results.filename, output);
+                handleLoadCommand(player, argText, output);
                 break;
             case "place":
-                handlePlaceCommand(player, results.filename, output);
+                handlePlaceCommand(player, argText, output);
                 break;
             case "placeat":
                 handlePlaceAtCommand(player, results.x, results.y, results.z, output);
@@ -537,6 +710,7 @@ function registerCommands() {
                 handleMaterialsCommand(player, output);
                 break;
             case "clear":
+                // clearPlayerProjection 内部已经连同"重进自动恢复"的记录一起清掉
                 renderer.clearPlayerProjection(player);
                 // 先获取活动投影信息，再删除
                 const activeForClear = projManager.getActiveProjection(player.xuid);
@@ -550,38 +724,58 @@ function registerCommands() {
                 listProjections(player, output);
                 break;
             case "remove":
-                handleRemoveCommand(player, results.filename, output);
+                handleRemoveCommand(player, argText, output);
                 break;
             case "info":
                 showProjectionInfo(player, output);
                 break;
             case "debug":
-                handleDebugCommand(player, results.args || [], output);
+                // RawText 是整串文本，handleDebugCommand 期望数组；原来直接传字符串，
+                // args[0] 取到的是第一个字符，所有 debug 子命令都落进 default 分支
+                handleDebugCommand(player, String(argText || '').trim().split(/\s+/).filter(Boolean), output);
                 break;
             case "save":
                 uiManager.showSaveSchematicMenu(player);
                 output.success("§a已打开保存原理图菜单");
+                break;
+            case "ghost":
+                dispatchGhost(player, argText);
+                break;
+            case "selfcheck":
+                // 写世界链路自检。逐项 PASS/FAIL，失败停在该层并说明原因
+                try {
+                    ghostSelfCheck.run(player);
+                } catch (e) {
+                    output.error(`§cselfcheck 异常: ${e && e.message ? e.message : e}`);
+                }
                 break;
             default:
                 uiManager.showMainMenu(player);
         }
     });
 
-    cmd.setup();
+    return cmd;
+}
 
-    // 短命令
+function buildShortCommand() {
+    const cmdShort = mc.newCommand("lit", "Litematica (Short)", PermType.Any, 0x80);
+    // 短命令原来直接 setup、从未声明过重载；LSE 要求至少一条重载，否则 /lit 不可执行
+    cmdShort.overload([]);
     cmdShort.setCallback((cmd, origin, output, results) => {
         const player = origin.player;
         if (player) {
             uiManager.showMainMenu(player);
         }
     });
-    cmdShort.setup();
+    return cmdShort;
+}
 
+function buildLogCleanCommand() {
     // 日志清理命令
     const cmdLogClean = mc.newCommand("litematica:logclean", "Clean render logs", PermType.Any, 0x80);
     cmdLogClean.setEnum("LogCleanAction", ["status", "clean", "config"]);
     cmdLogClean.mandatory("action", ParamType.Enum, "LogCleanAction", 1);
+    cmdLogClean.overload(["LogCleanAction"]);
     cmdLogClean.setCallback((cmd, origin, output, results) => {
         const action = results.action;
 
@@ -623,13 +817,17 @@ function registerCommands() {
                 break;
         }
     });
-    cmdLogClean.setup();
+    return cmdLogClean;
+}
 
+function buildConfigCommand() {
     // 配置管理命令
     const cmdConfig = mc.newCommand("litematica:config", "Config management", PermType.Any, 0x80);
     cmdConfig.setEnum("ConfigAction", ["reload", "reset", "get"]);
     cmdConfig.mandatory("action", ParamType.Enum, "ConfigAction", 1);
     cmdConfig.optional("key", ParamType.RawText);
+    cmdConfig.overload(["ConfigAction"]);
+    cmdConfig.overload(["ConfigAction", "key"]);
     cmdConfig.setCallback((cmd, origin, output, results) => {
         const player = origin.player;
         if (!player) {
@@ -663,7 +861,42 @@ function registerCommands() {
                 break;
         }
     });
-    cmdConfig.setup();
+    return cmdConfig;
+}
+
+/**
+ * ghost 验证探针的独立命令入口。
+ */
+function buildGhostCommand() {
+    const cmdGhost = mc.newCommand("litematica:ghost", "Ghost block probe (P1.5 verification)", PermType.Any, 0x80);
+    cmdGhost.setEnum("GhostAction", ["lay", "undo", "info", "restore"]);
+    cmdGhost.mandatory("action", ParamType.Enum, "GhostAction", 1);
+    cmdGhost.overload(["GhostAction"]);
+    cmdGhost.setCallback((cmd, origin, output, results) => {
+        const player = origin.player;
+        if (!player) {
+            output.success("This command must be used by a player");
+            return;
+        }
+        dispatchGhost(player, results.action);
+    });
+    return cmdGhost;
+}
+
+/**
+ * 注册全部命令。可在加载期调用一次，并在 onServerStarted 再调用一次做兜底重试：
+ * 已成功的命令记在 registeredCommands 里，不会被重复注册。
+ */
+function registerCommands(reason = 'load') {
+    setupCommand('/litematica', buildMainCommand);
+    setupCommand('/lit', buildShortCommand);
+    setupCommand('/litematica:logclean', buildLogCleanCommand);
+    setupCommand('/litematica:config', buildConfigCommand);
+    setupCommand('/litematica:ghost', buildGhostCommand);
+
+    const okList = Array.from(registeredCommands);
+    logger.info(`[LitematicaBE] 命令注册(${reason}): ${okList.length}/5 条可用 [${okList.join(', ')}]`);
+    return okList.length;
 }
 
 function handleLoadCommand(player, filename, output) {
@@ -719,7 +952,7 @@ function handlePlaceCommand(player, filename, output) {
             name: schematic.name,
             filePath: schematic.filePath || filename,
             position: placePos,
-            dimension: player.dim,
+            dimension: (player.pos && typeof player.pos.dimid === 'number') ? player.pos.dimid : 0,
             rotation: 0,
             mirrorX: false,
             mirrorZ: false,
@@ -799,7 +1032,7 @@ function handlePlaceAtCommand(player, x, y, z, output) {
         name: schematic.name,
         filePath: schematic.filePath,
         position: placePos,
-        dimension: player.dim,
+        dimension: (player.pos && typeof player.pos.dimid === 'number') ? player.pos.dimid : 0,
         rotation: 0,
         mirrorX: false,
         mirrorZ: false,
@@ -1255,12 +1488,96 @@ mc.listen("onJoin", (player) => {
     // 显示欢迎消息
     player.tell(`§a欢迎使用 ${PLUGIN_NAME} v${PLUGIN_VERSION}`);
     player.tell('§7手持木剑，蹲下点击打开菜单');
+
+    // ═══ 退出重进后把投影接回来 ═══
+    // 两条路：
+    //   1. 内存里还留着保活会话（玩家掉线后又回来）→ 只 resume，零重写
+    //   2. 会话已不在（服务器重启过）→ 按 playerData.currentProjectionId 重建
+    try {
+        let restored = false;
+        try {
+            restored = renderer.restoreForPlayer(player);
+        } catch (e) {
+            logger.warn(`[LitematicaBE] 恢复保活会话失败: ${e && e.message ? e.message : e}`);
+        }
+
+        if (restored) {
+            const task = renderer.activeProjections.get(player.xuid);
+            const nm = task && task.projection ? (task.projection.name || task.projection.id) : '投影';
+            player.tell(`§a已恢复投影 "${nm}"`);
+        } else {
+            const pd = dataManager.getPlayerData(player.xuid) || {};
+            const pid = pd.currentProjectionId;
+            if (pid) {
+                const projection = dataManager.getProjection(pid);
+                if (projection) {
+                    const lay = Number.isFinite(pd.currentRenderLayer) ? pd.currentRenderLayer : -1;
+                    if (pd.renderLayerMode) renderer.layerRenderMode.set(player.xuid, true);
+                    renderer.currentRenderLayer.set(player.xuid, lay);
+                    // 同步 projManager：easyPlace / 建造模式都从这里取活动投影
+                    try { projManager.activateProjection(player, projection); } catch (e) { /* 已有的会覆盖 */ }
+                    const ok = renderer.startRender(player, projection, lay);
+                    if (ok) {
+                        player.tell(`§a已恢复上次的投影 "${projection.name || projection.id}"`
+                            + (lay >= 0 ? `§7（第 ${lay} 层）` : ''));
+                        logger.info(`[LitematicaBE] ${player.name} 重进恢复投影 ${pid}（层 ${lay}）`);
+                    }
+                } else {
+                    // 投影已被删除：清掉记录，别每次都提示
+                    dataManager.updatePlayerData(player.xuid, { currentProjectionId: null });
+                    player.tell('§7上次的投影已被删除，记录已清理');
+                }
+            }
+        }
+
+        // 进服时他附近的区块一定已加载 —— 补一轮"当时没加载"的 ghost
+        const r = ghostRenderer.retryPending();
+        if (r && r.placed) logger.info(`[LitematicaBE] ${player.name} 进服补写 ghost ${r.placed} 格（剩余 ${r.remaining}）`);
+        if (r && r.blocked && r.blocked.remaining) {
+            logger.info(`[LitematicaBE] ${player.name} 进服检查被挡住的格：${r.blocked.placed} 格已补写，${r.blocked.remaining} 格仍被方块占据`);
+        }
+    } catch (e) {
+        logger.warn(`[LitematicaBE] 进服恢复投影异常: ${e && e.message ? e.message : e}`);
+    }
+});
+
+// ═══ 玩家挖掉"挡住投影"的那格 → 立刻补 ghost ═══
+mc.listen("onDestroyBlock", (player, block) => {
+    try {
+        const p = (block && block.pos) ? block.pos : block;
+        if (!p || typeof p.x !== 'number') return;
+        const dimid = (typeof p.dimid === 'number')
+            ? p.dimid
+            : ((player && player.pos && typeof player.pos.dimid === 'number') ? player.pos.dimid : 0);
+        setTimeout(() => {
+            try {
+                const r = ghostRenderer.retryBlockedAt(p.x, p.y, p.z, dimid);
+                if (r === 'placed' && player && player.tell) {
+                    player.tell(`§7投影补齐：§f(${p.x}, ${p.y}, ${p.z})`);
+                }
+            } catch (e) {
+                logger.debug(`[LitematicaBE] blocked 定点补写失败: ${e && e.message ? e.message : e}`);
+            }
+        }, 1);
+    } catch (e) { /* 破坏事件异常不能影响玩家 */ }
 });
 
 // 玩家离开
 mc.listen("onLeft", (player) => {
-    renderer.clearPlayerProjection(player);
-    // 先获取活动投影信息，再删除
+    // ═══ 会话保活 ═══
+    try {
+        const kept = renderer.suspendPlayer(player);
+        if (kept) {
+            const task = renderer.activeProjections.get(player.xuid);
+            logger.info(`[LitematicaBE] ${player.name} 离线，会话保活`
+                + `（投影 ${task && task.projection ? task.projection.id : '?'}，30 分钟内回来可直接恢复）`);
+        }
+    } catch (e) {
+        logger.warn(`[LitematicaBE] 会话保活失败，退回撤销: ${e && e.message ? e.message : e}`);
+        try { renderer.clearPlayerProjection(player); } catch (e2) { /* 兜底也失败就交给 prune */ }
+    }
+
+    // 先获取活动投影信息，再删除（Mega 是纯内存状态，必须回收）
     const activeForLeft = projManager.getActiveProjection(player.xuid);
     if (activeForLeft && activeForLeft.projection && activeForLeft.projection.schematicId) {
         megaRenderer.stopRender(`${player.xuid}_${activeForLeft.projection.schematicId}`);
@@ -1271,18 +1588,64 @@ mc.listen("onLeft", (player) => {
     if (selectionTool) selectionTool.cleanup(player.xuid);
 });
 
-// 服务器关闭时自动清理日志 - LeviLamina 不支持 onServerStop 事件
-// 建议在关机前手动执行 /litematica:logclean clean 命令清理日志
-// 或者依赖自动清理循环在服务器运行时清理
-
 // ==================== 初始化 ====================
 
-registerCommands();
+registerCommands('load');
+
+// 命令系统在 onServerStarted 才完全就绪：加载期注册失败的在这里补一次，成功的不会重复注册
+mc.listen('onServerStarted', () => {
+    registerCommands('serverStarted');
+    // 此刻工作目录与世界才真正就绪：再校验一次 addon 版本（部署侧路径这时才可靠）
+    giCheckWiring();
+    // 世界已就绪，但此刻目标区块通常还没进内存（无人在附近），setBlock 会全数失败。
+    // 所以延后 3s 再补一次，失败的格会进 GhostGuard 的待恢复队列，由重试链 + tickingarea 兜。
+    setTimeout(() => {
+        // 先把上次异常退出留下的快照处理掉，再补 ghost 期望。
+        // shouldRestore 的判据是"期望集合已不认这一格"——说明上次撤销只做了一半；
+        // 期望仍认的格属于正常投影（重启后本来就该补回），绝不能在这里还原掉。
+        try {
+            const sr = worldSnapshot.restoreOrphaned({
+                shouldRestore: (dimid, x, y, z) => !ghostExpect.get(dimid, x, y, z),
+            });
+            if (sr.sessions) {
+                logger.info(`[LitematicaBE] 快照孤儿会话: ${sr.sessions} 个 / 续做还原 ${sr.restored} 格 / 保留待撤销 ${sr.held} 格 / 保留现状 ${sr.kept} / 失败 ${sr.failed} / 残留 ${sr.remaining}`);
+            }
+        } catch (e) {
+            logger.warn(`[LitematicaBE] 快照孤儿会话清理失败: ${e && e.message ? e.message : e}`);
+        }
+        try {
+            ghostGuard.restoreAll('serverStarted');
+        } catch (e) {
+            logger.warn(`[LitematicaBE] ghost 期望补齐失败: ${e && e.message ? e.message : e}`);
+        }
+    }, 3000);
+});
 
 // 导出加载函数供UI使用（必须在函数定义之后）
 global.loadSchematicFile = loadSchematicFile;
 
 logger.info(`${PLUGIN_NAME} v${PLUGIN_VERSION} Loaded!`);
-logger.info("Commands: /litematica, /lit, /litematica:logclean, /litematica:config");
+
+// Ghost 子系统状态（渲染走这条路；此处先打印可用性）
+function logGhostRegistryStatus() {
+    const gs = ghostRegistry.stats();
+    if (gs.ready) {
+        logger.info(`[LitematicaBE] Ghost 注册表就绪: addon ${(gs.addonVersion || []).join('.')}, ${gs.blockCount} 种定义, javaMap ${gs.javaMapCount} 条`);
+        const st = gs.javaMapStats;
+        if (st) {
+            logger.info(`[LitematicaBE] ghost 命中 ${st.mapped}/${st.total}，其余回落 ${gs.genericId}`);
+        }
+    } else {
+        logger.warn(`[LitematicaBE] Ghost 注册表不可用: ${gs.loadError || '未知'}`);
+        logger.warn('[LitematicaBE] 请确认已部署 ghost addon 且 data/ghost_index.json 存在');
+    }
+}
+
+logGhostRegistryStatus();
+const addonSummary = addonCheck.summary();
+logger.info(`[LitematicaBE] addon 版本校验: ${addonSummary.state}${addonSummary.enabled ? '（ghost 写入可用）' : '（ghost 写入已禁用，其余功能正常）'}`);
+const snapStats = worldSnapshot.stats();
+logger.info(`[LitematicaBE] 快照: ${snapStats.sessions} 个未还原会话 / ${snapStats.blocks} 格 / 目录 ${snapStats.dir}`);
+logger.info(`Commands: ${Array.from(registeredCommands).join(', ') || '(none)'}`);
 logger.info("Use wooden sword to operate");
 logger.info("[LogCleaner] Auto-clean enabled");

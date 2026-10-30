@@ -1,6 +1,16 @@
 // SelectionTool - 选区工具
 // 处理玩家使用木剑选取两个坐标点的逻辑
 
+/**
+ * 取玩家所在维度 ID。
+ * LSE 的 Player 对象没有 dim / dimid 属性（只有 pos 是 FloatPos，带 dim 文字名与 dimid 数字），
+ * 原来写 player.dim 恒为 undefined，导致跨维度校验永远通过、选区维度恒为 undefined。
+ */
+function dimidOf(player) {
+    const d = player && player.pos && player.pos.dimid;
+    return typeof d === 'number' ? d : 0;
+}
+
 class SelectionTool {
     constructor() {
         // 存储玩家的选区状态: xuid -> { pos1: {x,y,z,dim}, pos2: {x,y,z,dim}, state: 'idle'|'waiting_pos1'|'waiting_pos2' }
@@ -18,7 +28,7 @@ class SelectionTool {
             pos1: null,
             pos2: null,
             state: 'waiting_pos1',
-            dimension: player.dim
+            dimension: dimidOf(player)
         });
         player.tell('§a请使用 §e木剑右键 §a选择第 §e1 §a个坐标点');
         player.tell('§7提示: 手持木剑，右键点击方块即可选择');
@@ -56,7 +66,7 @@ class SelectionTool {
         const sel = this.selections.get(xuid);
 
         if (!sel) return true;
-        if (sel.dimension !== player.dim) {
+        if (sel.dimension !== dimidOf(player)) {
             player.tell('§c错误: 两个选区点必须在同一维度');
             return false;
         }

@@ -21,11 +21,15 @@ class DebugLogger {
             this.ensureDir();
             this.openNewFile();
             // 定期自动刷新缓冲区（每5秒），防止插件崩溃时丢失日志
-            this._flushTimer = setInterval(() => {
-                if (this.buffer.length > 0) {
-                    this.flush();
-                }
-            }, 5000);
+            // 默认不再自带 setInterval，flush 交给统一调度器的 'debug-flush' 任务。
+            // 需要独立运行时传 { autoFlush: true } 保留原行为。
+            if (options.autoFlush === true) {
+                this._flushTimer = setInterval(() => {
+                    if (this.buffer.length > 0) {
+                        this.flush();
+                    }
+                }, 5000);
+            }
         }
     }
 

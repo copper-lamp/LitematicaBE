@@ -1,4 +1,6 @@
 class SpatialIndexUtils {
+    // 内存 spatial index 的分块边长（消费端），必须与 LitematicLoader 构建 blockChunks 时的
+    // CHUNK_SIZE 一致。与 BinaryChunkStorage 的 CHUNK_SIZE=32（.mcmega 磁盘格式）无关，切勿统一。
     static CHUNK_SIZE = 16;
 
     static getBlocksInRadius(projection, centerX, centerY, centerZ, radius) {

@@ -5,12 +5,23 @@ const fs = require('fs');
 const path = require('path');
 const { bidirectionalConverter } = require('../mappings/BidirectionalBlockConverter');
 
+/**
+ * 玩家所在维度 ID。LSE 的 Player 没有 dim 属性，维度信息在 FloatPos 上
+ * （pos.dim 是文字名，pos.dimid 是 0/1/2 的数字 ID）。
+ */
+function dimidOf(player) {
+    const d = player && player.pos && player.pos.dimid;
+    return typeof d === 'number' ? d : 0;
+}
+
 class UIManager {
     constructor() {
         this.actionBarMessages = new Map();
         this.lastVerifyResults = new Map();
         this.schematicsDir = './plugins/LitematicaBE/schematics/';
-        this.startActionBarLoop();
+        // P4.3：不再自己 mc.listen('onTick')。actionBar 刷新由统一调度器的 'actionbar'
+        // 任务驱动（index.js 注册，每 2 tick = 100ms），全插件只留一个 onTick。
+        this._actionBarLoopStarted = false;
         this.ensureSchematicsDir();
     }
 
@@ -51,8 +62,16 @@ class UIManager {
         return schematics;
     }
 
+    /**
+     * 独立使用（不经过统一调度器）时的降级入口。
+     * 正常装配下 index.js 已把 updateActionBars 注册成调度器任务，这里不该被调用。
+     */
     startActionBarLoop() {
-        mc.listen('onTick', () => {  
+        if (this._actionBarLoopStarted) return;
+        const sched = (typeof global !== 'undefined') ? global.renderScheduler : null;
+        if (sched && sched.has && sched.has('actionbar')) return;   // 已由调度器接管
+        this._actionBarLoopStarted = true;
+        mc.listen('onTick', () => {
             this.updateActionBars();
         });
     }
@@ -243,7 +262,7 @@ class UIManager {
         try {
             const result = await schematicSaver.saveSchematic(
                 region,
-                player.dim,
+                dimidOf(player),
                 fileName,
                 player.name,
                 description
@@ -392,7 +411,7 @@ class UIManager {
                 dimensions: loadedSchematic.dimensions,
                 blocks: loadedSchematic.blocks || [],
                 position: placePos,
-                dimension: player.dim,
+                dimension: dimidOf(player),
                 file: schematic.file,
                 filePath: loadedSchematic.filePath || null,
                 version: loadedSchematic.version || 0,

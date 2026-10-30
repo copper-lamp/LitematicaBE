@@ -28,6 +28,9 @@ class MegaProjectionRenderer {
     loadConfig() {
         try {
             if (global.configManager) {
+                // 超大投影默认关闭（render.enableMega）。关掉后 onTick 直接早退、
+                // initRenderState 不建状态，超大投影不再抢 ghost 队列。
+                this.enabled = global.configManager.get('render.enableMega', false) === true;
                 this.viewportUpdateInterval = global.configManager.get('megaRender.viewportUpdateInterval', 500);
                 this.maxParticlesPerTick = global.configManager.get('megaRender.maxParticlesPerTick', 2000);
                 this.maxRenderDistance = global.configManager.get('megaRender.maxRenderDistance', 96);
@@ -44,6 +47,7 @@ class MegaProjectionRenderer {
                     });
                 }
             } else {
+                this.enabled = false;
                 this.viewportUpdateInterval = 500;
                 this.maxParticlesPerTick = 2000;
                 this.maxRenderDistance = 96;
@@ -52,6 +56,7 @@ class MegaProjectionRenderer {
             }
         } catch (e) {
             logger.warn(`[MegaRender] Config load failed: ${e.message}`);
+            this.enabled = false;
             this.viewportUpdateInterval = 500;
             this.maxParticlesPerTick = 2000;
             this.maxRenderDistance = 96;
@@ -101,6 +106,17 @@ class MegaProjectionRenderer {
     // ==================== 状态管理 ====================
 
     initRenderState(player, schematicId, projection) {
+        // 超大投影暂不启用，等普通投影的 ghost 管线完全跑通后再针对优化。
+        // 这里保留方法本体（UIManager / index.js 的调用点不用改），但直接不建状态：
+        // 一旦建了状态，onTick 会往 GhostRenderer 注入 LOD 子集，把普通投影的队列覆盖掉。
+        if (!this.enabled) {
+            logger.info(`[MegaRender] 已停用（render.enableMega=false），超大投影 "${projection && projection.name}" 本轮不渲染`);
+            if (player && player.tell) {
+                player.tell('§e超大投影（MEGA）暂未启用，等普通投影跑通后再优化');
+            }
+            return null;
+        }
+
         const stateId = `${player.xuid}_${schematicId}`;
         if (this.renderStates.has(stateId)) {
             return this.renderStates.get(stateId);
@@ -146,6 +162,7 @@ class MegaProjectionRenderer {
     // ==================== 主循环 ====================
 
     onTick() {
+        if (!this.enabled) return;
         this.tickCount++;
 
         for (const [stateId, state] of this.renderStates) {

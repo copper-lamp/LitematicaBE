@@ -159,27 +159,52 @@ class EasyPlaceManager {
         return this.fastPlaceStates.get(player.xuid)?.enabled || false;
     }
 
+    /**
+     * FastPlace 的一个周期（原来写在 setInterval 里）。
+     * P4.3 起由统一调度器（global.renderScheduler 的 easyplace-fast 任务）调用；
+     * 没有调度器时 startTickLoop 会退回 setInterval，两边共用这一个方法。
+     */
+    tickFastPlace() {
+        if (this.fastPlaceStates.size === 0) return;
+        const players = mc.getOnlinePlayers();
+        for (const player of players) {
+            if (!this.isFastPlaceEnabled(player)) continue;
+            this.processFastPlace(player);
+        }
+        this.placedLocations.clear();
+    }
+
     startTickLoop() {
         if (this.tickInterval) return;
 
+        // 优先交给统一调度器：全插件只保留一个 onTick
+        const sched = (typeof global !== 'undefined') ? global.renderScheduler : null;
+        if (sched && sched.has && sched.has('easyplace-fast')) {
+            sched.enable('easyplace-fast', true);
+            this.tickInterval = 'scheduler';
+            logger.info('[EasyPlace] FastPlace tick 已交给统一调度器（200ms）');
+            return;
+        }
+
         this.tickInterval = setInterval(() => {
-            const players = mc.getOnlinePlayers();
-            for (const player of players) {
-                if (!this.isFastPlaceEnabled(player)) continue;
-                this.processFastPlace(player);
-            }
-            this.placedLocations.clear();
+            this.tickFastPlace();
         }, EasyPlaceManager.TICK_INTERVAL);
 
-        logger.info('[EasyPlace] FastPlace tick loop started');
+        logger.info('[EasyPlace] FastPlace tick loop started (setInterval 降级)');
     }
 
     stopTickLoop() {
-        if (this.tickInterval) {
-            clearInterval(this.tickInterval);
+        if (!this.tickInterval) return;
+        if (this.tickInterval === 'scheduler') {
+            const sched = (typeof global !== 'undefined') ? global.renderScheduler : null;
+            if (sched && sched.enable) sched.enable('easyplace-fast', false);
             this.tickInterval = null;
-            logger.info('[EasyPlace] FastPlace tick loop stopped');
+            logger.info('[EasyPlace] FastPlace tick 已从调度器摘除');
+            return;
         }
+        clearInterval(this.tickInterval);
+        this.tickInterval = null;
+        logger.info('[EasyPlace] FastPlace tick loop stopped');
     }
 
     processFastPlace(player) {

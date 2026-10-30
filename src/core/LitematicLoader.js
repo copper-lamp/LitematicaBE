@@ -718,6 +718,9 @@ class LitematicLoader {
         schematic.totalBlocks = schematic.blocks.length;
         
         // 构建方块位置索引，加速轻松放置查找
+        // 注意：此 CHUNK_SIZE 是内存 spatial index 的分块边长，必须与
+        // src/easyplace/SpatialIndexUtils.js 的 CHUNK_SIZE 保持一致（生产端 ↔ 消费端）。
+        // 它与 BinaryChunkStorage 的 CHUNK_SIZE=32（.mcmega 磁盘文件格式分块）无关，切勿统一。
         const CHUNK_SIZE = 16;
         for (const block of schematic.blocks) {
             const key = `${block.pos[0]},${block.pos[1]},${block.pos[2]}`;

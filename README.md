@@ -1,10 +1,10 @@
 # LitematicaBE
 
-<img src="https://img.shields.io/badge/version-2.5.0-blue" alt="Version">
-<img src="https://img.shields.io/badge/BDS-1.21.132-green" alt="BDS Version">
+<img src="https://img.shields.io/badge/version-3.0.0-blue" alt="Version">
+<img src="https://img.shields.io/badge/BDS-1.21.132+-green" alt="BDS Version">
 <img src="https://img.shields.io/badge/LeviLamina-0.13.5+-orange" alt="LeviLamina">
 
-基岩版跨时代投影插件 — 支持加载 Java 版 `.litematic` 文件，在基岩版世界中以粒子投影显示，并提供轻松放置、逐层建造、粘贴投影等全套功能。
+基岩版跨时代投影插件 — 支持加载 Java 版 `.litematic` 文件，在基岩版世界中以自定义 ghost 方块投影显示，并提供逐层建造等功能。
 
 ---
 
@@ -16,7 +16,7 @@
 |------|------|
 | 原理图加载 | 加载 Java 版 `.litematic` 文件 |
 | 原理图保存 | 将基岩版世界中的建筑保存为 `.litematic`，与 Java 版 Litematica 完全互通 |
-| 粒子投影 | 采用粒子显示投影，不修改世界实际方块 |
+| ghost 投影 | 采用自定义 ghost 方块显示投影，贴近原版显示 |
 | 逐层建造 | 按 Y 层切换显示，低头看下层 / 抬头看上层的直觉操作 |
 | 轻松放置 | 手持材料对准投影即可精确放置，支持快速连续放置（投影打印机） |
 | 直接放置 | OP + 创造模式一键将投影所有方块直接写入世界（NBT 直放） |
@@ -54,10 +54,12 @@
 /litematica clear         # 清除当前投影显示
 /litematica info          # 查看投影详细信息
 /litematica debug <sub>   # 调试命令（mega/stats/config）
+/litematica selfcheck     # 投影流程自检
 
 # 工具命令
 /litematica:logclean status|clean|config   # 日志清理
 /litematica:config reload|reset|get <key>  # 配置管理
+/litematica:ghost lay|undo|info|restore    # ghost 测试
 ```
 
 ---
@@ -67,16 +69,20 @@
 ### 前置要求
 
 - [LeviLamina](https://github.com/LiteLDev/LeviLamina) 0.13.5 或更高版本
-- [legacy-script-engine-nodejs](https://github.com/LiteLDev/legacy-script-engine-nodejs) 插件
-- 安装配套资源包以显示粒子纹理
+- [legacy-script-engine-nodejs](https://github.com/LiteLDev/legacy-script-engine-nodejs) lse插件
+- [LegacyMoney](https://github.com/LiteLDev/LegacyMoney) lse的前置插件
+- [LegacyRemoteCall](https://github.com/LiteLDev/LegacyRemoteCall) lse的前置插件
+- 安装配套扩展包以显示 ghost 方块纹理
 
 ### 安装步骤
 
 1. 下载最新版 `LitematicaBE.zip`
-2. 将plugins内文件解压到 BDS 的 `plugins/` 目录下
-3. 将资源包安装到服务端（可选）
-4. 重启服务器
-5. 将 `.litematic` 文件放入 `plugins/LitematicaBE/schematics/` 目录
+2. 将 plugins 内文件解压到 BDS 的 `plugins/` 目录下
+3. 将服务端拓展包（BP/RP）分别放置到 BDS 的`behaviour_packs/`和`resource_packs/`目录下
+4. 在 BDS 的 `worlds/<世界名>/` 目录下找到 `world_behavior_packs.json` 和 `world_resource_packs.json` 并按数组格式写入 BP 和 RP 的 `pack_id` 及 `version`
+5. 重启服务器
+6. 将已打包的拓展包（addon）装载到玩家客户端
+7. 将 `.litematic` 文件放入 `plugins/LitematicaBE/schematics/` 目录
 
 ---
 
@@ -124,63 +130,47 @@
 
 ---
 
-## 配置文件
-
-`plugins/LitematicaBE/config.json`：
-
-```json
-{
-  "render": {
-    "particleDensity": 1.0,
-    "renderDistance": 64,
-    "ghostModeOpacity": 0.5
-  },
-  "easyPlace": {
-    "enabled": true,
-    "checkInventory": true
-  },
-  "mega": {
-    "chunkSize": 32,
-    "maxMemoryChunks": 200
-  },
-  "megaSchematic": {
-    "threshold": 30000
-  }
-}
-```
-
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `render.particleDensity` | 1.0 | 粒子密度系数 |
-| `megaSchematic.threshold` | 30000 | Mega 模式自动触发方块数阈值 |
-| `mega.chunkSize` | 32 | 分块大小（32×32×32） |
-| `mega.maxMemoryChunks` | 200 | LRU 内存缓存分块上限 |
-
----
-
 ## 目录结构
 
 ```
-plugins/LitematicaBE/
-├── manifest.json              # 插件清单
-├── index.js                   # 主入口
-├── config.json                # 配置文件
-├── schematics/                # 原理图文件目录
-├── exports/                   # 材料清单导出目录
-├── mega_schematics/           # Mega 分块存储
+LitematicaBE/
+├── index.js                                 # 主入口
+├── manifest.json                            # 插件清单
+├── config.json                              # 配置文件
+├── schematics/                              # 原理图文件目录
+├── mega_schematics/                         # 运行时生成
+├── exports/                                 # 材料清单导出目录
+├── data/                                    # 构建产物 + 运行时状态
+├── logs/                                    # 日志文件
+├── node_modules/                            # 既有依赖
 └── src/
-    ├── core/                  # 核心模块（加载器/存储/保存/选区/NBT）
-    ├── data/                  # 数据管理
-    ├── easyplace/             # 轻松放置（放置/匹配/验证/背包/射线）
-    ├── mappings/              # 方块映射表（注册表/状态转换/双向引擎）
-    ├── render/                # 渲染模块（投影/Mega/LOD）
-    ├── ui/                    # UI 表单管理
-    └── utils/                 # 工具（材料统计）
+    ├── core/                                # 核心模块（NBT、投影加载/保存、方块转换、配置、日志、选区、Mega 管理）
+    ├── data/                                # 玩家/投影数据持久化
+    ├── easyplace/                           # 轻松放置
+    ├── ghost/                               # ghost 子系统（渲染、守卫、注册表、期望、探针、自检、版本校验、外壳提取）
+    ├── mappings/                            # JE / BE 方块映射
+    ├── render/                              # 投影渲染（会话层、Mega、LOD、统一调度器）
+    ├── ui/                                  # UI 菜单与提示
+    ├── utils/                               # 通用工具
+    └── world/                               # 原方块快照部分
 ```
 
 ---
 
 ## 更新日志
+
+### v3.0.0 (2026-10-31)（review）
+
+- 重大重构：渲染逻辑由 LSE 生成贴图粒子全面转向自定义 ghost 方块，更加贴近原版Litematica
+ - 新增 ghost 子系统：共 8 个全新文件，约 12 万字节，作为新构架渲染核心，包含期望逻辑、外壳提取、ghost 方块定义与查表、调试工具等
+ - 资源包更新：新版本使用服务端插件 + 双端 addon 包形式实现，并校验版本一致性
+ - 映射表升级：从"旧式容器 ID + 状态"升级为完整扁平化方块名并增加 `legacyBedrockId` 回退表
+ - 统一 tick 调度器：全局保留一个 `onTick`，所有周期任务收敛到调度器，带预算管理、优先级、启停、统计
+ - 添加快照功能：保障投影写入安全性，防止对存档造成破坏
+ - 生命周期重构：为新渲染逻辑完善了生命周期，包括保活、重写、校验等
+ - 命令功能调整：新注册 /litematica selfcheck 及 /litematica:ghost （`lay`/`undo`/`info`/`restore`）并修复了部分旧版bug
+ - 修复维度 ID 问题：现在投影可以跨纬度正确显示
+ - 其它若干代码优化与 Bug 修复
 
 ### v2.5.0 (2026-05-24)
 
@@ -238,6 +228,9 @@ plugins/LitematicaBE/
 ---
 
 ## 常见问题
+
+**Q: 为什么 3.X.X 版本部分功能无法使用？**
+A: 第三代 LitematicaBE 正在完善重构中，部分旧版功能暂未经测试/开放，如有问题请提交 Issue 或移步群聊反映
 
 **Q: 为什么投影显示为空气/错误材质？**
 A: 该bug是映射表的原因，Java与基岩差距极大，所有方块都是通过映射实现。遇到此类bug请提交Issues

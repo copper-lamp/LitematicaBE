@@ -29,7 +29,9 @@ class LogCleaner {
             totalFilesProcessed: 0
         };
 
-        this.startAutoClean();
+        // 不在构造期启动。构造时统一调度器还不存在（index.js 里 LogCleaner 先建、
+        // RenderScheduler 后建），此时 startAutoClean 会退化成 setInterval，等于白收敛。
+        // 由 index.js 在调度器 start() 之后显式调用 startAutoClean()。
     }
 
     /**
@@ -54,7 +56,16 @@ class LogCleaner {
         if (this.isRunning) return;
 
         this.isRunning = true;
-        setInterval(() => {
+
+        // 优先交给统一调度器（'log-cleaner' 任务，60s），全插件只留一个 onTick。
+        const sched = (typeof global !== 'undefined') ? global.renderScheduler : null;
+        if (sched && sched.has && sched.has('log-cleaner')) {
+            sched.enable('log-cleaner', true);
+            logger.info(`[LogCleaner] 自动清理由统一调度器驱动，扫描间隔: ${this.config.scanInterval}ms`);
+            return;
+        }
+
+        this._timer = setInterval(() => {
             this.cleanRenderLogs();
         }, this.config.scanInterval);
 
@@ -66,6 +77,12 @@ class LogCleaner {
      */
     stopAutoClean() {
         this.isRunning = false;
+        const sched = (typeof global !== 'undefined') ? global.renderScheduler : null;
+        if (sched && sched.enable) sched.enable('log-cleaner', false);
+        if (this._timer) {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
         logger.info('[LogCleaner] 自动清理已停止');
     }
 

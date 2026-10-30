@@ -15,8 +15,20 @@ class ConfigManager {
     getDefaultConfig() {
         return {
             render: {
-                mode: "particle",
-                opacity: 0.6,
+                // 只保留 ghost 一条渲染路径（粒子显示已整体移除）。
+                // 老配置文件里若写着 "particle"，加载时会被强制改成 ghost 并打一条日志。
+                mode: "ghost",
+                // 每个 tick 最多写多少格 ghost。1 万方块 ≈ 34 tick ≈ 1.7 秒
+                ghostWritesPerTick: 300,
+                // 单个投影最多写多少格（外壳提取后仍然超限就直接拒绝，防止写爆存档）
+                ghostMaxBlocks: 60000,
+                // 是否允许覆盖花草/水/雪这类"可替换"方块（玩家放的方块永远不覆盖）
+                ghostOverwriteReplaceable: true,
+                // 统一调度器单 tick 给周期任务的总预算（毫秒）
+                tickBudgetMs: 8,
+                // 超大投影（MEGA / LOD）暂不启用
+                enableMega: false,
+                opacity: 0.8,
                 particleSize: 0.5,
                 particlesPerFrame: 500,
                 renderFrameInterval: 16,
@@ -128,11 +140,26 @@ class ConfigManager {
             // 合并默认配置（确保新参数有值）
             this.config = this.mergeConfig(this.defaultConfig, this.config);
 
+            this.enforceGhostMode();
+
             logger.info(`[ConfigManager] 配置文件加载成功: ${this.configPath}`);
         } catch (e) {
             logger.error(`[ConfigManager] 加载配置文件失败: ${e.message}`);
             logger.warn(`[ConfigManager] 使用默认配置`);
             this.config = this.defaultConfig;
+        }
+    }
+
+    /**
+     * 粒子渲染已整体删除，配置里残留的 "particle"/"hybrid" 一律落回 ghost。
+     * 不抛错、不删用户的配置文件，只在启动日志里说一句，避免"改了配置没反应"。
+     */
+    enforceGhostMode() {
+        if (!this.config || !this.config.render) return;
+        const mode = this.config.render.mode;
+        if (mode !== 'ghost') {
+            logger.info(`[ConfigManager] render.mode="${mode}" 已失效（粒子渲染在 P4 移除），强制使用 ghost`);
+            this.config.render.mode = 'ghost';
         }
     }
 
