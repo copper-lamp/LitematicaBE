@@ -1,4 +1,13 @@
 {
+  "name": "LitematicaBE",
+  "version": "3.0.1",
+  "private": true,
+  "description": "Minecraft Bedrock Edition projection plugin for LeviLamina",
+  "license": "MIT",
+  "scripts": {
+    "build": "node tools/build-release.mjs",
+    "check:version": "node tools/check-version.mjs"
+  },
   "dependencies": {
     "xlsx": "^0.18.5"
   }

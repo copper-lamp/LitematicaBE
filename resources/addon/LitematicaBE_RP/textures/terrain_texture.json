@@ -1,0 +1,1643 @@
+{
+  "resource_pack_name": "LitematicaBE",
+  "texture_name": "atlas.terrain",
+  "padding": 8,
+  "num_mip_levels": 4,
+  "texture_data": {
+    "ghost_acacia_planks": {
+      "textures": "textures/blocks/ghost/ghost_acacia_planks"
+    },
+    "ghost_acacia_log": {
+      "textures": "textures/blocks/ghost/ghost_acacia_log"
+    },
+    "ghost_bamboo_stalk": {
+      "textures": "textures/blocks/ghost/ghost_bamboo_stalk"
+    },
+    "ghost_bamboo_planks": {
+      "textures": "textures/blocks/ghost/ghost_bamboo_planks"
+    },
+    "ghost_beetroots_stage3": {
+      "textures": "textures/blocks/ghost/ghost_beetroots_stage3"
+    },
+    "ghost_birch_planks": {
+      "textures": "textures/blocks/ghost/ghost_birch_planks"
+    },
+    "ghost_birch_log": {
+      "textures": "textures/blocks/ghost/ghost_birch_log"
+    },
+    "ghost_black_wool": {
+      "textures": "textures/blocks/ghost/ghost_black_wool"
+    },
+    "ghost_blue_wool": {
+      "textures": "textures/blocks/ghost/ghost_blue_wool"
+    },
+    "ghost_bone_block_side": {
+      "textures": "textures/blocks/ghost/ghost_bone_block_side"
+    },
+    "ghost_bricks": {
+      "textures": "textures/blocks/ghost/ghost_bricks"
+    },
+    "ghost_brown_wool": {
+      "textures": "textures/blocks/ghost/ghost_brown_wool"
+    },
+    "ghost_water_still": {
+      "textures": "textures/blocks/ghost/ghost_water_still"
+    },
+    "ghost_cactus_side": {
+      "textures": "textures/blocks/ghost/ghost_cactus_side"
+    },
+    "ghost_cake_side": {
+      "textures": "textures/blocks/ghost/ghost_cake_side"
+    },
+    "ghost_carrots_stage3": {
+      "textures": "textures/blocks/ghost/ghost_carrots_stage3"
+    },
+    "ghost_iron_chain": {
+      "textures": "textures/blocks/ghost/ghost_iron_chain"
+    },
+    "ghost_chain_command_block_front": {
+      "textures": "textures/blocks/ghost/ghost_chain_command_block_front"
+    },
+    "ghost_cherry_planks": {
+      "textures": "textures/blocks/ghost/ghost_cherry_planks"
+    },
+    "ghost_cherry_log": {
+      "textures": "textures/blocks/ghost/ghost_cherry_log"
+    },
+    "ghost_oak_planks": {
+      "textures": "textures/blocks/ghost/ghost_oak_planks"
+    },
+    "ghost_command_block_front": {
+      "textures": "textures/blocks/ghost/ghost_command_block_front"
+    },
+    "ghost_crimson_planks": {
+      "textures": "textures/blocks/ghost/ghost_crimson_planks"
+    },
+    "ghost_crimson_stem": {
+      "textures": "textures/blocks/ghost/ghost_crimson_stem"
+    },
+    "ghost_cyan_wool": {
+      "textures": "textures/blocks/ghost/ghost_cyan_wool"
+    },
+    "ghost_dark_oak_planks": {
+      "textures": "textures/blocks/ghost/ghost_dark_oak_planks"
+    },
+    "ghost_dark_oak_log": {
+      "textures": "textures/blocks/ghost/ghost_dark_oak_log"
+    },
+    "ghost_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_terracotta"
+    },
+    "ghost_dried_kelp_side": {
+      "textures": "textures/blocks/ghost/ghost_dried_kelp_side"
+    },
+    "ghost_end_portal_frame_top": {
+      "textures": "textures/blocks/ghost/ghost_end_portal_frame_top"
+    },
+    "ghost_obsidian": {
+      "textures": "textures/blocks/ghost/ghost_obsidian"
+    },
+    "ghost_fire_0": {
+      "textures": "textures/blocks/ghost/ghost_fire_0"
+    },
+    "ghost_frosted_ice_0": {
+      "textures": "textures/blocks/ghost/ghost_frosted_ice_0"
+    },
+    "ghost_gray_wool": {
+      "textures": "textures/blocks/ghost/ghost_gray_wool"
+    },
+    "ghost_green_wool": {
+      "textures": "textures/blocks/ghost/ghost_green_wool"
+    },
+    "ghost_hay_block_side": {
+      "textures": "textures/blocks/ghost/ghost_hay_block_side"
+    },
+    "ghost_iron_block": {
+      "textures": "textures/blocks/ghost/ghost_iron_block"
+    },
+    "ghost_chiseled_stone_bricks": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_stone_bricks"
+    },
+    "ghost_cobblestone": {
+      "textures": "textures/blocks/ghost/ghost_cobblestone"
+    },
+    "ghost_cracked_stone_bricks": {
+      "textures": "textures/blocks/ghost/ghost_cracked_stone_bricks"
+    },
+    "ghost_mossy_stone_bricks": {
+      "textures": "textures/blocks/ghost/ghost_mossy_stone_bricks"
+    },
+    "ghost_stone": {
+      "textures": "textures/blocks/ghost/ghost_stone"
+    },
+    "ghost_stone_bricks": {
+      "textures": "textures/blocks/ghost/ghost_stone_bricks"
+    },
+    "ghost_jungle_planks": {
+      "textures": "textures/blocks/ghost/ghost_jungle_planks"
+    },
+    "ghost_jungle_log": {
+      "textures": "textures/blocks/ghost/ghost_jungle_log"
+    },
+    "ghost_large_fern_top": {
+      "textures": "textures/blocks/ghost/ghost_large_fern_top"
+    },
+    "ghost_lava_still": {
+      "textures": "textures/blocks/ghost/ghost_lava_still"
+    },
+    "ghost_cauldron_top": {
+      "textures": "textures/blocks/ghost/ghost_cauldron_top"
+    },
+    "ghost_light_blue_wool": {
+      "textures": "textures/blocks/ghost/ghost_light_blue_wool"
+    },
+    "ghost_light_gray_wool": {
+      "textures": "textures/blocks/ghost/ghost_light_gray_wool"
+    },
+    "ghost_gold_block": {
+      "textures": "textures/blocks/ghost/ghost_gold_block"
+    },
+    "ghost_lilac_top": {
+      "textures": "textures/blocks/ghost/ghost_lilac_top"
+    },
+    "ghost_lime_wool": {
+      "textures": "textures/blocks/ghost/ghost_lime_wool"
+    },
+    "ghost_magenta_wool": {
+      "textures": "textures/blocks/ghost/ghost_magenta_wool"
+    },
+    "ghost_mangrove_planks": {
+      "textures": "textures/blocks/ghost/ghost_mangrove_planks"
+    },
+    "ghost_mangrove_log": {
+      "textures": "textures/blocks/ghost/ghost_mangrove_log"
+    },
+    "ghost_melon_side": {
+      "textures": "textures/blocks/ghost/ghost_melon_side"
+    },
+    "ghost_nether_wart_stage2": {
+      "textures": "textures/blocks/ghost/ghost_nether_wart_stage2"
+    },
+    "ghost_oak_log": {
+      "textures": "textures/blocks/ghost/ghost_oak_log"
+    },
+    "ghost_orange_wool": {
+      "textures": "textures/blocks/ghost/ghost_orange_wool"
+    },
+    "ghost_peony_top": {
+      "textures": "textures/blocks/ghost/ghost_peony_top"
+    },
+    "ghost_pink_wool": {
+      "textures": "textures/blocks/ghost/ghost_pink_wool"
+    },
+    "ghost_piston_side": {
+      "textures": "textures/blocks/ghost/ghost_piston_side"
+    },
+    "ghost_pitcher_crop_top": {
+      "textures": "textures/blocks/ghost/ghost_pitcher_crop_top"
+    },
+    "ghost_pointed_dripstone_up_tip": {
+      "textures": "textures/blocks/ghost/ghost_pointed_dripstone_up_tip"
+    },
+    "ghost_potatoes_stage3": {
+      "textures": "textures/blocks/ghost/ghost_potatoes_stage3"
+    },
+    "ghost_pumpkin_side": {
+      "textures": "textures/blocks/ghost/ghost_pumpkin_side"
+    },
+    "ghost_purple_wool": {
+      "textures": "textures/blocks/ghost/ghost_purple_wool"
+    },
+    "ghost_quartz_block_side": {
+      "textures": "textures/blocks/ghost/ghost_quartz_block_side"
+    },
+    "ghost_red_wool": {
+      "textures": "textures/blocks/ghost/ghost_red_wool"
+    },
+    "ghost_redstone_dust_dot": {
+      "textures": "textures/blocks/ghost/ghost_redstone_dust_dot"
+    },
+    "ghost_reinforced_deepslate_side": {
+      "textures": "textures/blocks/ghost/ghost_reinforced_deepslate_side"
+    },
+    "ghost_repeating_command_block_front": {
+      "textures": "textures/blocks/ghost/ghost_repeating_command_block_front"
+    },
+    "ghost_rose_bush_top": {
+      "textures": "textures/blocks/ghost/ghost_rose_bush_top"
+    },
+    "ghost_small_dripleaf_top": {
+      "textures": "textures/blocks/ghost/ghost_small_dripleaf_top"
+    },
+    "ghost_quartz_block_bottom": {
+      "textures": "textures/blocks/ghost/ghost_quartz_block_bottom"
+    },
+    "ghost_sniffer_egg_not_cracked_top": {
+      "textures": "textures/blocks/ghost/ghost_sniffer_egg_not_cracked_top"
+    },
+    "ghost_spruce_planks": {
+      "textures": "textures/blocks/ghost/ghost_spruce_planks"
+    },
+    "ghost_spruce_log": {
+      "textures": "textures/blocks/ghost/ghost_spruce_log"
+    },
+    "ghost_stripped_acacia_log": {
+      "textures": "textures/blocks/ghost/ghost_stripped_acacia_log"
+    },
+    "ghost_stripped_birch_log": {
+      "textures": "textures/blocks/ghost/ghost_stripped_birch_log"
+    },
+    "ghost_stripped_cherry_log": {
+      "textures": "textures/blocks/ghost/ghost_stripped_cherry_log"
+    },
+    "ghost_stripped_crimson_stem": {
+      "textures": "textures/blocks/ghost/ghost_stripped_crimson_stem"
+    },
+    "ghost_stripped_dark_oak_log": {
+      "textures": "textures/blocks/ghost/ghost_stripped_dark_oak_log"
+    },
+    "ghost_stripped_jungle_log": {
+      "textures": "textures/blocks/ghost/ghost_stripped_jungle_log"
+    },
+    "ghost_stripped_mangrove_log": {
+      "textures": "textures/blocks/ghost/ghost_stripped_mangrove_log"
+    },
+    "ghost_stripped_oak_log": {
+      "textures": "textures/blocks/ghost/ghost_stripped_oak_log"
+    },
+    "ghost_stripped_spruce_log": {
+      "textures": "textures/blocks/ghost/ghost_stripped_spruce_log"
+    },
+    "ghost_stripped_warped_stem": {
+      "textures": "textures/blocks/ghost/ghost_stripped_warped_stem"
+    },
+    "ghost_sunflower_top": {
+      "textures": "textures/blocks/ghost/ghost_sunflower_top"
+    },
+    "ghost_suspicious_gravel_0": {
+      "textures": "textures/blocks/ghost/ghost_suspicious_gravel_0"
+    },
+    "ghost_suspicious_sand_0": {
+      "textures": "textures/blocks/ghost/ghost_suspicious_sand_0"
+    },
+    "ghost_sweet_berry_bush_stage3": {
+      "textures": "textures/blocks/ghost/ghost_sweet_berry_bush_stage3"
+    },
+    "ghost_tall_grass_top": {
+      "textures": "textures/blocks/ghost/ghost_tall_grass_top"
+    },
+    "ghost_tnt_side": {
+      "textures": "textures/blocks/ghost/ghost_tnt_side"
+    },
+    "ghost_torchflower_crop_stage1": {
+      "textures": "textures/blocks/ghost/ghost_torchflower_crop_stage1"
+    },
+    "ghost_warped_planks": {
+      "textures": "textures/blocks/ghost/ghost_warped_planks"
+    },
+    "ghost_warped_stem": {
+      "textures": "textures/blocks/ghost/ghost_warped_stem"
+    },
+    "ghost_copper_block": {
+      "textures": "textures/blocks/ghost/ghost_copper_block"
+    },
+    "ghost_copper_bulb": {
+      "textures": "textures/blocks/ghost/ghost_copper_bulb"
+    },
+    "ghost_copper_grate": {
+      "textures": "textures/blocks/ghost/ghost_copper_grate"
+    },
+    "ghost_cut_copper": {
+      "textures": "textures/blocks/ghost/ghost_cut_copper"
+    },
+    "ghost_exposed_copper": {
+      "textures": "textures/blocks/ghost/ghost_exposed_copper"
+    },
+    "ghost_exposed_copper_bulb": {
+      "textures": "textures/blocks/ghost/ghost_exposed_copper_bulb"
+    },
+    "ghost_exposed_copper_grate": {
+      "textures": "textures/blocks/ghost/ghost_exposed_copper_grate"
+    },
+    "ghost_exposed_cut_copper": {
+      "textures": "textures/blocks/ghost/ghost_exposed_cut_copper"
+    },
+    "ghost_oxidized_copper": {
+      "textures": "textures/blocks/ghost/ghost_oxidized_copper"
+    },
+    "ghost_oxidized_copper_bulb": {
+      "textures": "textures/blocks/ghost/ghost_oxidized_copper_bulb"
+    },
+    "ghost_oxidized_copper_grate": {
+      "textures": "textures/blocks/ghost/ghost_oxidized_copper_grate"
+    },
+    "ghost_oxidized_cut_copper": {
+      "textures": "textures/blocks/ghost/ghost_oxidized_cut_copper"
+    },
+    "ghost_weathered_copper": {
+      "textures": "textures/blocks/ghost/ghost_weathered_copper"
+    },
+    "ghost_weathered_copper_bulb": {
+      "textures": "textures/blocks/ghost/ghost_weathered_copper_bulb"
+    },
+    "ghost_weathered_copper_grate": {
+      "textures": "textures/blocks/ghost/ghost_weathered_copper_grate"
+    },
+    "ghost_weathered_cut_copper": {
+      "textures": "textures/blocks/ghost/ghost_weathered_cut_copper"
+    },
+    "ghost_wheat_stage7": {
+      "textures": "textures/blocks/ghost/ghost_wheat_stage7"
+    },
+    "ghost_white_wool": {
+      "textures": "textures/blocks/ghost/ghost_white_wool"
+    },
+    "ghost_yellow_wool": {
+      "textures": "textures/blocks/ghost/ghost_yellow_wool"
+    },
+    "ghost_acacia_leaves": {
+      "textures": "textures/blocks/ghost/ghost_acacia_leaves"
+    },
+    "ghost_acacia_sapling": {
+      "textures": "textures/blocks/ghost/ghost_acacia_sapling"
+    },
+    "ghost_acacia_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_acacia_trapdoor"
+    },
+    "ghost_activator_rail": {
+      "textures": "textures/blocks/ghost/ghost_activator_rail"
+    },
+    "ghost_allium": {
+      "textures": "textures/blocks/ghost/ghost_allium"
+    },
+    "ghost_amethyst_block": {
+      "textures": "textures/blocks/ghost/ghost_amethyst_block"
+    },
+    "ghost_amethyst_cluster": {
+      "textures": "textures/blocks/ghost/ghost_amethyst_cluster"
+    },
+    "ghost_ancient_debris_top": {
+      "textures": "textures/blocks/ghost/ghost_ancient_debris_top"
+    },
+    "ghost_andesite": {
+      "textures": "textures/blocks/ghost/ghost_andesite"
+    },
+    "ghost_anvil": {
+      "textures": "textures/blocks/ghost/ghost_anvil"
+    },
+    "ghost_azalea_top": {
+      "textures": "textures/blocks/ghost/ghost_azalea_top"
+    },
+    "ghost_azalea_leaves": {
+      "textures": "textures/blocks/ghost/ghost_azalea_leaves"
+    },
+    "ghost_azure_bluet": {
+      "textures": "textures/blocks/ghost/ghost_azure_bluet"
+    },
+    "ghost_bamboo_block": {
+      "textures": "textures/blocks/ghost/ghost_bamboo_block"
+    },
+    "ghost_bamboo_door_bottom": {
+      "textures": "textures/blocks/ghost/ghost_bamboo_door_bottom"
+    },
+    "ghost_bamboo_fence": {
+      "textures": "textures/blocks/ghost/ghost_bamboo_fence"
+    },
+    "ghost_bamboo_fence_gate": {
+      "textures": "textures/blocks/ghost/ghost_bamboo_fence_gate"
+    },
+    "ghost_bamboo_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_bamboo_trapdoor"
+    },
+    "ghost_barrel_top": {
+      "textures": "textures/blocks/ghost/ghost_barrel_top"
+    },
+    "ghost_basalt_top": {
+      "textures": "textures/blocks/ghost/ghost_basalt_top"
+    },
+    "ghost_beacon": {
+      "textures": "textures/blocks/ghost/ghost_beacon"
+    },
+    "ghost_bedrock": {
+      "textures": "textures/blocks/ghost/ghost_bedrock"
+    },
+    "ghost_bee_nest_front": {
+      "textures": "textures/blocks/ghost/ghost_bee_nest_front"
+    },
+    "ghost_beehive_front": {
+      "textures": "textures/blocks/ghost/ghost_beehive_front"
+    },
+    "ghost_bell_top": {
+      "textures": "textures/blocks/ghost/ghost_bell_top"
+    },
+    "ghost_big_dripleaf_top": {
+      "textures": "textures/blocks/ghost/ghost_big_dripleaf_top"
+    },
+    "ghost_birch_leaves": {
+      "textures": "textures/blocks/ghost/ghost_birch_leaves"
+    },
+    "ghost_birch_sapling": {
+      "textures": "textures/blocks/ghost/ghost_birch_sapling"
+    },
+    "ghost_birch_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_birch_trapdoor"
+    },
+    "ghost_black_candle": {
+      "textures": "textures/blocks/ghost/ghost_black_candle"
+    },
+    "ghost_black_concrete": {
+      "textures": "textures/blocks/ghost/ghost_black_concrete"
+    },
+    "ghost_black_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_black_concrete_powder"
+    },
+    "ghost_black_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_black_glazed_terracotta"
+    },
+    "ghost_black_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_black_shulker_box"
+    },
+    "ghost_black_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_black_stained_glass"
+    },
+    "ghost_black_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_black_terracotta"
+    },
+    "ghost_blackstone": {
+      "textures": "textures/blocks/ghost/ghost_blackstone"
+    },
+    "ghost_blast_furnace_top": {
+      "textures": "textures/blocks/ghost/ghost_blast_furnace_top"
+    },
+    "ghost_blue_candle": {
+      "textures": "textures/blocks/ghost/ghost_blue_candle"
+    },
+    "ghost_blue_concrete": {
+      "textures": "textures/blocks/ghost/ghost_blue_concrete"
+    },
+    "ghost_blue_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_blue_concrete_powder"
+    },
+    "ghost_blue_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_blue_glazed_terracotta"
+    },
+    "ghost_blue_ice": {
+      "textures": "textures/blocks/ghost/ghost_blue_ice"
+    },
+    "ghost_blue_orchid": {
+      "textures": "textures/blocks/ghost/ghost_blue_orchid"
+    },
+    "ghost_blue_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_blue_shulker_box"
+    },
+    "ghost_blue_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_blue_stained_glass"
+    },
+    "ghost_blue_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_blue_terracotta"
+    },
+    "ghost_bookshelf": {
+      "textures": "textures/blocks/ghost/ghost_bookshelf"
+    },
+    "ghost_brain_coral": {
+      "textures": "textures/blocks/ghost/ghost_brain_coral"
+    },
+    "ghost_brain_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_brain_coral_block"
+    },
+    "ghost_brain_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_brain_coral_fan"
+    },
+    "ghost_brewing_stand": {
+      "textures": "textures/blocks/ghost/ghost_brewing_stand"
+    },
+    "ghost_brown_candle": {
+      "textures": "textures/blocks/ghost/ghost_brown_candle"
+    },
+    "ghost_brown_concrete": {
+      "textures": "textures/blocks/ghost/ghost_brown_concrete"
+    },
+    "ghost_brown_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_brown_concrete_powder"
+    },
+    "ghost_brown_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_brown_glazed_terracotta"
+    },
+    "ghost_brown_mushroom": {
+      "textures": "textures/blocks/ghost/ghost_brown_mushroom"
+    },
+    "ghost_brown_mushroom_block": {
+      "textures": "textures/blocks/ghost/ghost_brown_mushroom_block"
+    },
+    "ghost_brown_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_brown_shulker_box"
+    },
+    "ghost_brown_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_brown_stained_glass"
+    },
+    "ghost_brown_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_brown_terracotta"
+    },
+    "ghost_bubble_coral": {
+      "textures": "textures/blocks/ghost/ghost_bubble_coral"
+    },
+    "ghost_bubble_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_bubble_coral_block"
+    },
+    "ghost_bubble_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_bubble_coral_fan"
+    },
+    "ghost_budding_amethyst": {
+      "textures": "textures/blocks/ghost/ghost_budding_amethyst"
+    },
+    "ghost_calcite": {
+      "textures": "textures/blocks/ghost/ghost_calcite"
+    },
+    "ghost_calibrated_sculk_sensor_top": {
+      "textures": "textures/blocks/ghost/ghost_calibrated_sculk_sensor_top"
+    },
+    "ghost_campfire_fire": {
+      "textures": "textures/blocks/ghost/ghost_campfire_fire"
+    },
+    "ghost_candle": {
+      "textures": "textures/blocks/ghost/ghost_candle"
+    },
+    "ghost_cartography_table_top": {
+      "textures": "textures/blocks/ghost/ghost_cartography_table_top"
+    },
+    "ghost_carved_pumpkin": {
+      "textures": "textures/blocks/ghost/ghost_carved_pumpkin"
+    },
+    "ghost_cave_vines": {
+      "textures": "textures/blocks/ghost/ghost_cave_vines"
+    },
+    "ghost_cave_vines_plant": {
+      "textures": "textures/blocks/ghost/ghost_cave_vines_plant"
+    },
+    "ghost_cherry_door_bottom": {
+      "textures": "textures/blocks/ghost/ghost_cherry_door_bottom"
+    },
+    "ghost_cherry_leaves": {
+      "textures": "textures/blocks/ghost/ghost_cherry_leaves"
+    },
+    "ghost_cherry_sapling": {
+      "textures": "textures/blocks/ghost/ghost_cherry_sapling"
+    },
+    "ghost_cherry_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_cherry_trapdoor"
+    },
+    "ghost_chipped_anvil_top": {
+      "textures": "textures/blocks/ghost/ghost_chipped_anvil_top"
+    },
+    "ghost_chiseled_bookshelf_top": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_bookshelf_top"
+    },
+    "ghost_chiseled_deepslate": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_deepslate"
+    },
+    "ghost_chiseled_nether_bricks": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_nether_bricks"
+    },
+    "ghost_chiseled_polished_blackstone": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_polished_blackstone"
+    },
+    "ghost_chiseled_quartz_block": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_quartz_block"
+    },
+    "ghost_chiseled_red_sandstone": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_red_sandstone"
+    },
+    "ghost_chiseled_sandstone": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_sandstone"
+    },
+    "ghost_chiseled_tuff": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_tuff"
+    },
+    "ghost_chiseled_tuff_bricks": {
+      "textures": "textures/blocks/ghost/ghost_chiseled_tuff_bricks"
+    },
+    "ghost_chorus_flower": {
+      "textures": "textures/blocks/ghost/ghost_chorus_flower"
+    },
+    "ghost_chorus_plant": {
+      "textures": "textures/blocks/ghost/ghost_chorus_plant"
+    },
+    "ghost_clay": {
+      "textures": "textures/blocks/ghost/ghost_clay"
+    },
+    "ghost_coal_block": {
+      "textures": "textures/blocks/ghost/ghost_coal_block"
+    },
+    "ghost_coal_ore": {
+      "textures": "textures/blocks/ghost/ghost_coal_ore"
+    },
+    "ghost_coarse_dirt": {
+      "textures": "textures/blocks/ghost/ghost_coarse_dirt"
+    },
+    "ghost_cobbled_deepslate": {
+      "textures": "textures/blocks/ghost/ghost_cobbled_deepslate"
+    },
+    "ghost_cobweb": {
+      "textures": "textures/blocks/ghost/ghost_cobweb"
+    },
+    "ghost_comparator": {
+      "textures": "textures/blocks/ghost/ghost_comparator"
+    },
+    "ghost_composter_top": {
+      "textures": "textures/blocks/ghost/ghost_composter_top"
+    },
+    "ghost_conduit": {
+      "textures": "textures/blocks/ghost/ghost_conduit"
+    },
+    "ghost_copper_door_bottom": {
+      "textures": "textures/blocks/ghost/ghost_copper_door_bottom"
+    },
+    "ghost_copper_ore": {
+      "textures": "textures/blocks/ghost/ghost_copper_ore"
+    },
+    "ghost_copper_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_copper_trapdoor"
+    },
+    "ghost_cornflower": {
+      "textures": "textures/blocks/ghost/ghost_cornflower"
+    },
+    "ghost_cracked_deepslate_bricks": {
+      "textures": "textures/blocks/ghost/ghost_cracked_deepslate_bricks"
+    },
+    "ghost_cracked_deepslate_tiles": {
+      "textures": "textures/blocks/ghost/ghost_cracked_deepslate_tiles"
+    },
+    "ghost_cracked_nether_bricks": {
+      "textures": "textures/blocks/ghost/ghost_cracked_nether_bricks"
+    },
+    "ghost_cracked_polished_blackstone_bricks": {
+      "textures": "textures/blocks/ghost/ghost_cracked_polished_blackstone_bricks"
+    },
+    "ghost_crafter_top": {
+      "textures": "textures/blocks/ghost/ghost_crafter_top"
+    },
+    "ghost_crafting_table_top": {
+      "textures": "textures/blocks/ghost/ghost_crafting_table_top"
+    },
+    "ghost_crimson_nylium": {
+      "textures": "textures/blocks/ghost/ghost_crimson_nylium"
+    },
+    "ghost_crimson_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_crimson_trapdoor"
+    },
+    "ghost_crying_obsidian": {
+      "textures": "textures/blocks/ghost/ghost_crying_obsidian"
+    },
+    "ghost_cut_red_sandstone": {
+      "textures": "textures/blocks/ghost/ghost_cut_red_sandstone"
+    },
+    "ghost_cut_sandstone": {
+      "textures": "textures/blocks/ghost/ghost_cut_sandstone"
+    },
+    "ghost_cyan_candle": {
+      "textures": "textures/blocks/ghost/ghost_cyan_candle"
+    },
+    "ghost_cyan_concrete": {
+      "textures": "textures/blocks/ghost/ghost_cyan_concrete"
+    },
+    "ghost_cyan_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_cyan_concrete_powder"
+    },
+    "ghost_cyan_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_cyan_glazed_terracotta"
+    },
+    "ghost_cyan_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_cyan_shulker_box"
+    },
+    "ghost_cyan_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_cyan_stained_glass"
+    },
+    "ghost_cyan_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_cyan_terracotta"
+    },
+    "ghost_damaged_anvil_top": {
+      "textures": "textures/blocks/ghost/ghost_damaged_anvil_top"
+    },
+    "ghost_dandelion": {
+      "textures": "textures/blocks/ghost/ghost_dandelion"
+    },
+    "ghost_dark_oak_leaves": {
+      "textures": "textures/blocks/ghost/ghost_dark_oak_leaves"
+    },
+    "ghost_dark_oak_sapling": {
+      "textures": "textures/blocks/ghost/ghost_dark_oak_sapling"
+    },
+    "ghost_dark_oak_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_dark_oak_trapdoor"
+    },
+    "ghost_dark_prismarine": {
+      "textures": "textures/blocks/ghost/ghost_dark_prismarine"
+    },
+    "ghost_daylight_detector_top": {
+      "textures": "textures/blocks/ghost/ghost_daylight_detector_top"
+    },
+    "ghost_dead_brain_coral": {
+      "textures": "textures/blocks/ghost/ghost_dead_brain_coral"
+    },
+    "ghost_dead_brain_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_dead_brain_coral_block"
+    },
+    "ghost_dead_brain_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_dead_brain_coral_fan"
+    },
+    "ghost_dead_bubble_coral": {
+      "textures": "textures/blocks/ghost/ghost_dead_bubble_coral"
+    },
+    "ghost_dead_bubble_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_dead_bubble_coral_block"
+    },
+    "ghost_dead_bubble_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_dead_bubble_coral_fan"
+    },
+    "ghost_dead_bush": {
+      "textures": "textures/blocks/ghost/ghost_dead_bush"
+    },
+    "ghost_dead_fire_coral": {
+      "textures": "textures/blocks/ghost/ghost_dead_fire_coral"
+    },
+    "ghost_dead_fire_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_dead_fire_coral_block"
+    },
+    "ghost_dead_fire_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_dead_fire_coral_fan"
+    },
+    "ghost_dead_horn_coral": {
+      "textures": "textures/blocks/ghost/ghost_dead_horn_coral"
+    },
+    "ghost_dead_horn_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_dead_horn_coral_block"
+    },
+    "ghost_dead_horn_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_dead_horn_coral_fan"
+    },
+    "ghost_dead_tube_coral": {
+      "textures": "textures/blocks/ghost/ghost_dead_tube_coral"
+    },
+    "ghost_dead_tube_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_dead_tube_coral_block"
+    },
+    "ghost_dead_tube_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_dead_tube_coral_fan"
+    },
+    "ghost_deepslate": {
+      "textures": "textures/blocks/ghost/ghost_deepslate"
+    },
+    "ghost_deepslate_bricks": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_bricks"
+    },
+    "ghost_deepslate_coal_ore": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_coal_ore"
+    },
+    "ghost_deepslate_copper_ore": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_copper_ore"
+    },
+    "ghost_deepslate_diamond_ore": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_diamond_ore"
+    },
+    "ghost_deepslate_emerald_ore": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_emerald_ore"
+    },
+    "ghost_deepslate_gold_ore": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_gold_ore"
+    },
+    "ghost_deepslate_iron_ore": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_iron_ore"
+    },
+    "ghost_deepslate_lapis_ore": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_lapis_ore"
+    },
+    "ghost_deepslate_redstone_ore": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_redstone_ore"
+    },
+    "ghost_deepslate_tiles": {
+      "textures": "textures/blocks/ghost/ghost_deepslate_tiles"
+    },
+    "ghost_detector_rail": {
+      "textures": "textures/blocks/ghost/ghost_detector_rail"
+    },
+    "ghost_diamond_block": {
+      "textures": "textures/blocks/ghost/ghost_diamond_block"
+    },
+    "ghost_diamond_ore": {
+      "textures": "textures/blocks/ghost/ghost_diamond_ore"
+    },
+    "ghost_diorite": {
+      "textures": "textures/blocks/ghost/ghost_diorite"
+    },
+    "ghost_dirt": {
+      "textures": "textures/blocks/ghost/ghost_dirt"
+    },
+    "ghost_dirt_path_top": {
+      "textures": "textures/blocks/ghost/ghost_dirt_path_top"
+    },
+    "ghost_dispenser_front": {
+      "textures": "textures/blocks/ghost/ghost_dispenser_front"
+    },
+    "ghost_dragon_egg": {
+      "textures": "textures/blocks/ghost/ghost_dragon_egg"
+    },
+    "ghost_dripstone_block": {
+      "textures": "textures/blocks/ghost/ghost_dripstone_block"
+    },
+    "ghost_dropper_front": {
+      "textures": "textures/blocks/ghost/ghost_dropper_front"
+    },
+    "ghost_emerald_block": {
+      "textures": "textures/blocks/ghost/ghost_emerald_block"
+    },
+    "ghost_emerald_ore": {
+      "textures": "textures/blocks/ghost/ghost_emerald_ore"
+    },
+    "ghost_enchanting_table_top": {
+      "textures": "textures/blocks/ghost/ghost_enchanting_table_top"
+    },
+    "ghost_end_rod": {
+      "textures": "textures/blocks/ghost/ghost_end_rod"
+    },
+    "ghost_end_stone": {
+      "textures": "textures/blocks/ghost/ghost_end_stone"
+    },
+    "ghost_end_stone_bricks": {
+      "textures": "textures/blocks/ghost/ghost_end_stone_bricks"
+    },
+    "ghost_farmland": {
+      "textures": "textures/blocks/ghost/ghost_farmland"
+    },
+    "ghost_fern": {
+      "textures": "textures/blocks/ghost/ghost_fern"
+    },
+    "ghost_fire_coral": {
+      "textures": "textures/blocks/ghost/ghost_fire_coral"
+    },
+    "ghost_fire_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_fire_coral_block"
+    },
+    "ghost_fire_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_fire_coral_fan"
+    },
+    "ghost_fletching_table_top": {
+      "textures": "textures/blocks/ghost/ghost_fletching_table_top"
+    },
+    "ghost_flower_pot": {
+      "textures": "textures/blocks/ghost/ghost_flower_pot"
+    },
+    "ghost_flowering_azalea_top": {
+      "textures": "textures/blocks/ghost/ghost_flowering_azalea_top"
+    },
+    "ghost_flowering_azalea_leaves": {
+      "textures": "textures/blocks/ghost/ghost_flowering_azalea_leaves"
+    },
+    "ghost_furnace_front": {
+      "textures": "textures/blocks/ghost/ghost_furnace_front"
+    },
+    "ghost_gilded_blackstone": {
+      "textures": "textures/blocks/ghost/ghost_gilded_blackstone"
+    },
+    "ghost_glass": {
+      "textures": "textures/blocks/ghost/ghost_glass"
+    },
+    "ghost_glow_lichen": {
+      "textures": "textures/blocks/ghost/ghost_glow_lichen"
+    },
+    "ghost_glowstone": {
+      "textures": "textures/blocks/ghost/ghost_glowstone"
+    },
+    "ghost_gold_ore": {
+      "textures": "textures/blocks/ghost/ghost_gold_ore"
+    },
+    "ghost_granite": {
+      "textures": "textures/blocks/ghost/ghost_granite"
+    },
+    "ghost_short_grass": {
+      "textures": "textures/blocks/ghost/ghost_short_grass"
+    },
+    "ghost_grass_block_top": {
+      "textures": "textures/blocks/ghost/ghost_grass_block_top"
+    },
+    "ghost_gravel": {
+      "textures": "textures/blocks/ghost/ghost_gravel"
+    },
+    "ghost_gray_candle": {
+      "textures": "textures/blocks/ghost/ghost_gray_candle"
+    },
+    "ghost_gray_concrete": {
+      "textures": "textures/blocks/ghost/ghost_gray_concrete"
+    },
+    "ghost_gray_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_gray_concrete_powder"
+    },
+    "ghost_gray_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_gray_glazed_terracotta"
+    },
+    "ghost_gray_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_gray_shulker_box"
+    },
+    "ghost_gray_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_gray_stained_glass"
+    },
+    "ghost_gray_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_gray_terracotta"
+    },
+    "ghost_green_candle": {
+      "textures": "textures/blocks/ghost/ghost_green_candle"
+    },
+    "ghost_green_concrete": {
+      "textures": "textures/blocks/ghost/ghost_green_concrete"
+    },
+    "ghost_green_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_green_concrete_powder"
+    },
+    "ghost_green_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_green_glazed_terracotta"
+    },
+    "ghost_green_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_green_shulker_box"
+    },
+    "ghost_green_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_green_stained_glass"
+    },
+    "ghost_green_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_green_terracotta"
+    },
+    "ghost_grindstone_round": {
+      "textures": "textures/blocks/ghost/ghost_grindstone_round"
+    },
+    "ghost_hanging_roots": {
+      "textures": "textures/blocks/ghost/ghost_hanging_roots"
+    },
+    "ghost_honey_block_top": {
+      "textures": "textures/blocks/ghost/ghost_honey_block_top"
+    },
+    "ghost_honeycomb_block": {
+      "textures": "textures/blocks/ghost/ghost_honeycomb_block"
+    },
+    "ghost_hopper_top": {
+      "textures": "textures/blocks/ghost/ghost_hopper_top"
+    },
+    "ghost_horn_coral": {
+      "textures": "textures/blocks/ghost/ghost_horn_coral"
+    },
+    "ghost_horn_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_horn_coral_block"
+    },
+    "ghost_horn_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_horn_coral_fan"
+    },
+    "ghost_ice": {
+      "textures": "textures/blocks/ghost/ghost_ice"
+    },
+    "ghost_iron_bars": {
+      "textures": "textures/blocks/ghost/ghost_iron_bars"
+    },
+    "ghost_iron_ore": {
+      "textures": "textures/blocks/ghost/ghost_iron_ore"
+    },
+    "ghost_iron_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_iron_trapdoor"
+    },
+    "ghost_jack_o_lantern": {
+      "textures": "textures/blocks/ghost/ghost_jack_o_lantern"
+    },
+    "ghost_jigsaw_top": {
+      "textures": "textures/blocks/ghost/ghost_jigsaw_top"
+    },
+    "ghost_jukebox_top": {
+      "textures": "textures/blocks/ghost/ghost_jukebox_top"
+    },
+    "ghost_jungle_leaves": {
+      "textures": "textures/blocks/ghost/ghost_jungle_leaves"
+    },
+    "ghost_jungle_sapling": {
+      "textures": "textures/blocks/ghost/ghost_jungle_sapling"
+    },
+    "ghost_jungle_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_jungle_trapdoor"
+    },
+    "ghost_kelp": {
+      "textures": "textures/blocks/ghost/ghost_kelp"
+    },
+    "ghost_ladder": {
+      "textures": "textures/blocks/ghost/ghost_ladder"
+    },
+    "ghost_lantern": {
+      "textures": "textures/blocks/ghost/ghost_lantern"
+    },
+    "ghost_lapis_block": {
+      "textures": "textures/blocks/ghost/ghost_lapis_block"
+    },
+    "ghost_lapis_ore": {
+      "textures": "textures/blocks/ghost/ghost_lapis_ore"
+    },
+    "ghost_large_amethyst_bud": {
+      "textures": "textures/blocks/ghost/ghost_large_amethyst_bud"
+    },
+    "ghost_lectern_top": {
+      "textures": "textures/blocks/ghost/ghost_lectern_top"
+    },
+    "ghost_lever": {
+      "textures": "textures/blocks/ghost/ghost_lever"
+    },
+    "ghost_light_blue_candle": {
+      "textures": "textures/blocks/ghost/ghost_light_blue_candle"
+    },
+    "ghost_light_blue_concrete": {
+      "textures": "textures/blocks/ghost/ghost_light_blue_concrete"
+    },
+    "ghost_light_blue_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_light_blue_concrete_powder"
+    },
+    "ghost_light_blue_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_light_blue_glazed_terracotta"
+    },
+    "ghost_light_blue_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_light_blue_shulker_box"
+    },
+    "ghost_light_blue_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_light_blue_stained_glass"
+    },
+    "ghost_light_blue_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_light_blue_terracotta"
+    },
+    "ghost_light_gray_candle": {
+      "textures": "textures/blocks/ghost/ghost_light_gray_candle"
+    },
+    "ghost_light_gray_concrete": {
+      "textures": "textures/blocks/ghost/ghost_light_gray_concrete"
+    },
+    "ghost_light_gray_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_light_gray_concrete_powder"
+    },
+    "ghost_light_gray_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_light_gray_glazed_terracotta"
+    },
+    "ghost_light_gray_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_light_gray_shulker_box"
+    },
+    "ghost_light_gray_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_light_gray_stained_glass"
+    },
+    "ghost_light_gray_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_light_gray_terracotta"
+    },
+    "ghost_lightning_rod": {
+      "textures": "textures/blocks/ghost/ghost_lightning_rod"
+    },
+    "ghost_lily_of_the_valley": {
+      "textures": "textures/blocks/ghost/ghost_lily_of_the_valley"
+    },
+    "ghost_lily_pad": {
+      "textures": "textures/blocks/ghost/ghost_lily_pad"
+    },
+    "ghost_lime_candle": {
+      "textures": "textures/blocks/ghost/ghost_lime_candle"
+    },
+    "ghost_lime_concrete": {
+      "textures": "textures/blocks/ghost/ghost_lime_concrete"
+    },
+    "ghost_lime_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_lime_concrete_powder"
+    },
+    "ghost_lime_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_lime_glazed_terracotta"
+    },
+    "ghost_lime_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_lime_shulker_box"
+    },
+    "ghost_lime_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_lime_stained_glass"
+    },
+    "ghost_lime_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_lime_terracotta"
+    },
+    "ghost_lodestone_top": {
+      "textures": "textures/blocks/ghost/ghost_lodestone_top"
+    },
+    "ghost_loom_top": {
+      "textures": "textures/blocks/ghost/ghost_loom_top"
+    },
+    "ghost_magenta_candle": {
+      "textures": "textures/blocks/ghost/ghost_magenta_candle"
+    },
+    "ghost_magenta_concrete": {
+      "textures": "textures/blocks/ghost/ghost_magenta_concrete"
+    },
+    "ghost_magenta_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_magenta_concrete_powder"
+    },
+    "ghost_magenta_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_magenta_glazed_terracotta"
+    },
+    "ghost_magenta_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_magenta_shulker_box"
+    },
+    "ghost_magenta_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_magenta_stained_glass"
+    },
+    "ghost_magenta_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_magenta_terracotta"
+    },
+    "ghost_magma": {
+      "textures": "textures/blocks/ghost/ghost_magma"
+    },
+    "ghost_mangrove_leaves": {
+      "textures": "textures/blocks/ghost/ghost_mangrove_leaves"
+    },
+    "ghost_mangrove_propagule": {
+      "textures": "textures/blocks/ghost/ghost_mangrove_propagule"
+    },
+    "ghost_mangrove_roots_top": {
+      "textures": "textures/blocks/ghost/ghost_mangrove_roots_top"
+    },
+    "ghost_mangrove_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_mangrove_trapdoor"
+    },
+    "ghost_medium_amethyst_bud": {
+      "textures": "textures/blocks/ghost/ghost_medium_amethyst_bud"
+    },
+    "ghost_melon_stem": {
+      "textures": "textures/blocks/ghost/ghost_melon_stem"
+    },
+    "ghost_moss_block": {
+      "textures": "textures/blocks/ghost/ghost_moss_block"
+    },
+    "ghost_mossy_cobblestone": {
+      "textures": "textures/blocks/ghost/ghost_mossy_cobblestone"
+    },
+    "ghost_mud": {
+      "textures": "textures/blocks/ghost/ghost_mud"
+    },
+    "ghost_mud_bricks": {
+      "textures": "textures/blocks/ghost/ghost_mud_bricks"
+    },
+    "ghost_muddy_mangrove_roots_top": {
+      "textures": "textures/blocks/ghost/ghost_muddy_mangrove_roots_top"
+    },
+    "ghost_mushroom_stem": {
+      "textures": "textures/blocks/ghost/ghost_mushroom_stem"
+    },
+    "ghost_mycelium_top": {
+      "textures": "textures/blocks/ghost/ghost_mycelium_top"
+    },
+    "ghost_nether_bricks": {
+      "textures": "textures/blocks/ghost/ghost_nether_bricks"
+    },
+    "ghost_nether_gold_ore": {
+      "textures": "textures/blocks/ghost/ghost_nether_gold_ore"
+    },
+    "ghost_nether_portal": {
+      "textures": "textures/blocks/ghost/ghost_nether_portal"
+    },
+    "ghost_nether_quartz_ore": {
+      "textures": "textures/blocks/ghost/ghost_nether_quartz_ore"
+    },
+    "ghost_nether_wart_block": {
+      "textures": "textures/blocks/ghost/ghost_nether_wart_block"
+    },
+    "ghost_netherite_block": {
+      "textures": "textures/blocks/ghost/ghost_netherite_block"
+    },
+    "ghost_netherrack": {
+      "textures": "textures/blocks/ghost/ghost_netherrack"
+    },
+    "ghost_note_block": {
+      "textures": "textures/blocks/ghost/ghost_note_block"
+    },
+    "ghost_oak_leaves": {
+      "textures": "textures/blocks/ghost/ghost_oak_leaves"
+    },
+    "ghost_oak_sapling": {
+      "textures": "textures/blocks/ghost/ghost_oak_sapling"
+    },
+    "ghost_oak_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_oak_trapdoor"
+    },
+    "ghost_observer_front": {
+      "textures": "textures/blocks/ghost/ghost_observer_front"
+    },
+    "ghost_ochre_froglight_top": {
+      "textures": "textures/blocks/ghost/ghost_ochre_froglight_top"
+    },
+    "ghost_orange_candle": {
+      "textures": "textures/blocks/ghost/ghost_orange_candle"
+    },
+    "ghost_orange_concrete": {
+      "textures": "textures/blocks/ghost/ghost_orange_concrete"
+    },
+    "ghost_orange_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_orange_concrete_powder"
+    },
+    "ghost_orange_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_orange_glazed_terracotta"
+    },
+    "ghost_orange_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_orange_shulker_box"
+    },
+    "ghost_orange_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_orange_stained_glass"
+    },
+    "ghost_orange_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_orange_terracotta"
+    },
+    "ghost_orange_tulip": {
+      "textures": "textures/blocks/ghost/ghost_orange_tulip"
+    },
+    "ghost_oxeye_daisy": {
+      "textures": "textures/blocks/ghost/ghost_oxeye_daisy"
+    },
+    "ghost_packed_ice": {
+      "textures": "textures/blocks/ghost/ghost_packed_ice"
+    },
+    "ghost_packed_mud": {
+      "textures": "textures/blocks/ghost/ghost_packed_mud"
+    },
+    "ghost_pale_oak_log": {
+      "textures": "textures/blocks/ghost/ghost_pale_oak_log"
+    },
+    "ghost_pearlescent_froglight_top": {
+      "textures": "textures/blocks/ghost/ghost_pearlescent_froglight_top"
+    },
+    "ghost_pink_candle": {
+      "textures": "textures/blocks/ghost/ghost_pink_candle"
+    },
+    "ghost_pink_concrete": {
+      "textures": "textures/blocks/ghost/ghost_pink_concrete"
+    },
+    "ghost_pink_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_pink_concrete_powder"
+    },
+    "ghost_pink_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_pink_glazed_terracotta"
+    },
+    "ghost_pink_petals": {
+      "textures": "textures/blocks/ghost/ghost_pink_petals"
+    },
+    "ghost_pink_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_pink_shulker_box"
+    },
+    "ghost_pink_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_pink_stained_glass"
+    },
+    "ghost_pink_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_pink_terracotta"
+    },
+    "ghost_pink_tulip": {
+      "textures": "textures/blocks/ghost/ghost_pink_tulip"
+    },
+    "ghost_podzol_top": {
+      "textures": "textures/blocks/ghost/ghost_podzol_top"
+    },
+    "ghost_polished_andesite": {
+      "textures": "textures/blocks/ghost/ghost_polished_andesite"
+    },
+    "ghost_polished_basalt_top": {
+      "textures": "textures/blocks/ghost/ghost_polished_basalt_top"
+    },
+    "ghost_polished_blackstone": {
+      "textures": "textures/blocks/ghost/ghost_polished_blackstone"
+    },
+    "ghost_polished_blackstone_bricks": {
+      "textures": "textures/blocks/ghost/ghost_polished_blackstone_bricks"
+    },
+    "ghost_polished_deepslate": {
+      "textures": "textures/blocks/ghost/ghost_polished_deepslate"
+    },
+    "ghost_polished_diorite": {
+      "textures": "textures/blocks/ghost/ghost_polished_diorite"
+    },
+    "ghost_polished_granite": {
+      "textures": "textures/blocks/ghost/ghost_polished_granite"
+    },
+    "ghost_polished_tuff": {
+      "textures": "textures/blocks/ghost/ghost_polished_tuff"
+    },
+    "ghost_poppy": {
+      "textures": "textures/blocks/ghost/ghost_poppy"
+    },
+    "ghost_powder_snow": {
+      "textures": "textures/blocks/ghost/ghost_powder_snow"
+    },
+    "ghost_powered_rail": {
+      "textures": "textures/blocks/ghost/ghost_powered_rail"
+    },
+    "ghost_prismarine": {
+      "textures": "textures/blocks/ghost/ghost_prismarine"
+    },
+    "ghost_prismarine_bricks": {
+      "textures": "textures/blocks/ghost/ghost_prismarine_bricks"
+    },
+    "ghost_pumpkin_stem": {
+      "textures": "textures/blocks/ghost/ghost_pumpkin_stem"
+    },
+    "ghost_purple_candle": {
+      "textures": "textures/blocks/ghost/ghost_purple_candle"
+    },
+    "ghost_purple_concrete": {
+      "textures": "textures/blocks/ghost/ghost_purple_concrete"
+    },
+    "ghost_purple_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_purple_concrete_powder"
+    },
+    "ghost_purple_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_purple_glazed_terracotta"
+    },
+    "ghost_purple_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_purple_shulker_box"
+    },
+    "ghost_purple_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_purple_stained_glass"
+    },
+    "ghost_purple_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_purple_terracotta"
+    },
+    "ghost_purpur_block": {
+      "textures": "textures/blocks/ghost/ghost_purpur_block"
+    },
+    "ghost_purpur_pillar": {
+      "textures": "textures/blocks/ghost/ghost_purpur_pillar"
+    },
+    "ghost_quartz_bricks": {
+      "textures": "textures/blocks/ghost/ghost_quartz_bricks"
+    },
+    "ghost_quartz_pillar": {
+      "textures": "textures/blocks/ghost/ghost_quartz_pillar"
+    },
+    "ghost_rail": {
+      "textures": "textures/blocks/ghost/ghost_rail"
+    },
+    "ghost_red_candle": {
+      "textures": "textures/blocks/ghost/ghost_red_candle"
+    },
+    "ghost_red_concrete": {
+      "textures": "textures/blocks/ghost/ghost_red_concrete"
+    },
+    "ghost_red_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_red_concrete_powder"
+    },
+    "ghost_red_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_red_glazed_terracotta"
+    },
+    "ghost_red_mushroom": {
+      "textures": "textures/blocks/ghost/ghost_red_mushroom"
+    },
+    "ghost_red_mushroom_block": {
+      "textures": "textures/blocks/ghost/ghost_red_mushroom_block"
+    },
+    "ghost_red_nether_bricks": {
+      "textures": "textures/blocks/ghost/ghost_red_nether_bricks"
+    },
+    "ghost_red_sand": {
+      "textures": "textures/blocks/ghost/ghost_red_sand"
+    },
+    "ghost_red_sandstone": {
+      "textures": "textures/blocks/ghost/ghost_red_sandstone"
+    },
+    "ghost_red_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_red_shulker_box"
+    },
+    "ghost_red_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_red_stained_glass"
+    },
+    "ghost_red_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_red_terracotta"
+    },
+    "ghost_red_tulip": {
+      "textures": "textures/blocks/ghost/ghost_red_tulip"
+    },
+    "ghost_redstone_block": {
+      "textures": "textures/blocks/ghost/ghost_redstone_block"
+    },
+    "ghost_redstone_lamp": {
+      "textures": "textures/blocks/ghost/ghost_redstone_lamp"
+    },
+    "ghost_redstone_ore": {
+      "textures": "textures/blocks/ghost/ghost_redstone_ore"
+    },
+    "ghost_redstone_torch": {
+      "textures": "textures/blocks/ghost/ghost_redstone_torch"
+    },
+    "ghost_repeater": {
+      "textures": "textures/blocks/ghost/ghost_repeater"
+    },
+    "ghost_respawn_anchor_top": {
+      "textures": "textures/blocks/ghost/ghost_respawn_anchor_top"
+    },
+    "ghost_sand": {
+      "textures": "textures/blocks/ghost/ghost_sand"
+    },
+    "ghost_sandstone": {
+      "textures": "textures/blocks/ghost/ghost_sandstone"
+    },
+    "ghost_sculk": {
+      "textures": "textures/blocks/ghost/ghost_sculk"
+    },
+    "ghost_sculk_catalyst_top": {
+      "textures": "textures/blocks/ghost/ghost_sculk_catalyst_top"
+    },
+    "ghost_sculk_sensor_top": {
+      "textures": "textures/blocks/ghost/ghost_sculk_sensor_top"
+    },
+    "ghost_sculk_shrieker_top": {
+      "textures": "textures/blocks/ghost/ghost_sculk_shrieker_top"
+    },
+    "ghost_sculk_vein": {
+      "textures": "textures/blocks/ghost/ghost_sculk_vein"
+    },
+    "ghost_sea_lantern": {
+      "textures": "textures/blocks/ghost/ghost_sea_lantern"
+    },
+    "ghost_sea_pickle": {
+      "textures": "textures/blocks/ghost/ghost_sea_pickle"
+    },
+    "ghost_shroomlight": {
+      "textures": "textures/blocks/ghost/ghost_shroomlight"
+    },
+    "ghost_slime_block": {
+      "textures": "textures/blocks/ghost/ghost_slime_block"
+    },
+    "ghost_small_amethyst_bud": {
+      "textures": "textures/blocks/ghost/ghost_small_amethyst_bud"
+    },
+    "ghost_smithing_table_top": {
+      "textures": "textures/blocks/ghost/ghost_smithing_table_top"
+    },
+    "ghost_smoker_top": {
+      "textures": "textures/blocks/ghost/ghost_smoker_top"
+    },
+    "ghost_smooth_basalt": {
+      "textures": "textures/blocks/ghost/ghost_smooth_basalt"
+    },
+    "ghost_snow": {
+      "textures": "textures/blocks/ghost/ghost_snow"
+    },
+    "ghost_soul_campfire_fire": {
+      "textures": "textures/blocks/ghost/ghost_soul_campfire_fire"
+    },
+    "ghost_soul_fire_0": {
+      "textures": "textures/blocks/ghost/ghost_soul_fire_0"
+    },
+    "ghost_soul_lantern": {
+      "textures": "textures/blocks/ghost/ghost_soul_lantern"
+    },
+    "ghost_soul_sand": {
+      "textures": "textures/blocks/ghost/ghost_soul_sand"
+    },
+    "ghost_soul_soil": {
+      "textures": "textures/blocks/ghost/ghost_soul_soil"
+    },
+    "ghost_soul_torch": {
+      "textures": "textures/blocks/ghost/ghost_soul_torch"
+    },
+    "ghost_spawner": {
+      "textures": "textures/blocks/ghost/ghost_spawner"
+    },
+    "ghost_sponge": {
+      "textures": "textures/blocks/ghost/ghost_sponge"
+    },
+    "ghost_spore_blossom": {
+      "textures": "textures/blocks/ghost/ghost_spore_blossom"
+    },
+    "ghost_spruce_leaves": {
+      "textures": "textures/blocks/ghost/ghost_spruce_leaves"
+    },
+    "ghost_spruce_sapling": {
+      "textures": "textures/blocks/ghost/ghost_spruce_sapling"
+    },
+    "ghost_spruce_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_spruce_trapdoor"
+    },
+    "ghost_stonecutter_top": {
+      "textures": "textures/blocks/ghost/ghost_stonecutter_top"
+    },
+    "ghost_stripped_bamboo_block": {
+      "textures": "textures/blocks/ghost/ghost_stripped_bamboo_block"
+    },
+    "ghost_structure_block": {
+      "textures": "textures/blocks/ghost/ghost_structure_block"
+    },
+    "ghost_sugar_cane": {
+      "textures": "textures/blocks/ghost/ghost_sugar_cane"
+    },
+    "ghost_target_top": {
+      "textures": "textures/blocks/ghost/ghost_target_top"
+    },
+    "ghost_tinted_glass": {
+      "textures": "textures/blocks/ghost/ghost_tinted_glass"
+    },
+    "ghost_torch": {
+      "textures": "textures/blocks/ghost/ghost_torch"
+    },
+    "ghost_torchflower": {
+      "textures": "textures/blocks/ghost/ghost_torchflower"
+    },
+    "ghost_trial_spawner_top_inactive": {
+      "textures": "textures/blocks/ghost/ghost_trial_spawner_top_inactive"
+    },
+    "ghost_tripwire": {
+      "textures": "textures/blocks/ghost/ghost_tripwire"
+    },
+    "ghost_tripwire_hook": {
+      "textures": "textures/blocks/ghost/ghost_tripwire_hook"
+    },
+    "ghost_tube_coral": {
+      "textures": "textures/blocks/ghost/ghost_tube_coral"
+    },
+    "ghost_tube_coral_block": {
+      "textures": "textures/blocks/ghost/ghost_tube_coral_block"
+    },
+    "ghost_tube_coral_fan": {
+      "textures": "textures/blocks/ghost/ghost_tube_coral_fan"
+    },
+    "ghost_tuff": {
+      "textures": "textures/blocks/ghost/ghost_tuff"
+    },
+    "ghost_tuff_bricks": {
+      "textures": "textures/blocks/ghost/ghost_tuff_bricks"
+    },
+    "ghost_turtle_egg": {
+      "textures": "textures/blocks/ghost/ghost_turtle_egg"
+    },
+    "ghost_twisting_vines": {
+      "textures": "textures/blocks/ghost/ghost_twisting_vines"
+    },
+    "ghost_vault_top": {
+      "textures": "textures/blocks/ghost/ghost_vault_top"
+    },
+    "ghost_verdant_froglight_top": {
+      "textures": "textures/blocks/ghost/ghost_verdant_froglight_top"
+    },
+    "ghost_vine": {
+      "textures": "textures/blocks/ghost/ghost_vine"
+    },
+    "ghost_warped_nylium": {
+      "textures": "textures/blocks/ghost/ghost_warped_nylium"
+    },
+    "ghost_warped_trapdoor": {
+      "textures": "textures/blocks/ghost/ghost_warped_trapdoor"
+    },
+    "ghost_warped_wart_block": {
+      "textures": "textures/blocks/ghost/ghost_warped_wart_block"
+    },
+    "ghost_weeping_vines": {
+      "textures": "textures/blocks/ghost/ghost_weeping_vines"
+    },
+    "ghost_wet_sponge": {
+      "textures": "textures/blocks/ghost/ghost_wet_sponge"
+    },
+    "ghost_white_candle": {
+      "textures": "textures/blocks/ghost/ghost_white_candle"
+    },
+    "ghost_white_concrete": {
+      "textures": "textures/blocks/ghost/ghost_white_concrete"
+    },
+    "ghost_white_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_white_concrete_powder"
+    },
+    "ghost_white_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_white_glazed_terracotta"
+    },
+    "ghost_white_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_white_shulker_box"
+    },
+    "ghost_white_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_white_stained_glass"
+    },
+    "ghost_white_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_white_terracotta"
+    },
+    "ghost_white_tulip": {
+      "textures": "textures/blocks/ghost/ghost_white_tulip"
+    },
+    "ghost_wither_rose": {
+      "textures": "textures/blocks/ghost/ghost_wither_rose"
+    },
+    "ghost_yellow_candle": {
+      "textures": "textures/blocks/ghost/ghost_yellow_candle"
+    },
+    "ghost_yellow_concrete": {
+      "textures": "textures/blocks/ghost/ghost_yellow_concrete"
+    },
+    "ghost_yellow_concrete_powder": {
+      "textures": "textures/blocks/ghost/ghost_yellow_concrete_powder"
+    },
+    "ghost_yellow_glazed_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_yellow_glazed_terracotta"
+    },
+    "ghost_yellow_shulker_box": {
+      "textures": "textures/blocks/ghost/ghost_yellow_shulker_box"
+    },
+    "ghost_yellow_stained_glass": {
+      "textures": "textures/blocks/ghost/ghost_yellow_stained_glass"
+    },
+    "ghost_yellow_terracotta": {
+      "textures": "textures/blocks/ghost/ghost_yellow_terracotta"
+    },
+    "ghost_generic": {
+      "textures": "textures/blocks/ghost/ghost_generic"
+    }
+  }
+}

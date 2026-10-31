@@ -17,6 +17,10 @@ debug_*
 # --- 依赖 ---
 node_modules/
 
+# --- 构建产物 ---
+/build/
+/dist/
+
 # --- 系统文件 ---
 .DS_Store
 Thumbs.db

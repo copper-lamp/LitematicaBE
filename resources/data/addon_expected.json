@@ -1,0 +1,11 @@
+{
+  "$comment": "本次构建的 addon 期望版本",
+  "addonVersion": [
+    1,
+    1,
+    8
+  ],
+  "bpUuid": "a7f3c1e2-5b64-4d9a-9c11-8e2f4b7d3a01",
+  "rpUuid": "49cb94c2-8cec-4b27-8b58-4b3e01f843fc",
+  "blockFormatVersion": "1.21.70"
+}

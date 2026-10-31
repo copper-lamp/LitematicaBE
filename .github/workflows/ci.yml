@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Syntax check
+        run: |
+          node --check index.js
+          find src -name '*.js' -print0 | xargs -0 -n1 node --check
+
+      - name: Version consistency
+        run: node tools/check-version.mjs
+
+      - name: Build release artifacts
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LitematicaBE-build
+          path: build/

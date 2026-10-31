@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1] - 2026-10-31
+
+### Added
+- **lip 安装支持** — 新增 `tooth.json`，服务端执行 `lip install github.com/copper-lamp/LitematicaBE` 即可安装插件与 BP/RP；客户端使用 `#client` 变体安装 BP/RP
+- **自动发布** — 新增 CI 校验与 tag → Release 工作流，推送 `v*` tag 自动构建并上传产物
+- **产物结构** — 统一为服务端 zip（插件 + BP/RP）、客户端 zip（BP/RP）、手动安装 zip、`.mcaddon` 与 `SHA256SUMS.txt`
+- **README 双语** — `README.md`（中文）与 `README_EN.md`
+
+### Fixed
+- **构建产物** — 修复 zip 中央目录中外部属性写入溢出导致的构建失败
+
 ## [3.0.0] - 2026-10-31
 
 ### Fixed

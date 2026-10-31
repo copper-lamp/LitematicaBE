@@ -1,0 +1,88 @@
+{
+  "format_version": 3,
+  "format_uuid": "289f771f-2c9a-4d73-9f3f-8492495a924d",
+  "tooth": "github.com/copper-lamp/LitematicaBE",
+  "version": "3.0.1",
+  "info": {
+    "name": "LitematicaBE",
+    "description": "LSE投影插件：支持 .litematic格式的原理图，幽灵方块投影、逐层建造与轻松放置",
+    "tags": [
+      "platform:levilamina",
+      "type:mod",
+      "minecraft-bedrock",
+      "litematica",
+      "schematic",
+      "projection"
+    ],
+    "avatar_url": "https://raw.githubusercontent.com/copper-lamp/LitematicaBE/main/resources/pack_icon.png"
+  },
+  "variants": [
+    {
+      "label": "",
+      "platform": "win-x64",
+      "dependencies": {
+        "github.com/LiteLDev/LeviLamina": ">=26.10.0",
+        "github.com/LiteLDev/LegacyScriptEngine#nodejs": "^0.22.3"
+      },
+      "assets": [
+        {
+          "type": "zip",
+          "urls": [
+            "https://{{tooth}}/releases/download/v{{version}}/LitematicaBE-server-{{version}}.zip"
+          ],
+          "placements": [
+            {
+              "type": "dir",
+              "src": "plugin/",
+              "dest": "plugins/LitematicaBE/"
+            },
+            {
+              "type": "dir",
+              "src": "packs/LitematicaBE_BP/",
+              "dest": "behavior_packs/LitematicaBE_BP/"
+            },
+            {
+              "type": "dir",
+              "src": "packs/LitematicaBE_RP/",
+              "dest": "resource_packs/LitematicaBE_RP/"
+            }
+          ]
+        }
+      ],
+      "preserve_files": [
+        "plugins/LitematicaBE/config.json",
+        "plugins/LitematicaBE/schematics/",
+        "plugins/LitematicaBE/mega_schematics/",
+        "plugins/LitematicaBE/exports/",
+        "plugins/LitematicaBE/logs/"
+      ],
+      "remove_files": []
+    },
+    {
+      "label": "client",
+      "platform": "win-x64",
+      "assets": [
+        {
+          "type": "zip",
+          "urls": [
+            "https://{{tooth}}/releases/download/v{{version}}/LitematicaBE-client-{{version}}.zip"
+          ],
+          "placements": [
+            {
+              "type": "dir",
+              "src": "resource_packs/LitematicaBE_RP/",
+              "dest": "resource_packs/LitematicaBE_RP/"
+            },
+            {
+              "type": "dir",
+              "src": "behavior_packs/LitematicaBE_BP/",
+              "dest": "behavior_packs/LitematicaBE_BP/"
+            }
+          ]
+        }
+      ],
+      "preserve_files": [],
+      "remove_files": []
+    }
+  ]
+}

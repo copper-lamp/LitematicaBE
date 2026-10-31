@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Validate version
+        run: node tools/check-version.mjs "$GITHUB_REF_NAME"
+
+      - name: Build release artifacts
+        run: npm run build
+
+      - name: Extract release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          {
+            echo "## LitematicaBE ${GITHUB_REF_NAME}"
+            echo
+            awk -v v="$version" '
+              $0 ~ "^## \\[" v "\\]" { found = 1; next }
+              found && /^## \[/ { exit }
+              found { print }
+            ' CHANGELOG.md
+          } > release-notes.md
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "$GITHUB_REF_NAME" in
+            *-*) flags="--prerelease" ;;
+          esac
+          shopt -s nullglob
+          files=(build/*.zip build/*.mcaddon build/SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" \
+            --title "LitematicaBE $GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            "${files[@]}" \
+            $flags
