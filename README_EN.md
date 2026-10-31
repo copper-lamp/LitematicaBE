@@ -63,7 +63,7 @@ LitematicaBE is a projection plugin for Minecraft Bedrock Edition servers (BDS +
 
    ```json
    [
-     { "pack_id": "<header.uuid of the BP>", "version": [0, 0, 1] }
+     { "pack_id": "<header.uuid of the BP>", "version": [1, 1, 8] }
    ]
    ```
 

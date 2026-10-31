@@ -63,7 +63,7 @@ LitematicaBE 是一个面向基岩版（BDS + LeviLamina）的投影插件：读
 
    ```json
    [
-     { "pack_id": "<BP 的 header.uuid>", "version": [0, 0, 1] }
+     { "pack_id": "<BP 的 header.uuid>", "version": [1, 1, 8] }
    ]
    ```
 

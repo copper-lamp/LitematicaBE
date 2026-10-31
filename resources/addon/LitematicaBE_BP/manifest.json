@@ -5,9 +5,9 @@
     "description": "幽灵方块行为包（LitematicaBE 投影渲染载体）\n仅服务端 + 客户端同时安装时生效",
     "uuid": "a7f3c1e2-5b64-4d9a-9c11-8e2f4b7d3a01",
     "version": [
-      0,
-      0,
-      1
+      1,
+      1,
+      8
     ],
     "min_engine_version": [
       1,

@@ -5,9 +5,9 @@
     "description": "LitematicaBE 资源包\n幽灵方块贴图 + 粒子降级层\naddon 版本 1.1.8",
     "uuid": "49cb94c2-8cec-4b27-8b58-4b3e01f843fc",
     "version": [
-      0,
-      0,
-      1
+      1,
+      1,
+      8
     ],
     "min_engine_version": [
       1,

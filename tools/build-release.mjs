@@ -35,8 +35,32 @@ if (tooth.version !== version) fail(`tooth.json 版本 ${tooth.version} ≠ pack
 
 requirePath(path.join(ADDON, 'LitematicaBE_BP'), '行为包源码');
 requirePath(path.join(ADDON, 'LitematicaBE_RP'), '资源包源码');
-requirePath(path.join(ADDON, 'LitematicaBE.mcaddon'), '客户端 mcaddon');
 for (const file of RUNTIME_FILES) requirePath(path.join(RUNTIME, file), '运行时索引');
+
+/** 版本数组比较：不足位补 0，逐位比 */
+function versionEq(a, b) {
+    const x = Array.isArray(a) ? a : [];
+    const y = Array.isArray(b) ? b : [];
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+        if ((x[i] || 0) !== (y[i] || 0)) return false;
+    }
+    return true;
+}
+
+// addon 版本必须三处一致：构建期望、运行时索引、BP/RP 的 header.version
+// 不一致时插件会禁用 ghost 写入（AddonVersionCheck），因此这里直接拦住发布
+const expected = readJson('resources/data/addon_expected.json');
+const wantAddonVersion = expected.addonVersion;
+const addonVersionSources = [
+    ['resources/data/ghost_index.json', readJson('resources/data/ghost_index.json').addonVersion],
+    ['resources/addon/LitematicaBE_BP/manifest.json', readJson('resources/addon/LitematicaBE_BP/manifest.json').header.version],
+    ['resources/addon/LitematicaBE_RP/manifest.json', readJson('resources/addon/LitematicaBE_RP/manifest.json').header.version],
+];
+for (const [label, got] of addonVersionSources) {
+    if (!versionEq(got, wantAddonVersion)) {
+        fail(`addon 版本不一致：${label} = ${(got || []).join('.')}，期望 ${(wantAddonVersion || []).join('.')}`);
+    }
+}
 
 /** 插件目录条目（dest 为安装后的相对前缀） */
 function pluginEntries(prefix) {
@@ -77,8 +101,13 @@ writeZip(clientZip, [
     ...packEntries('behavior_packs/LitematicaBE_BP/', 'LitematicaBE_BP'),
 ]);
 
+// mcaddon 直接由入库的 BP/RP 打包，避免与 zip 产物出现版本漂移
 const mcaddonTarget = path.join(BUILD, `LitematicaBE-client-${version}.mcaddon`);
-fs.copyFileSync(path.join(ADDON, 'LitematicaBE.mcaddon'), mcaddonTarget);
+const mcaddonRoot = `LitematicaBE-${expected.addonVersion.join('.')}/`;
+writeZip(mcaddonTarget, [
+    ...packEntries(`${mcaddonRoot}BP/`, 'LitematicaBE_BP'),
+    ...packEntries(`${mcaddonRoot}RP/`, 'LitematicaBE_RP'),
+]);
 
 const legacyZip = path.join(BUILD, `LitematicaBE-${version}.zip`);
 writeZip(legacyZip, [
