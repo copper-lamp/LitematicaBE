@@ -1094,22 +1094,30 @@ async function loadSchematicFile(filename, player) {
     
     try {
         const megaThreshold = configManager.get('megaSchematic.threshold', 30000);
+        // mega 渲染未启用时不能走 mega 加载：方块会被写进 .mcmega 分块、projection.blocks 留空，
+        // 普通渲染拿不到数据，投影将完全不可见。此时直接按普通投影加载。
+        const megaAvailable = megaRenderer.enabled === true
+            && configManager.get('megaSchematic.enabled', true) === true;
         
         let useMegaMode = false;
         let streamResult = null;
         
-        try {
-            if (!streamLoader) {
-                throw new Error('streamLoader is not initialized');
+        if (megaAvailable) {
+            try {
+                if (!streamLoader) {
+                    throw new Error('streamLoader is not initialized');
+                }
+                streamResult = await streamLoader.prepareStream(loader, fullPath);
+                if (streamResult && streamResult.totalEstimate > megaThreshold) {
+                    useMegaMode = true;
+                    logger.info(`[MegaSchematic] Auto-detected mega schematic: ${streamResult.totalEstimate} blocks (threshold: ${megaThreshold})`);
+                }
+            } catch (streamErr) {
+                logger.error(`[MegaSchematic] Stream detection failed: ${streamErr.message}`);
+                logger.info(`[MegaSchematic] Falling back to standard loading`);
             }
-            streamResult = await streamLoader.prepareStream(loader, fullPath);
-            if (streamResult && streamResult.totalEstimate > megaThreshold) {
-                useMegaMode = true;
-                logger.info(`[MegaSchematic] Auto-detected mega schematic: ${streamResult.totalEstimate} blocks (threshold: ${megaThreshold})`);
-            }
-        } catch (streamErr) {
-            logger.error(`[MegaSchematic] Stream detection failed: ${streamErr.message}`);
-            logger.info(`[MegaSchematic] Falling back to standard loading`);
+        } else {
+            logger.info(`[MegaSchematic] mega 渲染未启用，大型投影回退普通加载: ${fullPath}`);
         }
         
         if (useMegaMode && streamResult) {
@@ -1117,50 +1125,55 @@ async function loadSchematicFile(filename, player) {
                 logger.info(`[MegaSchematic] 正在加载超大型投影 | 方块数: ${streamResult.totalEstimate || '?'}`);
             }
             
-            const megaResult = await megaManager.loadMegaSchematic(
-                fullPath,
-                streamResult,
-                (blocks) => {
-                    logger.info(`[MegaSchematic] Loading progress: ${blocks} blocks...`);
-                },
-                player
-            );
-            
-            const path = require('path');
-            let megaName = megaResult.meta.name;
-            if (!megaName || megaName === 'Unknown' || megaName === 'Unnamed' || megaName.trim() === '') {
-                megaName = path.basename(fullPath, path.extname(fullPath)) || 'Unnamed';
-            }
+            try {
+                const megaResult = await megaManager.loadMegaSchematic(
+                    fullPath,
+                    streamResult,
+                    (blocks) => {
+                        logger.info(`[MegaSchematic] Loading progress: ${blocks} blocks...`);
+                    },
+                    player
+                );
+                
+                const path = require('path');
+                let megaName = megaResult.meta.name;
+                if (!megaName || megaName === 'Unknown' || megaName === 'Unnamed' || megaName.trim() === '') {
+                    megaName = path.basename(fullPath, path.extname(fullPath)) || 'Unnamed';
+                }
 
-            const schematic = {
-                name: megaName,
-                author: megaResult.meta.author,
-                description: megaResult.meta.description || '',
-                dimensions: megaResult.meta.dimensions,
-                totalBlocks: megaResult.totalBlocks,
-                filePath: fullPath,
-                isMega: true,
-                schematicId: megaResult.schematicId,
-                version: megaResult.meta.version || 0,
-                timeCreated: megaResult.meta.timeCreated || null,
-                timeModified: megaResult.meta.timeModified || null,
-                blocks: [],
-                blockIndex: null,
-                blockChunks: null
-            };
-            
-            logger.info(`[MegaSchematic] Loaded mega schematic: ${schematic.name}, ${megaResult.totalBlocks} blocks, ${megaResult.chunkCount} chunks`);
-            return schematic;
-        } else {
-            logger.info(`[LitematicaBE] Using standard loader for: ${fullPath}`);
-            const schematic = await loader.load(fullPath);
-            schematic.isMega = false;
-            schematic.schematicId = null;
-            schematic.version = schematic.version || 0;
-            schematic.timeCreated = schematic.timeCreated || null;
-            schematic.timeModified = schematic.timeModified || null;
-            return schematic;
+                const schematic = {
+                    name: megaName,
+                    author: megaResult.meta.author,
+                    description: megaResult.meta.description || '',
+                    dimensions: megaResult.meta.dimensions,
+                    totalBlocks: megaResult.totalBlocks,
+                    filePath: fullPath,
+                    isMega: true,
+                    schematicId: megaResult.schematicId,
+                    version: megaResult.meta.version || 0,
+                    timeCreated: megaResult.meta.timeCreated || null,
+                    timeModified: megaResult.meta.timeModified || null,
+                    blocks: [],
+                    blockIndex: null,
+                    blockChunks: null
+                };
+                
+                logger.info(`[MegaSchematic] Loaded mega schematic: ${schematic.name}, ${megaResult.totalBlocks} blocks, ${megaResult.chunkCount} chunks`);
+                return schematic;
+            } catch (megaErr) {
+                // mega 加载失败时回退普通加载，避免整个投影加载失败
+                logger.warn(`[MegaSchematic] 加载失败，回退普通加载: ${megaErr.message}`);
+            }
         }
+
+        logger.info(`[LitematicaBE] Using standard loader for: ${fullPath}`);
+        const schematic = await loader.load(fullPath);
+        schematic.isMega = false;
+        schematic.schematicId = null;
+        schematic.version = schematic.version || 0;
+        schematic.timeCreated = schematic.timeCreated || null;
+        schematic.timeModified = schematic.timeModified || null;
+        return schematic;
     } catch (e) {
         logger.error(`[LitematicaBE] Error loading file: ${e.message}`);
         if (player) {

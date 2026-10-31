@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - **README 双语** — `README.md`（中文）与 `README_EN.md`
 
 ### Fixed
+- **大型投影回退** — Mega 渲染未启用或加载失败时不再丢弃整个投影：改为走标准加载与普通 ghost 渲染，避免超大投影加载后完全不可见
 - **addon 版本一致性** — 把 BP/RP manifest 的 `header.version` 统一为 `1.1.8`，与 `ghost_index.json` / `addon_expected.json` 对齐，修复安装后 `server-bp-version-mismatch` 导致 ghost 写入被禁用的问题；构建时对三处版本做一致性校验
 - **构建产物** — 修复 zip 中央目录中外部属性写入溢出导致的构建失败
 

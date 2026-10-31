@@ -100,7 +100,7 @@ Update with `lip update github.com/copper-lamp/LitematicaBE`. `lip` only manages
 | Direct placement | OP + Creative writes the whole projection with NBT |
 | Block conversion | Two-way Java ↔ Bedrock mapping with a legacy fallback table |
 | Projection management | Multiple projections, load/unload/delete, material list export |
-| Mega projections | Chunked storage + streaming + LOD (being refactored, currently unavailable) |
+| Mega projections | Chunked storage + streaming + LOD (being refactored; falls back to normal rendering while disabled) |
 | Self check | `/litematica selfcheck` verifies the ghost write pipeline |
 
 ### Controls
@@ -242,7 +242,7 @@ A: Usually a block mapping issue. Report it with the block name and a screenshot
 A: The plugin, server BP/RP, and client addon must come from the same build. Run `/litematica selfcheck` and make sure the packs are enabled in the world.
 
 **Q: Large projections are slow or fail to load.**
-A: Mega mode kicks in above 30,000 blocks and is still being refactored; consider splitting very large projections.
+A: Mega mode is still being refactored; projections above 30,000 blocks now fall back to normal rendering. Very large ones are still better split or built layer by layer.
 
 **Q: Easy place does not work.**
 A: Check that the schematic loaded, the block mappings are complete, and easy place is enabled.
