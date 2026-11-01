@@ -29,6 +29,9 @@ jobs:
       - name: Version consistency
         run: node tools/check-version.mjs
 
+      - name: Offline tests (ghost / render / snapshot regressions)
+        run: npm test
+
       - name: Build release artifacts
         run: npm run build
 

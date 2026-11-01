@@ -33,6 +33,15 @@ const tooth = readJson('tooth.json');
 if (manifest.version !== version) fail(`manifest.json 版本 ${manifest.version} ≠ package.json ${version}`);
 if (tooth.version !== version) fail(`tooth.json 版本 ${tooth.version} ≠ package.json ${version}`);
 
+// index.js 的 PLUGIN_VERSION 是运行时真正展示的版本（启动日志 / 欢迎语 / 表单），
+// 必须和清单同步，否则日志里会出现"加载 3.0.0"而 manifest 写 3.0.1 的错位。
+const INDEX_SRC = fs.readFileSync(path.join(ROOT, 'index.js'), 'utf8');
+const pluginVersionMatch = INDEX_SRC.match(/const\s+PLUGIN_VERSION\s*=\s*['"]([^'"]+)['"]/);
+if (!pluginVersionMatch) fail('index.js 里找不到 PLUGIN_VERSION 常量');
+if (pluginVersionMatch[1] !== version) {
+    fail(`index.js 的 PLUGIN_VERSION ${pluginVersionMatch[1]} ≠ package.json ${version}`);
+}
+
 requirePath(path.join(ADDON, 'LitematicaBE_BP'), '行为包源码');
 requirePath(path.join(ADDON, 'LitematicaBE_RP'), '资源包源码');
 for (const file of RUNTIME_FILES) requirePath(path.join(RUNTIME, file), '运行时索引');

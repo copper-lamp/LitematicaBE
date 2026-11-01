@@ -5,6 +5,8 @@ const DATA_PATH = './plugins/LitematicaBE/data/';
 const PROJECTIONS_FILE = 'projections.json';
 const PLAYER_DATA_FILE = 'player_data.json';
 
+const { normalizeProjection } = require('./projectionFlags');
+
 class DataManager {
     constructor() {
         this.projections = new Map();
@@ -44,6 +46,25 @@ class DataManager {
     /**
      * 加载投影数据
      */
+    /**
+     * 把一条投影记录里的类型/字段修正到当前约定。见 src/data/projectionFlags.js：
+     * 判定逻辑只有一处，避免各调用方各写一套（`isMega !== true` 曾让重启后的 MEGA 无法自愈）。
+     *
+     * @param {object} proj
+     * @returns {object} 同一个对象（就地修正）
+     */
+    normalizeProjection(proj) {
+        return normalizeProjection(proj);
+    }
+
+    /**
+     * 按 id 取投影（读的时候也归一化一次，防止运行期被写脏）
+     */
+    getProjection(id) {
+        const proj = this.projections.get(id);
+        return proj ? this.normalizeProjection(proj) : null;
+    }
+
     loadProjections() {
         const filePath = DATA_PATH + PROJECTIONS_FILE;
         
@@ -58,6 +79,10 @@ class DataManager {
             
             if (data.projections && Array.isArray(data.projections)) {
                 for (const proj of data.projections) {
+                    // 归一化 isMega：历史数据里它被写成过 schematicId 字符串
+                    // （`const isMega = x.isMega && x.schematicId` 的短路返回值），
+                    // 而严格判定 `isMega !== true` 会因此永远为假 → 重启后 MEGA 注入状态建不起来。
+                    this.normalizeProjection(proj);
                     this.projections.set(proj.id, proj);
                 }
             }
@@ -107,6 +132,7 @@ class DataManager {
      * 添加投影
      */
     addProjection(projection) {
+        this.normalizeProjection(projection);
         this.projections.set(projection.id, projection);
         this.saveProjections();
         return projection;
@@ -116,14 +142,15 @@ class DataManager {
      * 获取投影
      */
     getProjection(id) {
-        return this.projections.get(id);
+        const proj = this.projections.get(id);
+        return proj ? this.normalizeProjection(proj) : null;
     }
 
     /**
      * 获取所有投影
      */
     getAllProjections() {
-        return Array.from(this.projections.values());
+        return Array.from(this.projections.values()).map(p => this.normalizeProjection(p));
     }
 
     /**

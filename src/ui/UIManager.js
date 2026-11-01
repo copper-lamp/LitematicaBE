@@ -19,8 +19,8 @@ class UIManager {
         this.actionBarMessages = new Map();
         this.lastVerifyResults = new Map();
         this.schematicsDir = './plugins/LitematicaBE/schematics/';
-        // P4.3：不再自己 mc.listen('onTick')。actionBar 刷新由统一调度器的 'actionbar'
-        // 任务驱动（index.js 注册，每 2 tick = 100ms），全插件只留一个 onTick。
+        // 不再自行监听 onTick：actionBar 刷新由统一调度器的 'actionbar'
+        // 任务驱动（index.js 注册，每 2 tick = 100ms），全插件仅保留一个 onTick。
         this._actionBarLoopStarted = false;
         this.ensureSchematicsDir();
     }
@@ -105,7 +105,7 @@ class UIManager {
         fm.addButton('关于投影');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) return;
+            if (typeof data !== 'number') return;
 
             switch (data) {
                 case 0:
@@ -159,6 +159,7 @@ class UIManager {
         fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
+            if (typeof data !== 'number') return;   // 取消表单：LSE 可能回 null 也可能回 undefined
             this.showMainMenu(player);
         });
     }
@@ -174,7 +175,7 @@ class UIManager {
         fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) {
+            if (typeof data !== 'number') {
                 this.showMainMenu(player);
                 return;
             }
@@ -218,7 +219,7 @@ class UIManager {
         fm.addInput('描述（可选）', '输入描述...', '');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null || data === undefined) {
+            if (!Array.isArray(data)) {
                 player.tell('§c保存已取消');
                 const selectionTool = global.selectionTool;
                 if (selectionTool) selectionTool.cleanup(player.xuid);
@@ -302,7 +303,7 @@ class UIManager {
         }
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) {
+            if (typeof data !== 'number') {
                 this.showMainMenu(player);
                 return;
             }
@@ -325,7 +326,7 @@ class UIManager {
         // 投影信息
         const totalBlocks = loadedSchematic.totalBlocks || (loadedSchematic.blocks?.length || 0);
         const dims = loadedSchematic.dimensions || { x: '?', y: '?', z: '?' };
-        const isMega = loadedSchematic.isMega && loadedSchematic.schematicId;
+        const isMega = !!(loadedSchematic.isMega && loadedSchematic.schematicId);
         const version = loadedSchematic.version || '未知';
         const timeCreated = loadedSchematic.timeCreated
             ? new Date(Number(loadedSchematic.timeCreated)).toLocaleString()
@@ -342,7 +343,7 @@ class UIManager {
         fm.addLabel(`修改时间: ${timeModified}`);
         fm.addLabel(`数据版本: ${version}`);
         if (isMega) {
-            fm.addLabel('当前投影为超大型投影 - 将使用LOD优化');
+            fm.addLabel('当前投影为超大型投影 - 按分块逐块注入（支持逐层显示）');
         }
 
         // 坐标输入 - 紧凑排列
@@ -354,15 +355,19 @@ class UIManager {
         fm.addLabel('点击提交放置投影');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) {
+            if (!Array.isArray(data)) {
                 this.showSchematicBrowser(player);
                 return;
             }
 
+            // label 在 CustomForm 的 data 里是 null 占位（保存表单的 data[1]/data[2] 已验证），
+            // 所以坐标输入从"label 个数"开始。数量不够说明表单结构被改过，退回默认坐标，
+            // 不要静默错位（加了 label 忘了改 labelCount 就会取到别的控件）。
             const labelCount = isMega ? 9 : 8;
-            const inputX = data[labelCount] || `${defaultX}`;
-            const inputY = data[labelCount + 1] || `${defaultY}`;
-            const inputZ = data[labelCount + 2] || `${defaultZ}`;
+            const enough = Array.isArray(data) && data.length >= labelCount + 3;
+            const inputX = (enough && data[labelCount]) || `${defaultX}`;
+            const inputY = (enough && data[labelCount + 1]) || `${defaultY}`;
+            const inputZ = (enough && data[labelCount + 2]) || `${defaultZ}`;
 
             const placePos = {
                 x: parseInt(inputX) || defaultX,
@@ -385,7 +390,7 @@ class UIManager {
         const path = require('path');
 
         try {
-            const isMega = loadedSchematic.isMega && loadedSchematic.schematicId;
+            const isMega = !!(loadedSchematic.isMega && loadedSchematic.schematicId);
 
             // 复制原始 .litematic 到 Mega 目录，方便材料清单等功能使用
             if (isMega && loadedSchematic.filePath) {
@@ -449,11 +454,11 @@ class UIManager {
             renderer.layerRenderMode.set(player.xuid, false);
             renderer.currentRenderLayer.set(player.xuid, -1);
             renderer.startRender(player, projection, -1);
-            // MegaProjectionRenderer.onTick 会通过 updateBlocks 注入 LOD 方块数据
+            // MEGA 投影：startRender 建空队列会话，MegaProjectionRenderer.onTick 用 appendBlocks 分块注入
 
             logger.info(`[LitematicaBE] 投影 "${projection.name}" 已加载 | 位置: (${placePos.x}, ${placePos.y}, ${placePos.z}) | 方块数: ${loadedSchematic.totalBlocks || loadedSchematic.blocks?.length || 0}`);
             if (isMega) {
-                logger.info('[LitematicaBE] MEGA模式 - 使用LOD优化');
+                logger.info('[LitematicaBE] MEGA 模式 - 分块全量注入');
             }
 
             player.tell(`投影已放置于 (${placePos.x}, ${placePos.y}, ${placePos.z})`);
@@ -468,7 +473,7 @@ class UIManager {
     // 直接放置全部方块（OP+创造模式）
     async directPlaceAllBlocks(player, data, placePos) {
         const dimid = player.pos.dimid;
-        const isMega = data.isMega && data.schematicId;
+        const isMega = !!(data.isMega && data.schematicId);
         const origin = placePos || data.position;
 
         const { BlockConversions } = require('../easyplace/BlockConversions');
@@ -640,6 +645,7 @@ class UIManager {
             fm.addButton('返回主菜单');
 
             player.sendForm(fm, (player, data) => {
+                if (typeof data !== 'number') return;   // 取消表单：LSE 可能回 null 也可能回 undefined
                 if (data === 0) {
                     this.showSchematicBrowser(player);
                 } else {
@@ -660,7 +666,7 @@ class UIManager {
         fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) {
+            if (typeof data !== 'number') {
                 this.showMainMenu(player);
                 return;
             }
@@ -717,7 +723,7 @@ class UIManager {
         fm.addButton('返回');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) {
+            if (typeof data !== 'number') {
                 this.showLoadProjection(player);
                 return;
             }
@@ -820,6 +826,7 @@ class UIManager {
         fm.addButton('取消');
 
         player.sendForm(fm, (player, data) => {
+            if (typeof data !== 'number') return;   // 取消表单：LSE 可能回 null 也可能回 undefined
             if (data === 0) {
                 const dataManager = global.dataManager;
                 if (dataManager && projection && projection.id) {
@@ -850,7 +857,7 @@ class UIManager {
         fm.addButton('返回');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null || data === 1) {
+            if (typeof data !== 'number' || data === 1) {
                 this.showProjectionDetail(player, projection);
                 return;
             }
@@ -905,7 +912,7 @@ class UIManager {
         fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) {
+            if (typeof data !== 'number') {
                 this.showMainMenu(player);
                 return;
             }
@@ -944,7 +951,7 @@ class UIManager {
         fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null || data === 1) {
+            if (typeof data !== 'number' || data === 1) {
                 this.showMainMenu(player);
                 return;
             }
@@ -963,6 +970,7 @@ class UIManager {
         fm.addButton('取消');
 
         player.sendForm(fm, (player, data) => {
+            if (typeof data !== 'number') return;   // 取消表单：LSE 可能回 null 也可能回 undefined
             if (data === 0) {
                 const dataManager = global.dataManager;
                 if (dataManager) {
@@ -1021,7 +1029,7 @@ class UIManager {
         fm.addButton('返回主菜单');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) {
+            if (typeof data !== 'number') {
                 this.showMainMenu(player);
                 return;
             }
@@ -1084,14 +1092,33 @@ class UIManager {
         if (activeProj) {
             const projection = activeProj.projection;
             if (!current) {
-                // 开启逐层模式，默认从第0层开始
-                renderer.currentRenderLayer.set(player.xuid, 0);
+                // 开启逐层模式，默认从第 0 层开始。
+                // 只改 projManager 的状态是不够的（它不碰世界），必须同步真正铺 ghost 的渲染器：
+                // 普通投影走 gr.setLayer，MEGA 走分块计划，统一收口在 applyLayer。
+                const targetLayer = 0;
                 projManager.switchLayer(player, 'up');
-                player.tell(`已切换到第 0 层（共 ${projection.dimensions.y} 层）`);
+                const r = (typeof renderer.applyLayer === 'function')
+                    ? renderer.applyLayer(player, projection, targetLayer)
+                    : null;
+                if (r && r.ok) {
+                    const detail = (typeof r.chunks === 'number' && r.chunks > 0)
+                        ? `${r.chunks} 个分块待注入`
+                        : `${r.count || 0} 格`;
+                    player.tell(`已切换到第 0 层（共 ${projection.dimensions.y} 层），${detail}`);
+                } else {
+                    renderer.currentRenderLayer.set(player.xuid, targetLayer);
+                }
             } else {
                 projManager.switchLayer(player, 'all');
-                renderer.currentRenderLayer.set(player.xuid, -1);
-                player.tell('已切换到完整渲染模式');
+                const r = (typeof renderer.applyLayer === 'function')
+                    ? renderer.applyLayer(player, projection, -1)
+                    : null;
+                if (r && r.ok) {
+                    player.tell('已切换到完整渲染模式（正在重新注入全部层）');
+                } else {
+                    renderer.currentRenderLayer.set(player.xuid, -1);
+                    player.tell('已切换到完整渲染模式');
+                }
             }
         }
 
@@ -1268,7 +1295,7 @@ class UIManager {
         fm.addButton('返回');
 
         player.sendForm(fm, (player, data) => {
-            if (data === null) {
+            if (typeof data !== 'number') {
                 this.showProjectionOperations(player);
                 return;
             }
@@ -1369,7 +1396,7 @@ class UIManager {
             fm.addButton('返回');
 
             player.sendForm(fm, (player, data) => {
-                if (data === null) {
+                if (typeof data !== 'number') {
                     this.showVerifyResult(player);
                     return;
                 }

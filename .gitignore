@@ -8,8 +8,9 @@ exports/
 schematics/
 mega_schematics/
 
-# --- 测试文件 ---
-tests/
+# --- 测试 ---
+# tests/ 已入库：CI 要跑行为回归（npm test）。临时探测脚本仍放 work/（见文件末尾）
+tests/.tmp/
 
 # --- 调试文件 ---
 debug_*
@@ -32,3 +33,13 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# --- 与发布无关的开发工具（本地开发辅助，不参与 npm run build / Release） ---
+/docs/
+/work/
+/addon/
+# tools/ 下除发布构建工具外全部忽略（后期新增开发脚本自动忽略）
+/tools/*
+!/tools/build-release.mjs
+!/tools/check-version.mjs
+!/tools/zip.mjs

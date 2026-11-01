@@ -92,6 +92,14 @@ class GhostGuard {
     }
 
     /**
+     * 忘掉某格的待补记录（期望账本已经删掉这一格时用，否则重试链会把它又补回来）
+     * @returns {boolean} 是否真的删掉了
+     */
+    forget(dimid, x, y, z) {
+        return this.pending.delete(`${dimid}:${x},${y},${z}`);
+    }
+
+    /**
      * 只做一次写入尝试，不碰 pending
      * @returns {'placed'|'skipped'|'failed'}
      */
@@ -243,7 +251,7 @@ class GhostGuard {
             }
         }
         if (this.pending.size) {
-            // 立即强制加载一次（别等 20s 后的第一轮），主世界通常 1s 内就能补齐
+            // 立即强制加载一次（不等待 20 秒后的首轮重试），主世界通常 1 秒内即可补齐
             this._primeChunks();
             this._scheduleRetry();
         }

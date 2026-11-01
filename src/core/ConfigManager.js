@@ -26,38 +26,20 @@ class ConfigManager {
                 ghostOverwriteReplaceable: true,
                 // 统一调度器单 tick 给周期任务的总预算（毫秒）
                 tickBudgetMs: 8,
-                // 超大投影（MEGA / LOD）暂不启用
-                enableMega: false,
-                opacity: 0.8,
-                particleSize: 0.5,
-                particlesPerFrame: 500,
-                renderFrameInterval: 16,
-                layerRenderEnabled: false,
-                defaultStartLayer: "max"
-            },
-            particleRespawn: {
-                enabled: true,
-                lifetime: 40,
-                respawnBuffer: 2,
-                checkInterval: 1000
+                // 超大投影（MEGA / LOD）默认关闭
+                enableMega: false
             },
             easyPlace: {
                 enabled: true,
-                checkInterval: 500,
-                successMessage: "✓ 方块放置正确",
-                errorMessage: "✗ 方块类型错误"
-            },
-            layerSwitch: {
-                cooldown: 200,
-                lookUpThreshold: -10,
-                lookDownThreshold: 10,
-                defaultDirection: "down"
-            },
-            nearbyPrompt: {
-                enabled: true,
-                checkInterval: 30000,
-                cooldown: 300000,
-                range: 50
+                // 投影打印机（自动把半径内的 ghost 格填成真方块）
+                printer: {
+                    radius: 5,              // 搜索半径（格）
+                    maxPerCycle: 12,        // 每轮（200ms）最多放多少格，防一次铺满半个投影卡服
+                    budgetMs: 6,            // 单轮时间预算（毫秒），超了就留到下轮
+                    placeDelayMs: 0,        // >0 = 每格之间等待（模拟手工节奏）
+                    overwriteReplaceable: true,  // 是否顶掉花草/雪/水（玩家建筑永远不覆盖）
+                    debug: false            // true = 写 logs/LitematicaBE/easyplace_debug.log（5s 一条）
+                }
             },
             logCleaner: {
                 enabled: true,
@@ -72,44 +54,25 @@ class ConfigManager {
                     "render"
                 ]
             },
-            gui: {
-                titleColor: "§l§6",
-                buttonColor: "§l",
-                textColor: "§f",
-                successColor: "§a",
-                errorColor: "§c"
-            },
             projection: {
-                defaultLayer: -1,
                 showBounds: true,
                 boundsColor: "#00FF00",
                 mirrorX: false,
                 mirrorZ: false,
                 rotation: 0
             },
-            performance: {
-                maxActiveProjections: 10,
-                maxCachedBlocks: 100000,
-                monitorEnabled: false,
-                monitorInterval: 5000
-            },
             megaSchematic: {
                 threshold: 30000,
                 enabled: true,
-                chunkSize: 16,
-                batchInsertSize: 5000,
-                lruCacheSize: 200,
+                // 实际分块大小由 BinaryChunkStorage.CHUNK_SIZE 固定（32），此处仅作说明
+                chunkSize: 32,
                 storagePath: "./plugins/LitematicaBE/mega_schematics/"
             },
+            // 全量注入模式无可调渲染参数：注入速度跟随 render.ghostWritesPerTick，
+            // 分块读取固定 1 块/tick。这两个键仅控制调试输出。
             megaRender: {
-                maxParticlesPerTick: 2000,
-                maxRenderDistance: 96,
-                viewportUpdateInterval: 500,
-                lodLevels: {
-                    near: { distance: 32, skipRate: 0 },
-                    medium: { distance: 80, skipRate: 2 },
-                    far: { distance: 160, skipRate: 4 }
-                }
+                debug: false,
+                fileDebug: false
             }
         };
     }
@@ -140,7 +103,9 @@ class ConfigManager {
             // 合并默认配置（确保新参数有值）
             this.config = this.mergeConfig(this.defaultConfig, this.config);
 
-            this.enforceGhostMode();
+            // 一次性迁移：老配置里的 particle/hybrid 落回 ghost 并立刻写回文件，
+            // 这样下次启动不再重复提示（不再作为常态逻辑）。
+            if (this.enforceGhostMode()) this.save();
 
             logger.info(`[ConfigManager] 配置文件加载成功: ${this.configPath}`);
         } catch (e) {
@@ -151,16 +116,17 @@ class ConfigManager {
     }
 
     /**
-     * 粒子渲染已整体删除，配置里残留的 "particle"/"hybrid" 一律落回 ghost。
-     * 不抛错、不删用户的配置文件，只在启动日志里说一句，避免"改了配置没反应"。
+     * 一次性迁移：粒子渲染已整体删除，配置里残留的 "particle"/"hybrid" 落回 ghost。
+     * 返回 true 表示发生过迁移，调用方（load）会立刻写回文件 —— 之后启动不再重复提示。
+     * 不抛错、不删用户的其它键，只在启动日志里说一句，避免"改了配置没反应"。
      */
     enforceGhostMode() {
-        if (!this.config || !this.config.render) return;
+        if (!this.config || !this.config.render) return false;
         const mode = this.config.render.mode;
-        if (mode !== 'ghost') {
-            logger.info(`[ConfigManager] render.mode="${mode}" 已失效（粒子渲染在 P4 移除），强制使用 ghost`);
-            this.config.render.mode = 'ghost';
-        }
+        if (mode === 'ghost') return false;
+        logger.info(`[ConfigManager] render.mode="${mode}" 已废弃（粒子渲染已整体移除），已迁移为 ghost 并写回配置`);
+        this.config.render.mode = 'ghost';
+        return true;
     }
 
     /**
@@ -208,7 +174,7 @@ class ConfigManager {
 
     /**
      * 获取配置值
-     * @param {string} key 配置路径，如 "render.opacity"
+     * @param {string} key 配置路径，如 "render.ghostWritesPerTick"
      * @param {*} defaultValue 默认值
      * @returns {*} 配置值
      */

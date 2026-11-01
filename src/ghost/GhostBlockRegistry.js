@@ -122,6 +122,47 @@ class GhostBlockRegistry {
         return this.genericId;
     }
 
+    /**
+     * 把 Java/BE 状态收窄成「该 ghost 方块声明的 state 集合」。
+     *
+     * 为什么必须严格按声明出键：基岩版自定义方块写 states 时，**多写或少写一个键
+     * 都会让 setBlock 返回 false**（不抛异常、不忽略），结果 _writeOne 把它推进
+     * pending 重试，表现为"静默失败"。因此仅输出声明中包含的键，缺失的补默认值。
+     *
+     * @param {string} javaName  例 'minecraft:oak_stairs'（或短名 'oak_stairs'）
+     * @param {object} [bedrockStates] 已由 javaToBedrock 转换的 BE states（block.bedrockState）
+     * @returns {object|null} 归一化 state 对象；该 ghost 无 state 载体时返回 null（走旧路径）
+     */
+    buildStates(javaName, bedrockStates) {
+        if (!this.ready) return null;
+        if (!javaName) return null;
+        const id = this.resolve(javaName);
+        const meta = this.blocks.get(id);
+        const decl = meta && meta.states;
+        if (!decl) return null;
+
+        const src = bedrockStates || {};
+        const out = {};
+        for (const [key, spec] of Object.entries(decl)) {
+            let v = spec.default;
+            if (spec.from && src[spec.from] !== undefined) {
+                v = src[spec.from];
+                if (spec.map && spec.map[v] !== undefined) v = spec.map[v];
+            }
+            if (spec.type === 'int') {
+                v = Math.floor(Number(v) || 0);
+                if (typeof spec.min === 'number' && v < spec.min) v = spec.min;
+                if (typeof spec.max === 'number' && v > spec.max) v = spec.max;
+            } else if (spec.type === 'bool') {
+                v = !!v;
+            } else {
+                v = String(v);
+            }
+            out[key] = v;
+        }
+        return out;
+    }
+
     /** 是否是本插件写入的 ghost 方块 */
     isGhost(blockType) {
         return typeof blockType === 'string' && blockType.startsWith(GHOST_PREFIX);

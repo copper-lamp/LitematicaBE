@@ -8,11 +8,11 @@
       }
     },
     "components": {
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.lit_chain",
       "minecraft:material_instances": {
         "*": {
           "texture": "ghost_iron_chain",
-          "render_method": "blend",
+          "render_method": "alpha_test",
           "face_dimming": false,
           "ambient_occlusion": false
         }
@@ -23,7 +23,25 @@
       "minecraft:destructible_by_explosion": false,
       "minecraft:replaceable": {},
       "minecraft:light_dampening": 0,
-      "minecraft:map_color": "#888888"
-    }
+      "minecraft:map_color": "#888888",
+      "minecraft:transformation": {
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "permutations": []
   }
 }

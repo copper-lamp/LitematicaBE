@@ -28,7 +28,7 @@
 </div>
 
 > [!WARNING]
-> 3.x 仍在重构与预览阶段：Mega 投影、投影打印机等旧版功能尚未恢复。升级前请备份存档；插件与 addon 的版本必须一致，否则 ghost 写入会被禁用。
+> 3.x 仍在重构与预览阶段：Mega 投影的视口跟随 / 分块卸载 / LOD 尚未恢复。升级前请备份存档；插件与 addon 的版本必须一致，否则 ghost 写入会被禁用。
 
 LitematicaBE 是一个面向基岩版（BDS + LeviLamina）的投影插件：读取 Java 版 Litematica 的 `.litematic` 文件，用自定义 ghost 方块在世界中还原投影，并提供逐层建造、轻松放置、方块验证与材料清单等建筑辅助功能。保存出的 `.litematic` 可被 Java 版 Litematica 直接打开。
 
@@ -96,7 +96,8 @@ lip install github.com/copper-lamp/LitematicaBE#client@3.0.1   # 客户端
 | 原理图保存 | 把基岩版建筑保存为 `.litematic`，与 Java 版 Litematica 互通 |
 | ghost 投影 | 自定义 ghost 方块渲染，半透明显示，贴近原版观感 |
 | 逐层建造 | 按 Y 层切换显示，抬头看上层 / 低头看下层 |
-| 轻松放置 | 手持材料对准投影精确放置，支持快速连续放置（重构中） |
+| 轻松放置 | 手持材料对准投影精确放置，支持快速连续放置 |
+| 投影打印机 | 开启后自动把半径内（默认 5 格）的 ghost 格填成真方块，可限速、可逐层 |
 | 直接放置 | OP + 创造模式把投影方块直接写入世界（NBT 直放） |
 | 方块转换 | Java ↔ 基岩版双向映射，含 legacy 回退表 |
 | 投影管理 | 多投影存储、加载 / 卸载 / 删除、材料清单导出 |
@@ -121,7 +122,7 @@ lip install github.com/copper-lamp/LitematicaBE#client@3.0.1   # 客户端
 /litematica place <file>  # 加载并在脚下放置投影
 /litematica placeat X Y Z # 在指定坐标放置投影
 /litematica easyplace     # 切换轻松放置
-/litematica printer       # 切换投影打印机
+/litematica printer       # 切换投影打印机（也可用 /lit printer）
 /litematica verify        # 验证方块放置正确性
 /litematica materials     # 生成材料清单 Excel
 /litematica save          # 保存原理图（选区模式）
@@ -155,7 +156,19 @@ lip install github.com/copper-lamp/LitematicaBE#client@3.0.1   # 客户端
 ### 轻松放置
 
 1. 在投影操作面板开启**轻松放置**，手持材料对准投影即可精确放置。
-2. 需要连续放置时再开启**投影打印机**；再次点击菜单可关闭。
+2. 需要连续放置时再开启**投影打印机**（`/litematica printer` 或 `/lit printer`）；再次点击菜单可关闭。
+3. 打印机只填 ghost / 空气 / 花草雪水这类可替换方块，**不会覆盖你自己放的方块**；逐层模式下只放当前层。
+
+打印机可调参数（`config.json` 的 `easyPlace.printer`，改完即时生效）：
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `radius` | 5 | 搜索半径（格） |
+| `maxPerCycle` | 12 | 每轮（200ms）最多放多少格，调大容易卡服 |
+| `budgetMs` | 6 | 单轮时间预算，超出的格留到下一轮 |
+| `placeDelayMs` | 0 | >0 = 每轮只放一格（想要"慢慢放"才改） |
+| `overwriteReplaceable` | true | 是否顶掉花草/雪/水 |
+| `debug` | false | 写 `logs/LitematicaBE/easyplace_debug.log`（最多 5 秒一条） |
 
 ### 直接放置（管理员）
 
@@ -235,7 +248,7 @@ npm run build
 ## 常见问题
 
 **Q：为什么部分 3.x 功能无法使用？**
-A：第三代 LitematicaBE 正在重构，Mega 投影、投影打印机等功能暂未恢复，后续会陆续补齐。
+A：第三代 LitematicaBE 在逐块恢复旧功能。ghost 投影、逐层建造、轻松放置、**投影打印机**已可用；Mega 投影的分块视口跟随 / 卸载 / LOD、以及 `verify` 对 ghost 的判定仍在补齐。
 
 **Q：投影显示为空气或错误材质？**
 A：多为方块映射问题。Java 与基岩版方块差异较大，遇到请提交 Issue 并附上方块名与截图。

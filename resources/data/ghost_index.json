@@ -3,7 +3,7 @@
   "addonVersion": [
     1,
     1,
-    8
+    13
   ],
   "bpUuid": "a7f3c1e2-5b64-4d9a-9c11-8e2f4b7d3a01",
   "rpUuid": "49cb94c2-8cec-4b27-8b58-4b3e01f843fc",
@@ -75,7 +75,7 @@
     },
     "lit:g_iron_chain": {
       "texture": "iron_chain",
-      "geometry": "full_block"
+      "geometry": "chain"
     },
     "lit:g_chain_command_block_front": {
       "texture": "chain_command_block_front",
@@ -1371,7 +1371,7 @@
     },
     "lit:g_lantern": {
       "texture": "lantern",
-      "geometry": "full_block"
+      "geometry": "lantern"
     },
     "lit:g_lapis_block": {
       "texture": "lapis_block",
@@ -2188,6 +2188,45 @@
     "lit:g_generic": {
       "texture": "generic",
       "geometry": "full_block"
+    },
+    "lit:g_oak_stairs": {
+      "texture": "oak_planks",
+      "geometry": "stairs",
+      "states": {
+        "lit:dir": {
+          "type": "int",
+          "min": 0,
+          "max": 3,
+          "default": 0,
+          "from": "weirdo_direction"
+        }
+      }
+    },
+    "lit:g_unpowered_repeater": {
+      "texture": "repeater",
+      "geometry": "repeater",
+      "states": {
+        "lit:dir": {
+          "type": "int",
+          "min": 0,
+          "max": 3,
+          "default": 0,
+          "from": "direction"
+        }
+      }
+    },
+    "lit:g_unpowered_comparator": {
+      "texture": "comparator",
+      "geometry": "comparator",
+      "states": {
+        "lit:dir": {
+          "type": "int",
+          "min": 0,
+          "max": 3,
+          "default": 0,
+          "from": "direction"
+        }
+      }
     }
   },
   "deferred": {},
@@ -2521,7 +2560,7 @@
     "minecraft:mangrove_planks": "lit:g_mangrove_planks",
     "minecraft:cherry_planks": "lit:g_cherry_planks",
     "minecraft:bamboo_planks": "lit:g_bamboo_planks",
-    "minecraft:oak_stairs": "lit:g_oak_planks",
+    "minecraft:oak_stairs": "lit:g_oak_stairs",
     "minecraft:spruce_stairs": "lit:g_spruce_planks",
     "minecraft:birch_stairs": "lit:g_birch_planks",
     "minecraft:jungle_stairs": "lit:g_jungle_planks",
@@ -3061,7 +3100,9 @@
     "minecraft:light": "lit:g_generic",
     "minecraft:water": "lit:g_water_still",
     "minecraft:lava": "lit:g_lava_still",
-    "minecraft:bubble_column": "lit:g_water_still"
+    "minecraft:bubble_column": "lit:g_water_still",
+    "minecraft:unpowered_repeater": "lit:g_unpowered_repeater",
+    "minecraft:unpowered_comparator": "lit:g_unpowered_comparator"
   },
   "javaMapStats": {
     "total": 870,

@@ -58,7 +58,7 @@ ll.registerPlugin(
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '3.0.0';
+const PLUGIN_VERSION = '3.0.1';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
@@ -90,7 +90,7 @@ const materialCounter = new MaterialCounter();
 const ghostRegistry = new GhostBlockRegistry();
 const ghostExpect = new GhostExpectStore({ logger }).load();
 const ghostGuard = new GhostGuard(ghostRegistry);
-// P2.3：addon 与插件版本一致性校验。不一致时只关 ghost 写入，投影/粒子/easyplace 全部照常
+// addon 与插件版本一致性校验。不一致时仅禁用 ghost 写入，其余功能不受影响
 const addonCheck = new AddonVersionCheck({ logger });
 
 // 写世界前的原方块快照（data/sessions/）。启动时先收拾上次异常退出留下的会话，
@@ -101,7 +101,7 @@ const worldSnapshot = new WorldSnapshot({
     isGhost: (t) => ghostRegistry.isGhost(t),
 }).load();
 
-// P3.2：探针铺墙前逐格 record()，undo 走 snapshot.close()
+// 探针铺墙前逐格记录原方块，undo 通过快照还原
 const ghostProbe = new GhostProbe(ghostRegistry, ghostExpect, addonCheck, worldSnapshot);
 
 // ═══════════════════ 渲染管线（ghost 方块取代粒子） ═══════════════════
@@ -118,8 +118,8 @@ const ghostRenderer = new GhostRenderer({
     overwriteReplaceable: configManager.get('render.ghostOverwriteReplaceable', true),
 });
 
-// 投影会话层不在这里显式 attach：ProjectionRenderer 的 _gr() 会惰性取 global.ghostRenderer，
-// 这样 docs/renderer-contract.md §5 的 8 项外部访问基线不会被装配细节污染。
+// 投影会话层不在此处显式装配：ProjectionRenderer 通过 _gr() 惰性获取 global.ghostRenderer，
+// 以保持外部访问基线不被装配细节污染。
 
 // /litematica selfcheck —— 一条命令验证"读原状→快照→写幽灵→读回→撤销"整条链路
 const ghostSelfCheck = new GhostSelfCheck({
@@ -129,6 +129,13 @@ const ghostSelfCheck = new GhostSelfCheck({
     logger,
 });
 ghostGuard.install({ expectStore: ghostExpect, logger });
+// 轻松放置 / 投影打印机认 ghost：ghost 是真实方块（lit:g_*），判定必须显式注入，
+// 否则它们会拿 `type !== 'minecraft:air'` 比，整片投影判成"非空" → 一格都放不了。
+try {
+    easyPlaceManager.attachGhostChecks({ isAirLike: (b) => ghostGuard.isAirLike(b) });
+} catch (e) {
+    logger.warn(`[LitematicaBE] 注入 ghost 判定失败: ${e && e.message ? e.message : e}`);
+}
 giCheckWiring();
 
 /** 把版本校验结果接到写闸门上（加载期一次；onServerStarted 会再校验一次） */
@@ -169,6 +176,10 @@ global.megaManager = megaManager;
 global.streamLoader = streamLoader;
 global.megaRenderer = megaRenderer;
 
+// MEGA 渲染器构造（第 75 行）早于 global.configManager 赋值（第 147 行），
+// 构造期读不到配置会把 render.enableMega 永久锁成 false —— 这里补一次加载。
+megaRenderer.loadConfig();
+
 const PLUGIN_NAME = "LitematicaBE";
 
 // 玩家临时数据（内存中）
@@ -190,8 +201,9 @@ renderScheduler.add('easyplace-fast', () => easyPlaceManager.tickFastPlace(), { 
 renderScheduler.add('mega-render', () => megaRenderer.onTick(), {
     everyTicks: 1,
     priority: 40,
-    // 3.0.0 review 决策：超大投影暂不启用（等后续优化），任务留着但默认关
-    enabled: !!megaRenderer.enabled,
+    // 任务常开：开关由 megaRenderer.isEnabled() 在任务体内实时判定。
+    // 不要用 enabled: !!megaRenderer.enabled —— 那会在注册时求值一次并固定，导致开关永久失效。
+    enabled: true,
 });
 renderScheduler.add('actionbar', () => uiManager.updateActionBars(), { everyTicks: 2, priority: 60 });
 renderScheduler.add('debug-flush', () => megaRenderer.flushLogs(), { everyMs: 5000, priority: 80 });
@@ -388,7 +400,7 @@ function handlePlaceMode(player, block, pos, session) {
     // 创建投影
     const schematic = session.selectedSchematic;
     
-    const isMegaPlace = schematic.isMega && schematic.schematicId;
+    const isMegaPlace = !!(schematic.isMega && schematic.schematicId);
     
     // 创建新的投影
     const projection = {
@@ -428,11 +440,13 @@ function handlePlaceMode(player, block, pos, session) {
     projManager.activateProjection(player, projection);
 
     if (isMegaPlace) {
-        megaRenderer.initRenderState(player, schematic.schematicId, projection);
-        logger.info('[LitematicaBE] 已启用超大型投影渲染模式');
+        // 顺序要紧：先建 Mega 注入状态（读分块索引），再建 ghost 会话（空队列）。
+        // onTick 里的 pumpChunks 会先确认会话存在再注入，所以两者都就绪后才开始喂数据。
+        const megaState = megaRenderer.initRenderState(player, schematic.schematicId, projection);
         renderer.layerRenderMode.set(player.xuid, false);
         renderer.currentRenderLayer.set(player.xuid, -1);
         renderer.startRender(player, projection, -1);
+        if (megaState) logger.info('[LitematicaBE] 超大型投影注入已启动');
     } else {
         renderer.layerRenderMode.set(player.xuid, false);
         renderer.currentRenderLayer.set(player.xuid, -1);
@@ -527,22 +541,20 @@ function handleBuildMode(player, session) {
         const isMegaProj = result.projection.isMega && result.projection.schematicId;
 
         if (isMegaProj) {
-            // 超大型投影：Mega 管理分层过滤，ProjectionRenderer 统一渲染
-            const stateId = `${player.xuid}_${result.projection.schematicId}`;
-            // 设置 Mega 层模式（标记 _needsSync，下个 tick 自动同步）
-            megaRenderer.setLayerMode(stateId, newLayer);
-            // ProjectionRenderer 同步层信息（用于 respawn）
-            renderer.currentRenderLayer.set(player.xuid, newLayer);
-            renderer.layerRenderMode.set(player.xuid, newLayer >= 0);
-            // 清除旧粒子
-            renderer.clearPlayerProjection(player);
-            // 注意：不要调用 renderer.startRender，MegaProjectionRenderer.onTick 会处理渲染
-
-            if (newLayer === -1) {
+            // 超大型投影：Mega 只决定"注入哪些分块"，世界侧 ghost 由 GhostRenderer 会话决定。
+            // setMegaLayer 内部会调 mega.setLayerMode 重算计划，并靠 enqueue 撤回旧层的 ghost。
+            const r = renderer.applyLayer(player, result.projection, newLayer);
+            if (!r.ok) {
+                const why = (r.reason === 'mega-not-ready')
+                    ? '分块注入状态缺失，请重新放置该投影'
+                    : renderer._reasonText(r.reason);
+                player.tell(`§c分层切换失败：${why}`);
+            } else if (newLayer === -1) {
                 const totalBlocks = result.projection.totalBlocks || 0;
-                player.tell(`§a显示全部层 §7(${totalBlocks} 方块)`);
+                player.tell(`§a显示全部层 §7(${totalBlocks} 方块，${r.chunks} 个分块)`);
             } else {
-                player.tell(`§a当前层: §e${newLayer} §7/ ${result.projection.dimensions?.y || 1}`);
+                const layers = (result.projection.dimensions && result.projection.dimensions.y) || 1;
+                player.tell(`§a当前层: §e${newLayer} §7/ ${layers}§a，${r.chunks} 个分块待注入`);
             }
         } else {
             // 普通投影渲染
@@ -632,7 +644,83 @@ function dispatchGhost(player, sub) {
         }
         return true;
     }
+    if (s === 'clean' || s === 'reset') {
+        // 不依赖任何内存会话：把"世界里留着 ghost、期望账本还认、但没会话能撤销"的残留
+        // （强退/重启后的 MEGA 投影是必踩场景）一次性清干净。活跃会话不受影响。
+        const r = renderer.reclaimOrphans(player);
+        player.tell(`§a清理无主 ghost：期望删 §e${r.expect} §a格 / 会话 §e${r.sessions} §a个`
+            + ` / 还原世界 §e${r.restored} §a格 / 失败 §e${r.failed}`);
+        if (r.remaining) {
+            player.tell(`§7还有 ${r.remaining} 格没还原（区块未加载居多）：站在残留区域附近再执行一次`);
+            player.tell('§7或者重启服务器后再执行（启动时也会自动清一次）');
+        }
+        if (!r.expect && !r.sessions) player.tell('§7没有发现无主 ghost，世界是干净的');
+        return true;
+    }
+    if (s === 'array') {
+        return ghostTestArray(player);
+    }
     return ghostProbe.lay(player);
+}
+
+/**
+ * /litematica:ghost array — 生成 ghost 方块测试阵列，验证几何建模与朝向。
+ *
+ * 在玩家面前铺一个网格，包含对建模/方向敏感的方块（楼梯、锁链、灯笼、红石中继器、红石比较器），
+ * 每个朝向敏感的方块放 4 个 lit:dir（0-3），用于目视检查形状 + 旋转是否都正确。
+ */
+function ghostTestArray(player) {
+    if (!player) return false;
+    if (typeof addonCheck !== 'undefined' && addonCheck && !addonCheck.isEnabled()) {
+        player.tell('§cghost 写入已禁用：addon 与插件版本不一致（详见 /litematica:ghost info）');
+        return false;
+    }
+    const p = player.pos;
+    const yaw = (player.direction && typeof player.direction.yaw === 'number') ? player.direction.yaw : 0;
+    const rad = yaw * Math.PI / 180;
+    // 基岩 yaw：0=南(+Z)，90=西(-X)，180=北(-Z)，270=东(+X)
+    const fx = Math.round(-Math.sin(rad));
+    const fz = Math.round(Math.cos(rad));
+    const dim = (typeof p.dimid === 'number') ? p.dimid : 0;
+    const bx = Math.round(p.x), by = Math.round(p.y), bz = Math.round(p.z);
+
+    // 阵列起点：玩家面前 4 格（水平前方）
+    const ox = bx + fx * 4;
+    const oz = bz + fz * 4;
+
+    const rows = [
+        { name: 'minecraft:oak_stairs', dirs: [0, 1, 2, 3] },
+        { name: 'minecraft:unpowered_repeater', dirs: [0, 1, 2, 3] },
+        { name: 'minecraft:unpowered_comparator', dirs: [0, 1, 2, 3] },
+        { name: 'minecraft:chain', dirs: [null] },
+        { name: 'minecraft:lantern', dirs: [null] },
+    ];
+
+    let placed = 0, failed = 0, skipped = 0;
+    for (let r = 0; r < rows.length; r++) {
+        const row = rows[r];
+        for (let c = 0; c < row.dirs.length; c++) {
+            const d = row.dirs[c];
+            // 行沿"前方"推进，列沿"横向"（垂直前方）排开
+            const x = ox + fx * r + (-fz) * c;
+            const z = oz + fz * r + (fx) * c;
+            const y = by; // 玩家脚下一层
+            const gid = ghostRegistry.resolve(row.name);
+            if (!gid) { skipped++; continue; }
+            try {
+                let ok;
+                if (d !== null && typeof ghostRenderer._buildGhostNbt === 'function') {
+                    ok = !!mc.setBlock(x, y, z, dim, ghostRenderer._buildGhostNbt(gid, { 'lit:dir': d }));
+                } else {
+                    ok = !!mc.setBlock(x, y, z, dim, gid, 0);
+                }
+                if (ok) placed++; else failed++;
+            } catch (e) { failed++; }
+        }
+    }
+    player.tell(`§a测试阵列已生成：写入 §e${placed} §a格 / 失败 §e${failed}§a / 跳过 §e${skipped}`);
+    if (failed) player.tell('§7有失败格：确认 addon 1.1.9 已装、且该位置区块已加载（站近些重试）');
+    return true;
 }
 
 function buildMainCommand() {
@@ -662,11 +750,30 @@ function buildMainCommand() {
             return;
         }
 
-        const action = results.action;
         // 自由文本统一走 args；filename 是 1.1.1 遗留的重载参数名，这里做兼容读取
         const argText = (results.args !== undefined && results.args !== null) ? results.args : results.filename;
+        dispatchMainAction(player, results.action, results, argText, output);
+    });
 
-        switch (action) {
+    return cmd;
+}
+
+/**
+ * 主命令动作分发（/litematica 与 /lit 共用）。
+ *
+ * 抽出来的原因：`/lit` 原来只声明了空重载，玩家照着提示敲 `/lit printer` 会被 BDS
+ * 判成"重载不匹配"—— 命令在、功能在，但入口不可达。现在短命令把文本转成 action 后
+ * 直接走这里，两条命令的行为永远一致。
+ *
+ * @param {object} player
+ * @param {string} action
+ * @param {object} results 主命令的重载结果（含 x/y/z）；短命令路径下为空
+ * @param {string} argText 自由文本参数
+ * @param {object} output
+ */
+function dispatchMainAction(player, action, results, argText, output) {
+    if (!results) results = {};
+    switch (action) {
             case "menu":
                 uiManager.showMainMenu(player);
                 break;
@@ -752,20 +859,28 @@ function buildMainCommand() {
             default:
                 uiManager.showMainMenu(player);
         }
-    });
-
-    return cmd;
 }
 
 function buildShortCommand() {
     const cmdShort = mc.newCommand("lit", "Litematica (Short)", PermType.Any, 0x80);
-    // 短命令原来直接 setup、从未声明过重载；LSE 要求至少一条重载，否则 /lit 不可执行
+    // 短命令原来只声明了空重载，玩家照着提示敲 `/lit printer` 会被 BDS 判成
+    // "重载不匹配" —— 命令在、功能在，入口不可达。RawText 只能有一个且必须放最后。
+    cmdShort.optional("args", ParamType.RawText);
     cmdShort.overload([]);
+    cmdShort.overload(["args"]);
     cmdShort.setCallback((cmd, origin, output, results) => {
         const player = origin.player;
-        if (player) {
+        if (!player) return;
+        const text = String((results && results.args) || '').trim();
+        if (!text) {
             uiManager.showMainMenu(player);
+            return;
         }
+        // `/lit printer` → action=printer，其余文本原样交给 args（与长命令同一套分发）
+        const parts = text.split(/\s+/);
+        const action = parts[0];
+        const argText = parts.slice(1).join(' ');
+        dispatchMainAction(player, action, {}, argText, output);
     });
     return cmdShort;
 }
@@ -856,7 +971,7 @@ function buildConfigCommand() {
                 } else {
                     player.tell("§c请指定配置键");
                     player.tell("§7用法: /litematica:config get <key>");
-                    player.tell("§7示例: /litematica:config get render.opacity");
+                    player.tell("§7示例: /litematica:config get render.ghostWritesPerTick");
                 }
                 break;
         }
@@ -868,8 +983,8 @@ function buildConfigCommand() {
  * ghost 验证探针的独立命令入口。
  */
 function buildGhostCommand() {
-    const cmdGhost = mc.newCommand("litematica:ghost", "Ghost block probe (P1.5 verification)", PermType.Any, 0x80);
-    cmdGhost.setEnum("GhostAction", ["lay", "undo", "info", "restore"]);
+    const cmdGhost = mc.newCommand("litematica:ghost", "Ghost block probe verification", PermType.Any, 0x80);
+    cmdGhost.setEnum("GhostAction", ["lay", "undo", "info", "restore", "array"]);
     cmdGhost.mandatory("action", ParamType.Enum, "GhostAction", 1);
     cmdGhost.overload(["GhostAction"]);
     cmdGhost.setCallback((cmd, origin, output, results) => {
@@ -945,7 +1060,9 @@ function handlePlaceCommand(player, filename, output) {
             z: Math.floor(pos.z)
         };
         
-        const isMega = schematic.isMega && schematic.schematicId;
+        // 必须是布尔：`schematic.isMega && schematic.schematicId` 会短路返回字符串，
+        // 落盘成 `"isMega":"mega_xxx"`，之后任何 `isMega !== true` 的严格判定都会失效。
+        const isMega = !!(schematic.isMega && schematic.schematicId);
         
         const projection = {
             id: dataManager.generateId(),
@@ -979,11 +1096,13 @@ function handlePlaceCommand(player, filename, output) {
         projManager.activateProjection(player, projection);
 
         if (isMega) {
-            megaRenderer.initRenderState(player, schematic.schematicId, projection);
-            logger.info('[LitematicaBE] 已启用超大型投影渲染模式');
+            const megaState = megaRenderer.initRenderState(player, schematic.schematicId, projection);
             renderer.layerRenderMode.set(player.xuid, false);
             renderer.currentRenderLayer.set(player.xuid, -1);
             renderer.showBounds(projection, player);
+            // 之前这里缺 startRender：MEGA 投影只建了注入状态、没有 ghost 会话，等于不出投影
+            renderer.startRender(player, projection, -1);
+            if (megaState) logger.info('[LitematicaBE] 超大型投影注入已启动');
         } else {
             renderer.layerRenderMode.set(player.xuid, false);
             renderer.currentRenderLayer.set(player.xuid, -1);
@@ -1025,7 +1144,7 @@ function handlePlaceAtCommand(player, x, y, z, output) {
     
     const placePos = { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) };
     
-    const isMega2 = schematic.isMega && schematic.schematicId;
+    const isMega2 = !!(schematic.isMega && schematic.schematicId);
     
     const projection = {
         id: dataManager.generateId(),
@@ -1058,11 +1177,13 @@ function handlePlaceAtCommand(player, x, y, z, output) {
     projManager.activateProjection(player, projection);
 
     if (isMega2) {
-        megaRenderer.initRenderState(player, schematic.schematicId, projection);
-        logger.info('[LitematicaBE] 已启用超大型投影渲染模式');
+        const megaState = megaRenderer.initRenderState(player, schematic.schematicId, projection);
         renderer.layerRenderMode.set(player.xuid, false);
         renderer.currentRenderLayer.set(player.xuid, -1);
         renderer.showBounds(projection, player);
+        // 同 L988：补上 ghost 会话，否则 MEGA 投影不会出现
+        renderer.startRender(player, projection, -1);
+        if (megaState) logger.info('[LitematicaBE] 超大型投影注入已启动');
     } else {
         renderer.layerRenderMode.set(player.xuid, false);
         renderer.currentRenderLayer.set(player.xuid, -1);
@@ -1096,8 +1217,7 @@ async function loadSchematicFile(filename, player) {
         const megaThreshold = configManager.get('megaSchematic.threshold', 30000);
         // mega 渲染未启用时不能走 mega 加载：方块会被写进 .mcmega 分块、projection.blocks 留空，
         // 普通渲染拿不到数据，投影将完全不可见。此时直接按普通投影加载。
-        const megaAvailable = megaRenderer.enabled === true
-            && configManager.get('megaSchematic.enabled', true) === true;
+        const megaAvailable = megaRenderer.isEnabled() === true;
         
         let useMegaMode = false;
         let streamResult = null;
@@ -1536,10 +1656,40 @@ mc.listen("onJoin", (player) => {
                         logger.info(`[LitematicaBE] ${player.name} 重进恢复投影 ${pid}（层 ${lay}）`);
                     }
                 } else {
-                    // 投影已被删除：清掉记录，别每次都提示
+                    // 投影已被删除：清除记录，避免重复提示
                     dataManager.updatePlayerData(player.xuid, { currentProjectionId: null });
                     player.tell('§7上次的投影已被删除，记录已清理');
                 }
+            } else {
+                // 没有恢复记录（首进 / 上次被清掉）但有投影：给一条可操作的提示，
+                // 别让玩家以为投影丢了 —— 记录在 projections.json 里，重新放置即可。
+                let n = 0;
+                let sample = '';
+                try {
+                    const all = dataManager.getAllProjections ? dataManager.getAllProjections() : [];
+                    n = all.length;
+                    if (n) sample = all[n - 1].name || all[n - 1].id;
+                } catch (e) { /* 拿不到就不提示 */ }
+                if (n > 0) {
+                    player.tell(`§7你有 §f${n}§7 个投影记录（最近的：§f${sample}§7）`);
+                    player.tell('§7用 §f/litematica§7 打开菜单重新放置即可；超大投影需要重新放置才会注入分块');
+                }
+            }
+        }
+
+        // 没有恢复出任何投影，但快照/期望账本里还留着他上一次的 ghost（强退、重启、
+        // 或上次的投影已被删）→ 直接清掉，别让玩家自己去敲 /litematica ghost clean。
+        // reclaimOrphans 会跳过内存里还活着的会话，不会误伤正在显示的投影。
+        if (!renderer.activeProjections.has(player.xuid)) {
+            try {
+                const orph = renderer.reclaimOrphans(player);
+                if (orph.sessions || orph.expect) {
+                    logger.info(`[LitematicaBE] ${player.name} 进服清理残留 ghost：期望 ${orph.expect} 格 / 会话 ${orph.sessions} 个 / 还原 ${orph.restored} 格 / 残留 ${orph.remaining}`);
+                    player.tell(`§7已清理上次残留的 ghost：还原 §f${orph.restored}§7 格`
+                        + (orph.remaining ? `，还有 §f${orph.remaining}§7 格因区块未加载暂缓（站在该区域附近再执行 §f/litematica ghost clean§7）` : ''));
+                }
+            } catch (e) {
+                logger.warn(`[LitematicaBE] ${player.name} 进服清理残留失败: ${e && e.message ? e.message : e}`);
             }
         }
 
@@ -1610,14 +1760,35 @@ mc.listen('onServerStarted', () => {
     registerCommands('serverStarted');
     // 此刻工作目录与世界才真正就绪：再校验一次 addon 版本（部署侧路径这时才可靠）
     giCheckWiring();
-    // 世界已就绪，但此刻目标区块通常还没进内存（无人在附近），setBlock 会全数失败。
-    // 所以延后 3s 再补一次，失败的格会进 GhostGuard 的待恢复队列，由重试链 + tickingarea 兜。
+    // 世界已就绪，但此刻目标区块通常尚未加载进内存（附近无玩家），setBlock 会全部失败。
+    // 因此延后 3 秒再补写一次，失败的格进入 GhostGuard 的待恢复队列，由重试链与 tickingarea 兜底。
     setTimeout(() => {
         // 先把上次异常退出留下的快照处理掉，再补 ghost 期望。
         // shouldRestore 的判据是"期望集合已不认这一格"——说明上次撤销只做了一半；
         // 期望仍认的格属于正常投影（重启后本来就该补回），绝不能在这里还原掉。
+        //
+        // 例外：**MEGA 投影**。它的注入状态（MegaProjectionRenderer.renderStates）只活在内存里，
+        // 重启后没有任何东西能接管那些 ghost —— 若照普通投影那样"保留 + 补齐"，世界里就会
+        // 永久留着一片 ghost，玩家进服看不到"已加载"、也没有会话可以撤销。所以先把 MEGA
+        // 会话的期望记录删掉，再让 restoreOrphaned 无条件还原它们（玩家重进后重新加载投影即可）。
+        try {
+            const n = worldSnapshot.forEachSessionBlock(
+                (s) => WorldSnapshot.isMegaSession(s),
+                (dimid, x, y, z) => {
+                    ghostExpect.del(dimid, x, y, z);
+                    if (typeof ghostGuard.forget === 'function') ghostGuard.forget(dimid, x, y, z);
+                }
+            );
+            if (n) {
+                ghostExpect.flush();
+                logger.info(`[LitematicaBE] MEGA 残留会话：清理期望 ${n} 格（重启后无法接管 → 直接还原世界，不用等玩家进服）`);
+            }
+        } catch (e) {
+            logger.warn(`[LitematicaBE] MEGA 残留期望清理失败: ${e && e.message ? e.message : e}`);
+        }
         try {
             const sr = worldSnapshot.restoreOrphaned({
+                restoreMega: true,
                 shouldRestore: (dimid, x, y, z) => !ghostExpect.get(dimid, x, y, z),
             });
             if (sr.sessions) {

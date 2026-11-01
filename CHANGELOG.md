@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **投影打印机恢复** — ghost 重构后打印机一格都放不了，根因是 7 个独立缺陷叠加：
+  - 目标格判定 `type !== 'minecraft:air'` 把 ghost（`lit:g_*` 真实方块）判成"非空" → 全部 `skippedNotAir`；现在 ghost / 空气 / 可替换方块（花草雪水，与 ghost 写入同一份 `REPLACEABLE` 名单）都算空位，玩家建筑永不覆盖；
+  - `/lit` 只声明了空重载，玩家照提示敲 `/lit printer` 报重载不匹配 → 短命令增加 `args`（RawText）重载，与主命令共用 `dispatchMainAction` 分发；
+  - 世界坐标手算 `projPos + pos`，投影旋转/镜像后错位 → 统一走 `GhostRenderer.transformPosition`；
+  - 无每轮上限与时间预算 → 新增 `easyPlace.printer.maxPerCycle` / `budgetMs`，按距离近的先放；
+  - 热路径里每格 `new BlockMappingRegistry()` / `new BlockStateConverters()` → 改为构造期缓存；
+  - 层号两套 Map 漂移、`undefined !== -1` 恒真 → 层号唯一来源（renderer >> projManager >> -1）；
+  - 缺材料/失败逐格 `appendFileSync` 刷日志 → 按方块名去重，只提示一次、只记一次日志；调试日志默认关且 5 秒节流。
+- **生存模式扣物品修复（材料无限复制）** — 打印机/轻松放置清空"最后一个材料"时用的是 `inventory.setItem(slot, null)`，而 LSE 的 `Container.setItem` **只接受 Item 对象**，传 null 会抛错（被 catch 吞掉）或静默失败，槽位原样保留。于是背包剩 1 个时物品永不减少、方块却一直放，等于无限材料。改为：
+  - `container.removeItem(slot, 1)`（文档明确：数量 ≥ 该格堆叠数时整堆清除），覆盖"减 1"与"清空最后一格"两种情形；
+  - 失败再按类型走 `player.clearItem(type, 1)` 兜底；
+  - 最终以"读回背包确实少了"为准，扣不动就**暂停该方块 5 秒**并提示玩家，绝不再白放；
+  - 放置前二次确认槽位真的有货（`findBlockInInventory` 边界情况可能返回空槽）。
+- **`GhostRenderer.markSatisfied(xuid,dimid,x,y,z)`** — 打印机把某格填成真方块后，从 `blocked` / `pending` / `blockedIndex` 销账，避免 `retryBlocked` 每轮空转；不删 expect（挖掉后 ghost 应回来），不碰 written（撤销时真方块走 kept）。
+- **删除死代码** `src/easyplace/FastEasyPlace.js`（零引用，且用 `setInterval` 违反"周期任务只走调度器"的约定）。
+
+### Added
+- `config.json` / `ConfigManager` 新增 `easyPlace.printer`：`radius`、`maxPerCycle`、`budgetMs`、`placeDelayMs`、`overwriteReplaceable`、`debug`，实时读取、热改生效。
+- `tests/test_printer_placement.js`（16 断言）+ `test_ghost_renderer.js` 的 2 条 `markSatisfied` 用例；`npm test` 共 21 脚本 / 276 断言。
+
 ## [3.0.1] - 2026-10-31
 
 ### Added

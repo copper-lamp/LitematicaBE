@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SCHEMA_VERSION = 1;
-const DEFAULT_RESTORE_BATCH = 600;   // 每次 revert 默认最多写多少格（大纲 §5.3 restoreBatch）
+const DEFAULT_RESTORE_BATCH = 600;   // 每次 revert 默认最多还原的方块数
 
 function posKey(x, y, z) {
     return `${x},${y},${z}`;
@@ -79,6 +79,7 @@ class WorldSnapshot {
                 this.sessions.set(sessionId, {
                     sessionId,
                     dimid: Number.isFinite(obj.dimid) ? obj.dimid : 0,
+                    meta: (obj.meta && typeof obj.meta === 'object') ? obj.meta : null,
                     blocks,
                     createdAt: Number.isFinite(obj.createdAt) ? obj.createdAt : Date.now(),
                     updatedAt: Date.now(),
@@ -100,16 +101,20 @@ class WorldSnapshot {
     /**
      * 开一个新会话（若同名会话已存在 → 说明上次没还原，复用并告警，绝不覆盖）
      */
-    begin(sessionId, dimid) {
+    begin(sessionId, dimid, meta) {
         if (!sessionId) throw new Error('WorldSnapshot.begin 需要 sessionId');
         const exist = this.sessions.get(sessionId);
         if (exist) {
             this._warn(`会话 ${sessionId} 已存在（${exist.blocks.size} 格未还原），复用而不覆盖`);
+            if (meta && !exist.meta) exist.meta = meta;
             return exist;
         }
         const s = {
             sessionId,
             dimid: Number.isFinite(dimid) ? dimid : 0,
+            // meta 会跟着快照一起落盘：MEGA 会话标记 mega=true（重启后注入状态全丢，
+            // 只能无条件还原，不能像普通投影那样"保留 + 补齐"，见 restoreOrphaned）
+            meta: (meta && typeof meta === 'object') ? { ...meta } : null,
             blocks: new Map(),
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -117,6 +122,36 @@ class WorldSnapshot {
         };
         this.sessions.set(sessionId, s);
         return s;
+    }
+
+    /** 是否是 MEGA 会话（注入状态是纯内存的，重启后无人能接管） */
+    static isMegaSession(session) {
+        return !!(session && session.meta && session.meta.mega === true);
+    }
+
+    /**
+     * 遍历满足条件的会话里的每一格（只读，不改任何状态）
+     *
+     * 用途：重启后清理 MEGA 期望账本 —— 得先知道"哪些格属于 MEGA 会话"，而期望账本
+     * 只存 ghostId 不存归属，只能反过来从快照里取坐标。
+     *
+     * @param {((session:object)=>boolean)|null} pred 会话过滤器，null = 全部
+     * @param {(dimid:number, x:number, y:number, z:number, session:object)=>void} cb
+     * @returns {number} 回调成功执行的格数
+     */
+    forEachSessionBlock(pred, cb) {
+        let n = 0;
+        for (const s of this.sessions.values()) {
+            let ok = true;
+            if (typeof pred === 'function') {
+                try { ok = !!pred(s); } catch (e) { ok = false; }
+            }
+            if (!ok) continue;
+            for (const rec of s.blocks.values()) {
+                try { cb(s.dimid, rec.x, rec.y, rec.z, s); n++; } catch (e) { /* 单格异常不影响其余 */ }
+            }
+        }
+        return n;
     }
 
     has(sessionId) {
@@ -135,13 +170,25 @@ class WorldSnapshot {
         const k = posKey(x, y, z);
         if (s.blocks.has(k)) return false;
         const p = prev || {};
-        s.blocks.set(k, {
-            x, y, z,
-            type: p.type || 'minecraft:air',
-            data: Number.isFinite(p.tileData) ? p.tileData : (Number.isFinite(p.data) ? p.data : 0),
-            nbt: p.nbt || null,
-        });
+        // 防呆：原方块不可能是 ghost。能读到 ghost 说明世界里的上一次投影没撤干净
+        // （强退/重启的残留）。把它当"原状态"记下来，撤销时就会把 ghost 写回去 ——
+        // 不但消不掉，还会让残留变成"官方认可的原状"。这种情况按空气记。
+        let type = p.type || 'minecraft:air';
+        let data = Number.isFinite(p.tileData) ? p.tileData : (Number.isFinite(p.data) ? p.data : 0);
+        let poisoned = false;
+        try {
+            if (typeof this.isGhost === 'function' && this.isGhost(type)) {
+                type = 'minecraft:air';
+                data = 0;
+                poisoned = true;
+            }
+        } catch (e) { /* 判定失败就按原样记 */ }
+        s.blocks.set(k, { x, y, z, type, data, nbt: p.nbt || null });
         s.updatedAt = Date.now();
+        if (poisoned && !this._poisonWarned) {
+            this._poisonWarned = true;
+            this._warn('快照读到 ghost 方块（上次投影的残留），已按空气记录；请用 /litematica ghost clean 清理残留');
+        }
         return true;
     }
 
@@ -178,6 +225,7 @@ class WorldSnapshot {
                 dimid: s.dimid,
                 createdAt: s.createdAt,
                 updatedAt: s.updatedAt,
+                ...(s.meta ? { meta: s.meta } : {}),
                 blocks,
             }, null, 0) + '\n';
             const target = this.fileOf(sessionId);
@@ -302,17 +350,28 @@ class WorldSnapshot {
 
     /**
      * 启动时处理孤儿会话（上次异常退出留下的快照）
-     * @param {{shouldRestore?: function(number,number,number,number):boolean, limit?: number}} [opts]
-     * @returns {{sessions:number, restored:number, skipped:number, failed:number, kept:number, held:number, remaining:number}}
+     * @param {{shouldRestore?: function(number,number,number,number):boolean, limit?: number,
+     *          restoreMega?: boolean, skip?: function(object):boolean}} [opts]
+     *        restoreMega: true 时，MEGA 会话（meta.mega）**无条件还原**——它的注入状态只活在
+     *        内存里，重启后没人能接管，保留下来就是永久残留（玩家连撤销的会话都找不到）
+     *        skip: 返回 true 的会话整段不动（比如内存里还有活跃会话在用它）
+     * @returns {{sessions:number, restored:number, skipped:number, failed:number, kept:number, held:number, remaining:number, skippedSessions:number}}
      */
     restoreOrphaned(opts) {
         const o = opts || {};
-        const total = { sessions: 0, restored: 0, skipped: 0, failed: 0, kept: 0, held: 0, remaining: 0 };
+        const total = { sessions: 0, restored: 0, skipped: 0, failed: 0, kept: 0, held: 0, remaining: 0, skippedSessions: 0 };
         for (const sessionId of [...this.sessions.keys()]) {
-            const before = this.size(sessionId);
+            const s = this.sessions.get(sessionId);
+            if (typeof o.skip === 'function') {
+                let skipIt = false;
+                try { skipIt = !!o.skip(s); } catch (e) { skipIt = false; }
+                if (skipIt) { total.skippedSessions++; continue; }
+            }
+            // MEGA 会话强制全还原：不传 shouldRestore 等价于"每格都还原"
+            const forceMega = o.restoreMega === true && WorldSnapshot.isMegaSession(s);
             const r = this.revert(sessionId, {
                 limit: Number.isFinite(o.limit) ? o.limit : Number.MAX_SAFE_INTEGER,
-                shouldRestore: o.shouldRestore,
+                shouldRestore: forceMega ? null : o.shouldRestore,
             });
             total.sessions++;
             total.restored += r.restored;
@@ -338,7 +397,6 @@ class WorldSnapshot {
         }
         return total;
     }
-
     /** 按前缀找会话（崩溃后内存里的 xuid→session 映射丢了，用 sessionId 前缀把撤销能力找回来） */
     findSessions(prefix) {
         const out = [];

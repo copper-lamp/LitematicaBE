@@ -19,6 +19,18 @@ const TRANSPARENT = new Set([
     'azalea_leaves', 'flowering_azalea_leaves',
 ]);
 
+/** 形状/非整块方块：不遮挡相邻格（否则相邻楼梯会互相"遮"掉，投影出洞）。
+ *  宁可多写、不漏写——这些方块按"不遮挡"处理，让它们周围也保持可见。 */
+const NON_OCCLUDING_SHAPE = new Set([
+    'stairs', 'slab', 'double_slab', 'wall', 'fence', 'fence_gate',
+    'door', 'trapdoor', 'button', 'lever', 'torch', 'redstone_torch',
+    'unlit_redstone_torch', 'rail', 'golden_rail', 'activator_rail',
+    'detector_rail', 'ladder', 'glass_pane', 'iron_bars', 'carpet',
+    'pressure_plate', 'wooden_pressure_plate', 'stone_pressure_plate',
+    'sign', 'standing_sign', 'wall_sign', 'banner', 'standing_banner',
+    'wall_banner', 'cake', 'snow', 'layer', 'mushroom', 'sapling',
+]);
+
 function stripNamespace(name) {
     if (!name || typeof name !== 'string') return '';
     const lower = name.toLowerCase();
@@ -38,6 +50,17 @@ function isTransparentName(name) {
     const n = stripNamespace(name);
     if (TRANSPARENT.has(n)) return true;
     return n === 'glass' || n.endsWith('_glass') || n.endsWith('_glass_pane');
+}
+
+/** 形状/非整块方块：不参与"遮挡"判定 */
+function isNonOccludingShape(name) {
+    const n = stripNamespace(name);
+    if (NON_OCCLUDING_SHAPE.has(n)) return true;
+    return n.endsWith('_stairs') || n.endsWith('_slab') || n.endsWith('_wall')
+        || n.endsWith('_fence') || n.endsWith('_fence_gate') || n.endsWith('_door')
+        || n.endsWith('_trapdoor') || n.endsWith('_button') || n.endsWith('_torch')
+        || n.endsWith('_ladder') || n.endsWith('_sign') || n.endsWith('_banner')
+        || n.endsWith('_rail') || n.endsWith('_plate') || n.endsWith('_pane');
 }
 
 /** 兼容 pos 的两种写法：[x,y,z] 或 {x,y,z} */
@@ -143,6 +166,8 @@ class SurfaceExtractor {
             const name = nb.name || nb.type || '';
             if (isAirLikeName(name)) return false;
             if (!this.transparentOccluders && isTransparentName(name)) return false;
+            // 形状方块（楼梯/台阶/墙/栅栏等）不遮挡相邻面，否则相邻形状互相剔除、投影出洞
+            if (isNonOccludingShape(name)) return false;
             return true;
         };
 
@@ -197,4 +222,4 @@ class SurfaceExtractor {
     }
 }
 
-module.exports = { SurfaceExtractor, isAirLikeName, isTransparentName, stripNamespace, posOf };
+module.exports = { SurfaceExtractor, isAirLikeName, isTransparentName, isNonOccludingShape, stripNamespace, posOf };

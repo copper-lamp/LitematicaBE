@@ -178,16 +178,24 @@ class GhostRenderer {
             this.clear(player, { silent: true });
         }
 
-        const { blocks, stats } = this.extractor.extract(projection, { layerFilter: layer });
-        if (stats.input === 0) {
-            return { ok: false, reason: 'empty', stats };
-        }
-        if (blocks.length > this.maxBlocks) {
-            return { ok: false, reason: 'too-many', count: blocks.length, stats };
-        }
-        if (blocks.length === 0) {
-            this.stats.emptySessions++;
-            return { ok: false, reason: 'empty-surface', stats };
+        // deferBlocks=true：MEGA 投影的方块在 .mcmega 分块里，由 MegaProjectionRenderer
+        // 分 tick 用 appendBlocks() 增量注入，这里只建一个空队列的会话。
+        let blocks = [];
+        let stats = { input: 0, culled: 0, kept: 0, deferred: o.deferBlocks === true };
+        if (o.deferBlocks !== true) {
+            const ex = this.extractor.extract(projection, { layerFilter: layer });
+            blocks = ex.blocks;
+            stats = ex.stats;
+            if (stats.input === 0) {
+                return { ok: false, reason: 'empty', stats };
+            }
+            if (blocks.length > this.maxBlocks) {
+                return { ok: false, reason: 'too-many', count: blocks.length, stats };
+            }
+            if (blocks.length === 0) {
+                this.stats.emptySessions++;
+                return { ok: false, reason: 'empty-surface', stats };
+            }
         }
 
         const queue = new Array(blocks.length);
@@ -196,14 +204,23 @@ class GhostRenderer {
             const p = b.pos;
             const rel = Array.isArray(p) ? p : [p.x, p.y, p.z];
             const w = transformPosition(rel, projection);
-            queue[i] = { x: w.x, y: w.y, z: w.z, gid: this.registry.resolve(b.name || b.type || '') };
+            queue[i] = {
+                x: w.x, y: w.y, z: w.z,
+                gid: this.registry.resolve(b.name || b.type || ''),
+                st: (typeof this.registry.buildStates === 'function')
+                    ? this.registry.buildStates(b.name || b.type || '', b.bedrockState || b.state)
+                    : undefined,
+            };
         }
 
         const sessionId = this._newSessionId(player.xuid, dimid);
         let snapOk = false;
         if (this.snapshot) {
             try {
-                this.snapshot.begin(sessionId, dimid);
+                // deferBlocks = MEGA：给它打上 mega 标记，快照落盘后重启时可以据此判定
+                // "这堆 ghost 没人能接管"（MegaProjectionRenderer 的注入状态是纯内存的），
+                // 启动时无条件还原，避免永久残留。
+                this.snapshot.begin(sessionId, dimid, o.deferBlocks === true ? { mega: true } : null);
                 snapOk = true;
             } catch (e) {
                 this._log('warn', `[GhostRenderer] 快照初始化失败，本次投影无法撤销: ${e && e.message ? e.message : e}`);
@@ -220,6 +237,7 @@ class GhostRenderer {
             sessionId: snapOk ? sessionId : null,
             queue,
             cursor: 0,
+            seen: new Set(),   // MEGA 增量注入去重（"x,y,z"），普通会话不填
             pending: [],       // 区块未加载/写失败，等重试
             blocked: [],       // 被真实方块挡住，等玩家挖掉后补写（不可丢，否则地形"吞"投影）
             blockedCursor: 0,  // blocked 轮转游标（上万格时保证每格都能轮到）
@@ -321,7 +339,7 @@ class GhostRenderer {
         for (const s of this.sessions.values()) {
             if (!s.blocked.length) continue;
             // 先拍快照再按游标遍历：
-            //  · 处理成功会 splice 掉元素，直接按下标走会漏格（踩过）
+            //  · 处理成功会移除元素，直接按索引遍历会漏格
             //  · 必须轮转，否则上万格 blocked 永远只查最前面那批
             const snapshot = s.blocked.slice();
             const n = snapshot.length;
@@ -386,6 +404,96 @@ class GhostRenderer {
     }
 
     /**
+     * 该格已经由别人（打印机 / 玩家）填成真方块 → 销掉"待补 / 被挡住"的账。
+     *
+     * 只销账、不写世界、**不碰 expect**：Litematica 的语义是"挖掉已放好的方块 → ghost
+     * 回来提示该补"，所以期望记录要留着；也不碰 written：撤销时 WorldSnapshot.revert
+     * 见到"当前不是 ghost 且不是空气"会走 kept，打印机放的方块会被保留。
+     *
+     * 不做这一步的后果：同一格会一直挂在 blocked 里被 retryBlocked 反复重试（每轮都读一次
+     * 世界、判一次 protected），最坏情况下上万格的轮转全被这些无效格吃掉。
+     *
+     * @returns {boolean} 是否真的销掉了什么
+     */
+    markSatisfied(xuid, dimid, x, y, z) {
+        const d = Number.isFinite(dimid) ? dimid : 0;
+        const xs = Math.floor(x), ys = Math.floor(y), zs = Math.floor(z);
+        if (!Number.isFinite(xs) || !Number.isFinite(ys) || !Number.isFinite(zs)) return false;
+
+        this.blockedIndex.delete(`${d}:${xs},${ys},${zs}`);
+
+        const s = this.sessions.get(xuid);
+        if (!s) return false;
+
+        let touched = false;
+        for (let i = s.blocked.length - 1; i >= 0; i--) {
+            const e = s.blocked[i];
+            if (e.x === xs && e.y === ys && e.z === zs) { s.blocked.splice(i, 1); touched = true; }
+        }
+        for (let i = s.pending.length - 1; i >= 0; i--) {
+            const e = s.pending[i];
+            if (e.x === xs && e.y === ys && e.z === zs) { s.pending.splice(i, 1); touched = true; }
+        }
+        if (touched) {
+            this.stats.blockedCount = this._countBlocked();
+            this.stats.pendingCount = this._countPending();
+        }
+        return touched;
+    }
+
+    /**
+     * 读当前方块的实际 BE states（自定义方块含 lit:* 键）。
+     * 失败返回 {}，调用方按"缺键=不同"处理。
+     */
+    _readGhostStates(cur) {
+        try {
+            if (cur && typeof cur.getBlockState === 'function') {
+                const st = cur.getBlockState();
+                return (st && typeof st === 'object') ? st : {};
+            }
+        } catch (e) { /* 读不到就当无状态 */ }
+        return {};
+    }
+
+    /**
+     * 目标 states 与当前 states 是否一致。
+     * 基岩 NBT 里自定义 state 键是 `lit:dir`，但 getBlockState 部分版本会转成 `lit_dir`，
+     * 所以同时查冒号/下划线两种写法；当前缺键视为"不同"（需要重写）。
+     */
+    _statesEqual(curSt, want) {
+        if (!curSt || !want) return false;
+        for (const k of Object.keys(want)) {
+            const alt = k.replace(/:/g, '_');
+            let v = curSt[k];
+            if (v === undefined && alt !== k) v = curSt[alt];
+            if (v === undefined) return false;
+            if (String(v) !== String(want[k])) return false;
+        }
+        return true;
+    }
+
+    /**
+     * 构造带自定义 states 的 ghost NBT（mc.setBlock 的 blockObject 重载）。
+     * NbtCompound 不可用时回落普通对象（与 buildBlockNbt 同策略）。
+     */
+    _buildGhostNbt(gid, st) {
+        if (typeof NbtCompound === 'undefined') {
+            return { name: gid, states: st, version: 17959425 };
+        }
+        const blockNbt = new NbtCompound();
+        blockNbt.setString('name', gid);
+        const statesNbt = new NbtCompound();
+        for (const [k, v] of Object.entries(st)) {
+            if (typeof v === 'boolean') statesNbt.setByte(k, v ? 1 : 0);
+            else if (typeof v === 'number') statesNbt.setInt(k, v);
+            else statesNbt.setString(k, String(v));
+        }
+        blockNbt.setTag('states', statesNbt);
+        blockNbt.setInt('version', 17959425);
+        return blockNbt;
+    }
+
+    /**
      * 写一格。返回 'placed' | 'skipped' | 'protected' | 'pending'
      */
     _writeOne(s, entry) {
@@ -406,8 +514,13 @@ class GhostRenderer {
             ? this.guard.isGhostBlock(cur)
             : (this.registry.isGhost(curType));
 
-        // 已经是 ghost：不重复写（重铺/重启后整批省一半 setBlock）
-        if (isGhost) return 'skipped';
+        // 已经是 ghost：仅当「无朝向状态 或 状态与目标一致」才跳过；状态不一致必须重写
+        // （楼梯等形状方块换个朝向，同一格必须重写，否则永远停在旧朝向）
+        if (isGhost) {
+            const needSt = entry.st && Object.keys(entry.st).length > 0;
+            if (!needSt || this._statesEqual(this._readGhostStates(cur), entry.st)) return 'skipped';
+            // 状态不一致 → 继续往下重写，但**不重复记快照**（首次写入已记过真原方块）
+        }
 
         const airLike = this.guard && typeof this.guard.isAirLike === 'function'
             ? this.guard.isAirLike(cur)
@@ -417,8 +530,9 @@ class GhostRenderer {
             return 'protected';
         }
 
-        // 先备再写：写成功却漏记 = 永久丢原方块
-        if (this.snapshot && s.sessionId) {
+        // 先备再写：写成功却漏记 = 永久丢原方块。仅「真方块 → ghost 首次写入」记录；
+        // ghost 重写（朝向变了）不重复记录，否则撤销会把真原方块还原成 ghost。
+        if (!isGhost && this.snapshot && s.sessionId) {
             try {
                 this.snapshot.record(s.sessionId, entry.x, entry.y, entry.z, {
                     type: curType || 'minecraft:air',
@@ -434,7 +548,11 @@ class GhostRenderer {
 
         let ok = false;
         try {
-            ok = !!mc.setBlock(entry.x, entry.y, entry.z, s.dimid, entry.gid, 0);
+            if (entry.st && Object.keys(entry.st).length > 0) {
+                ok = !!mc.setBlock(entry.x, entry.y, entry.z, s.dimid, this._buildGhostNbt(entry.gid, entry.st));
+            } else {
+                ok = !!mc.setBlock(entry.x, entry.y, entry.z, s.dimid, entry.gid, 0);
+            }
         } catch (e) {
             ok = false;
         }
@@ -525,7 +643,7 @@ class GhostRenderer {
         }
         return out;
     }    /**
-     * 按层显示（P4 决策：切层 = 先撤旧层，再铺新层）
+     * 按层显示（切层时先撤旧层，再铺新层）
      *
      * @param {object} player
      * @param {object} projection
@@ -555,7 +673,7 @@ class GhostRenderer {
         const s = this.sessions.get(xuid);
         if (!s) return { ok: false, removed: 0 };
 
-        // 先删期望：否则还原完 GhostGuard 会把 ghost 补回来（P1.5e 踩过）
+        // 先删除期望记录：否则还原完成后 GhostGuard 会重新补回 ghost
         if (this.expect) {
             for (const e of s.written) {
                 try { this.expect.del(s.dimid, e.x, e.y, e.z); } catch (err) { /* 忽略 */ }
@@ -585,7 +703,7 @@ class GhostRenderer {
         }
 
         this.stats.reverted += restored;
-        // blocked 是"还没写世界"的格，撤销时直接销账即可（不涉及还原）
+        // blocked 是尚未写入世界的格，撤销时直接销账即可（不涉及还原）
         for (const e of s.blocked) this.blockedIndex.delete(`${s.dimid}:${e.x},${e.y},${e.z}`);
         s.blocked = [];
         this.sessions.delete(xuid);
@@ -622,7 +740,13 @@ class GhostRenderer {
             } else {
                 continue;
             }
-            rebuilt.push({ x: w.x, y: w.y, z: w.z, gid: this.registry.resolve(b.name || b.type || '') });
+            rebuilt.push({
+                x: w.x, y: w.y, z: w.z,
+                gid: this.registry.resolve(b.name || b.type || ''),
+                st: (typeof this.registry.buildStates === 'function')
+                    ? this.registry.buildStates(b.name || b.type || '', b.bedrockState || b.state)
+                    : undefined,
+            });
         }
         if (!rebuilt.length) return 0;
 
@@ -637,6 +761,54 @@ class GhostRenderer {
         return rebuilt.length;
     }
 
+    /**
+     * MEGA 增量注入：把分块读出来的方块**追加**到会话队列尾部。
+     *
+     * 与 updateBlocks 的区别（这是 MEGA 能用的关键）：
+     *   - updateBlocks 会整体替换 queue 并把 cursor 归零，世界里已写的格不动 → 换批次就重铺、账本错乱
+     *   - appendBlocks 只往尾部追加，不动 cursor、不动已写格，铺设进度可以连续推进
+     *
+     * @param {string} xuid
+     * @param {Array<{pos:number[]|{x:number,y:number,z:number}, name?:string, type?:string}>} blocks
+     *        坐标必须是**相对投影原点**的（分块存储就是这个坐标系），内部统一走 transformPosition
+     * @returns {{added:number, dup:number, total:number}}
+     */
+    appendBlocks(xuid, blocks) {
+        const out = { added: 0, dup: 0, total: 0 };
+        const s = this.sessions.get(xuid);
+        if (!s || !Array.isArray(blocks) || blocks.length === 0) return out;
+        if (!s.seen) s.seen = new Set();
+
+        for (const b of blocks) {
+            const p = b && b.pos;
+            if (!p) continue;
+            const rel = Array.isArray(p) ? p : [p.x, p.y, p.z];
+            const w = transformPosition(rel, s.projection);
+            const key = `${w.x},${w.y},${w.z}`;
+            if (s.seen.has(key)) { out.dup++; continue; }
+            s.seen.add(key);
+            s.queue.push({
+                x: w.x, y: w.y, z: w.z,
+                gid: this.registry.resolve(b.name || b.type || ''),
+                st: (typeof this.registry.buildStates === 'function')
+                    ? this.registry.buildStates(b.name || b.type || '', b.bedrockState || b.state)
+                    : undefined,
+            });
+            out.added++;
+        }
+
+        out.total = s.queue.length;
+        // 会话已经判过"铺完"，但 MEGA 每 tick 又塞进新分块 —— 必须复位，
+        // 否则 tick 只挑 state==='building' 的会话，后追加的格子永远写不进世界。
+        // （实测：5 格仅落地 4 格，且无报错，仅表现为"少一格"）
+        if (out.added > 0 && s.state === 'done') {
+            s.state = 'building';
+            s.doneAt = null;
+        }
+        this.stats.queued += out.added;
+        return out;
+    }
+
     /** 某玩家当前会话 */
     getSession(player) {
         const xuid = player && player.xuid ? player.xuid : player;
@@ -647,7 +819,7 @@ class GhostRenderer {
         return this.sessions.has(player && player.xuid ? player.xuid : player);
     }
 
-    // ==================== P5.3 会话保活 ====================
+    // ==================== 会话保活 ====================
 
     /**
      * 玩家离线：暂停写入，**不撤销世界 ghost**。

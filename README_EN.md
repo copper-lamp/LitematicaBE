@@ -28,7 +28,7 @@
 </div>
 
 > [!WARNING]
-> 3.x is still being refactored. Mega projections and the projection printer are not available yet. Back up your worlds before upgrading, and keep the plugin and addon versions identical — otherwise ghost writes are disabled.
+> 3.x is still being refactored. Mega viewport follow / chunk unloading / LOD are not restored yet. Back up your worlds before upgrading, and keep the plugin and addon versions identical — otherwise ghost writes are disabled.
 
 LitematicaBE is a projection plugin for Minecraft Bedrock Edition servers (BDS + LeviLamina). It reads Java Edition `.litematic` files, rebuilds the schematic in-world with custom ghost blocks, and provides layer-by-layer building, easy place, block verification, and material lists. Saved `.litematic` files can be opened in Java Edition Litematica.
 
@@ -96,7 +96,8 @@ Update with `lip update github.com/copper-lamp/LitematicaBE`. `lip` only manages
 | Schematic saving | Save Bedrock builds as `.litematic`, interoperable with Java Litematica |
 | Ghost rendering | Custom ghost blocks with translucent textures, close to vanilla Litematica |
 | Layer building | Switch the visible Y layer; look up for the next layer, down for the previous |
-| Easy place | Aim at the projection with materials in hand for precise placement (being refactored) |
+| Easy place | Aim at the projection with materials in hand for precise placement |
+| Projection printer | Automatically fills ghost cells within 5 blocks with real blocks — rate-limited and layer-aware |
 | Direct placement | OP + Creative writes the whole projection with NBT |
 | Block conversion | Two-way Java ↔ Bedrock mapping with a legacy fallback table |
 | Projection management | Multiple projections, load/unload/delete, material list export |
@@ -155,7 +156,19 @@ Update with `lip update github.com/copper-lamp/LitematicaBE`. `lip` only manages
 ### Easy place
 
 1. Enable **easy place** in the projection actions panel, then aim at the projection with matching materials.
-2. Enable the **projection printer** for continuous placement; click the menu again to disable.
+2. Enable the **projection printer** for continuous placement (`/litematica printer` or `/lit printer`); click the menu again to disable.
+3. The printer only fills ghost / air / replaceable cells (grass, snow, water). It never overwrites your own blocks, and in layer mode it only fills the current layer.
+
+Printer options (`easyPlace.printer` in `config.json`, applied live):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `radius` | 5 | Search radius in blocks |
+| `maxPerCycle` | 12 | Max blocks per 200ms cycle (raise carefully) |
+| `budgetMs` | 6 | Per-cycle time budget; the rest waits for the next cycle |
+| `placeDelayMs` | 0 | >0 = one block per cycle |
+| `overwriteReplaceable` | true | Allow replacing grass / snow / water |
+| `debug` | false | Write `logs/LitematicaBE/easyplace_debug.log` (at most one line per 5s) |
 
 ### Direct placement (administrators)
 
@@ -233,7 +246,7 @@ npm run build
 ## FAQ
 
 **Q: Why are some 3.x features unavailable?**
-A: The third-generation rewrite is in progress. Mega projections and the projection printer are not restored yet.
+A: The third-generation rewrite restores features one by one. Ghost projections, layer building, easy place and the **projection printer** work; Mega viewport follow / chunk unloading / LOD and ghost-aware `verify` are still being completed.
 
 **Q: The projection shows air or wrong textures.**
 A: Usually a block mapping issue. Report it with the block name and a screenshot.
