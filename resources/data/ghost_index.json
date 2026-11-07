@@ -3,7 +3,7 @@
   "addonVersion": [
     1,
     1,
-    13
+    16
   ],
   "bpUuid": "a7f3c1e2-5b64-4d9a-9c11-8e2f4b7d3a01",
   "rpUuid": "49cb94c2-8cec-4b27-8b58-4b3e01f843fc",
@@ -291,7 +291,7 @@
     },
     "lit:g_redstone_dust_dot": {
       "texture": "redstone_dust_dot",
-      "geometry": "full_block"
+      "geometry": "redstone_dust"
     },
     "lit:g_reinforced_deepslate_side": {
       "texture": "reinforced_deepslate_side",
@@ -862,8 +862,8 @@
       "geometry": "full_block"
     },
     "lit:g_composter_top": {
-      "texture": "composter_top",
-      "geometry": "full_block"
+      "texture": "generic",
+      "geometry": "composter"
     },
     "lit:g_conduit": {
       "texture": "conduit",
@@ -1306,8 +1306,8 @@
       "geometry": "full_block"
     },
     "lit:g_hopper_top": {
-      "texture": "hopper_top",
-      "geometry": "full_block"
+      "texture": "hopper_inside",
+      "geometry": "hopper"
     },
     "lit:g_horn_coral": {
       "texture": "horn_coral",
@@ -2227,6 +2227,32 @@
           "from": "direction"
         }
       }
+    },
+    "lit:g_powered_repeater": {
+      "texture": "repeater",
+      "geometry": "repeater",
+      "states": {
+        "lit:dir": {
+          "type": "int",
+          "min": 0,
+          "max": 3,
+          "default": 0,
+          "from": "direction"
+        }
+      }
+    },
+    "lit:g_powered_comparator": {
+      "texture": "comparator",
+      "geometry": "comparator",
+      "states": {
+        "lit:dir": {
+          "type": "int",
+          "min": 0,
+          "max": 3,
+          "default": 0,
+          "from": "direction"
+        }
+      }
     }
   },
   "deferred": {},
@@ -3102,7 +3128,9 @@
     "minecraft:lava": "lit:g_lava_still",
     "minecraft:bubble_column": "lit:g_water_still",
     "minecraft:unpowered_repeater": "lit:g_unpowered_repeater",
-    "minecraft:unpowered_comparator": "lit:g_unpowered_comparator"
+    "minecraft:unpowered_comparator": "lit:g_unpowered_comparator",
+    "minecraft:powered_repeater": "lit:g_powered_repeater",
+    "minecraft:powered_comparator": "lit:g_powered_comparator"
   },
   "javaMapStats": {
     "total": 870,

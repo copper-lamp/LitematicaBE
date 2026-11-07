@@ -8,10 +8,46 @@
       }
     },
     "components": {
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.lit_hopper",
       "minecraft:material_instances": {
         "*": {
+          "texture": "ghost_hopper_inside",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "down": {
+          "texture": "ghost_hopper_inside",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "up": {
           "texture": "ghost_hopper_top",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "north": {
+          "texture": "ghost_hopper_outside",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "south": {
+          "texture": "ghost_hopper_outside",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "east": {
+          "texture": "ghost_hopper_outside",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "west": {
+          "texture": "ghost_hopper_outside",
           "render_method": "blend",
           "face_dimming": false,
           "ambient_occlusion": false
@@ -23,7 +59,25 @@
       "minecraft:destructible_by_explosion": false,
       "minecraft:replaceable": {},
       "minecraft:light_dampening": 0,
-      "minecraft:map_color": "#888888"
-    }
+      "minecraft:map_color": "#888888",
+      "minecraft:transformation": {
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "permutations": []
   }
 }

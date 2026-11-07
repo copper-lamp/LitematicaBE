@@ -25,9 +25,9 @@
           "cubes": [
             {
               "origin": [
+                -8,
                 0,
-                0,
-                0
+                -8
               ],
               "size": [
                 16,
@@ -99,9 +99,9 @@
             },
             {
               "origin": [
-                0,
-                5,
-                0
+                2,
+                7,
+                3
               ],
               "size": [
                 2,
@@ -175,188 +175,253 @@
                   ],
                   "material_instance": "torch"
                 }
-              },
-              "translation": [
+              }
+            },
+            {
+              "origin": [
+                -5,
+                2,
+                3
+              ],
+              "size": [
+                16,
+                16,
+                0
+              ],
+              "uv": {
+                "north": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "south": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "east": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "west": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "up": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "down": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                }
+              }
+            },
+            {
+              "origin": [
+                -5,
+                2,
+                5
+              ],
+              "size": [
+                16,
+                16,
+                0
+              ],
+              "uv": {
+                "north": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "south": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "east": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "west": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "up": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "down": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                }
+              }
+            },
+            {
+              "origin": [
+                2,
+                2,
+                -4
+              ],
+              "size": [
+                0,
+                16,
+                16
+              ],
+              "uv": {
+                "north": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "south": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "east": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "west": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "up": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                },
+                "down": {
+                  "uv": [
+                    0,
+                    0
+                  ],
+                  "uv_size": [
+                    16,
+                    16
+                  ],
+                  "material_instance": "torch"
+                }
+              }
+            },
+            {
+              "origin": [
                 4,
                 2,
-                11
-              ]
-            },
-            {
-              "origin": [
-                0,
-                5,
-                7
-              ],
-              "size": [
-                16,
-                16,
-                0
-              ],
-              "uv": {
-                "north": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "south": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "east": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "west": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "up": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "down": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                }
-              },
-              "translation": [
-                -3,
-                -3,
-                4
-              ]
-            },
-            {
-              "origin": [
-                0,
-                5,
-                9
-              ],
-              "size": [
-                16,
-                16,
-                0
-              ],
-              "uv": {
-                "north": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "south": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "east": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "west": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "up": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "down": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                }
-              },
-              "translation": [
-                -3,
-                -3,
-                4
-              ]
-            },
-            {
-              "origin": [
-                7,
-                5,
-                0
+                -4
               ],
               "size": [
                 0,
@@ -430,103 +495,13 @@
                   ],
                   "material_instance": "torch"
                 }
-              },
-              "translation": [
-                -3,
-                -3,
-                4
-              ]
+              }
             },
             {
               "origin": [
-                9,
-                5,
-                0
-              ],
-              "size": [
-                0,
-                16,
-                16
-              ],
-              "uv": {
-                "north": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "south": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "east": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "west": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "up": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                },
-                "down": {
-                  "uv": [
-                    0,
-                    0
-                  ],
-                  "uv_size": [
-                    16,
-                    16
-                  ],
-                  "material_instance": "torch"
-                }
-              },
-              "translation": [
-                -3,
-                -3,
-                4
-              ]
-            },
-            {
-              "origin": [
-                7,
+                -1,
                 2,
-                2
+                -6
               ],
               "size": [
                 2,
@@ -604,9 +579,9 @@
             },
             {
               "origin": [
-                0,
-                2,
-                0
+                -4,
+                4,
+                3
               ],
               "size": [
                 2,

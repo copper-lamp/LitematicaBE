@@ -46,12 +46,12 @@ class UIManager {
             
             for (const file of files) {
                 const ext = path.extname(file).toLowerCase();
-                if (ext === '.litematic') {
+                if (ext === '.litematic' || ext === '.mcstructure') {
                     const name = path.basename(file, ext);
                     schematics.push({
                         name: name,
                         file: file,
-                        type: 'litematic'
+                        type: ext === '.mcstructure' ? 'mcstructure' : 'litematic'
                     });
                 }
             }
@@ -134,7 +134,7 @@ class UIManager {
             '§6§lLitematica BE§r\n\n' +
             '§7版本: §f2.6.0\n\n' +
             '§e§l功能说明:§r\n' +
-            '§f• 加载原理图 (.litematic)\n' +
+            '§f• 加载原理图 (.litematic / .mcstructure)\n' +
             '§f• 保存原理图\n' +
             '§f• 逐层渲染\n' +
             '§f• 木剑换层\n' +
@@ -142,7 +142,7 @@ class UIManager {
             '§f• 投影打印机§r\n\n' +
             '§e§l使用教学:§r\n' +
             '§a1. §f手持§6木剑§f蹲下点击打开主菜单\n' +
-            '§a2. §f选择"浏览新原理图"加载.litematic文件\n' +
+            '§a2. §f选择"浏览新原理图"加载原理图文件 (.litematic / .mcstructure)\n' +
             '§a3. §f投影会放置在玩家脚下位置\n' +
             '§a4. §f在 §e投影操作 §f开启逐层建造模式\n' +
             '§a5. §f逐层模式下，§6抬头向上§f切换下层，§6低头向下§f切换上层\n' +
@@ -289,7 +289,7 @@ class UIManager {
         const schematics = this.listSchematics();
         if (schematics.length === 0) {
             player.tell('§c未找到原理图文件！');
-            player.tell('§7请将.litematic文件放入 plugins/LitematicaBE/schematics/ 目录');
+            player.tell('§7请将原理图文件（.litematic / .mcstructure）放入 plugins/LitematicaBE/schematics/ 目录');
             this.showMainMenu(player);
             return;
         }
@@ -392,11 +392,12 @@ class UIManager {
         try {
             const isMega = !!(loadedSchematic.isMega && loadedSchematic.schematicId);
 
-            // 复制原始 .litematic 到 Mega 目录，方便材料清单等功能使用
+            // 复制原始文件到 Mega 目录，方便材料清单等功能使用（.litematic / .mcstructure 均可）
             if (isMega && loadedSchematic.filePath) {
                 try {
                     const megaDir = path.join('./plugins/LitematicaBE/mega_schematics/', loadedSchematic.schematicId);
-                    const destPath = path.join(megaDir, 'original.litematic');
+                    const ext = path.extname(loadedSchematic.filePath) || '.litematic';
+                    const destPath = path.join(megaDir, 'original' + ext);
                     if (!fs.existsSync(megaDir)) {
                         fs.mkdirSync(megaDir, { recursive: true });
                     }
@@ -608,8 +609,8 @@ class UIManager {
         const loadSchematicFile = global.loadSchematicFile;
 
         try {
-            // 使用 loadSchematicFile 以支持 Mega 模式自动检测
-            const loadedSchematic = await loadSchematicFile(schematic.file.replace('.litematic', ''));
+            // 使用 loadSchematicFile 以支持 Mega 模式自动检测；用 basename 去扩展名，兼容 .litematic / .mcstructure
+            const loadedSchematic = await loadSchematicFile(path.basename(schematic.file, path.extname(schematic.file)));
 
             if (!loadedSchematic) {
                 player.tell('§c加载失败：无法解析原理图文件');

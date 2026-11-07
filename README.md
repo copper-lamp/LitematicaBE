@@ -1,11 +1,11 @@
 <div align="center">
   <img src="resources/pack_icon.png" alt="LitematicaBE icon" width="160">
   <h1>LitematicaBE</h1>
-  <p><strong>在基岩版里，用 Java 版 Litematica 的方式造建筑。</strong></p>
+  <p><strong>基岩版服务器一站式投影的最佳方案</strong></p>
   <p>加载与保存 <code>.litematic</code>，用半透明 ghost 方块显示投影，支持逐层建造、轻松放置与材料清单导出。</p>
 
   <p>
-    <img src="https://img.shields.io/badge/release-v3.0.1-4c8bf5?style=flat-square" alt="LitematicaBE v3.0.1">
+    <img src="https://img.shields.io/badge/release-v3.0.3-4c8bf5?style=flat-square" alt="LitematicaBE v3.0.3">
     <img src="https://img.shields.io/badge/Minecraft%20Bedrock-1.21.132%2B-62b47a?style=flat-square" alt="Minecraft Bedrock 1.21.132+">
     <img src="https://img.shields.io/badge/LeviLamina-26.10%2B-7b68ee?style=flat-square" alt="LeviLamina 26.10+">
     <img src="https://img.shields.io/badge/LegacyScriptEngine-nodejs%200.22.x-ffb300?style=flat-square" alt="LegacyScriptEngine nodejs 0.22.x">
@@ -28,14 +28,14 @@
 </div>
 
 > [!WARNING]
-> 3.x 仍在重构与预览阶段：Mega 投影的视口跟随 / 分块卸载 / LOD 尚未恢复。升级前请备份存档；插件与 addon 的版本必须一致，否则 ghost 写入会被禁用。
+> 3.x 仍在重构与预览阶段：部分功能尚未经过严格测试，可能存在未知问题，若发现敬请反馈
 
-LitematicaBE 是一个面向基岩版（BDS + LeviLamina）的投影插件：读取 Java 版 Litematica 的 `.litematic` 文件，用自定义 ghost 方块在世界中还原投影，并提供逐层建造、轻松放置、方块验证与材料清单等建筑辅助功能。保存出的 `.litematic` 可被 Java 版 Litematica 直接打开。
+LitematicaBE 是一个面向基岩版（BDS + LeviLamina）服务端的投影插件：同时支持读取 .litematica 及 .mcstructure 双格式。采用自定义 ghost 方块写入投影，支持超大文件、逐层查看、投影打印机、litematica格式导出等实用功能。无需客户端玩家装载，为基岩版服务器提供一站式投影服务
 
 ## 快速开始
 
 > [!IMPORTANT]
-> LitematicaBE 由「服务端插件 + BP/RP 扩展包」组成。服务端与客户端都需要安装，且两者版本必须一致。
+> LitematicaBE 由「服务端插件 + BP/RP 扩展包」组成，全部内容在 LLBDS 服务端装载。
 
 1. 安装 lip（已安装可跳过）：
 

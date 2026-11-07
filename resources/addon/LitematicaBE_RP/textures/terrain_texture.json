@@ -1638,6 +1638,12 @@
     },
     "ghost_generic": {
       "textures": "textures/blocks/ghost/ghost_generic"
+    },
+    "ghost_hopper_inside": {
+      "textures": "textures/blocks/ghost/ghost_hopper_inside"
+    },
+    "ghost_hopper_outside": {
+      "textures": "textures/blocks/ghost/ghost_hopper_outside"
     }
   }
 }

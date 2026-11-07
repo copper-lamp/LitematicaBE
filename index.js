@@ -37,6 +37,7 @@ const { MegaSchematicManager } = require('./src/core/MegaSchematicManager');
 const { StreamingLitematicLoader } = require('./src/core/StreamingLitematicLoader');
 const { MegaProjectionRenderer } = require('./src/render/MegaProjectionRenderer');
 const { BinaryChunkStorage } = require('./src/core/BinaryChunkStorage');
+const { McstructureLoader } = require('./src/core/McstructureLoader');
 
 // Ghost 子系统
 const { GhostBlockRegistry } = require('./src/ghost/GhostBlockRegistry');
@@ -58,7 +59,7 @@ ll.registerPlugin(
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '3.0.2';
+const PLUGIN_VERSION = '3.0.3-test.1';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
@@ -73,6 +74,9 @@ const logCleaner = new LogCleaner();
 const megaManager = new MegaSchematicManager();
 const streamLoader = new StreamingLitematicLoader();
 const megaRenderer = new MegaProjectionRenderer(megaManager);
+
+// .mcstructure（Bedrock 结构文件）加载器：独立小端 NBT 解析，方块已是 BE 名/状态
+const mcstructureLoader = new McstructureLoader();
 
 const easyPlaceManager = new EasyPlaceManager(projManager, dataManager, megaManager);
 
@@ -1203,6 +1207,8 @@ async function loadSchematicFile(filename, player) {
     
     if (File.exists(filePath + ".litematic")) {
         fullPath = filePath + ".litematic";
+    } else if (File.exists(filePath + ".mcstructure")) {
+        fullPath = filePath + ".mcstructure";
     } else if (File.exists(filePath + ".json")) {
         fullPath = filePath + ".json";
     } else if (File.exists(filePath)) {
@@ -1227,7 +1233,13 @@ async function loadSchematicFile(filename, player) {
                 if (!streamLoader) {
                     throw new Error('streamLoader is not initialized');
                 }
-                streamResult = await streamLoader.prepareStream(loader, fullPath);
+                // .mcstructure 与 .litematic 的字节序/压缩/坐标顺序均不同，必须走各自的流式解析
+                const ext = require('path').extname(fullPath).toLowerCase();
+                if (ext === '.mcstructure') {
+                    streamResult = await mcstructureLoader.prepareStream(fullPath);
+                } else {
+                    streamResult = await streamLoader.prepareStream(loader, fullPath);
+                }
                 if (streamResult && streamResult.totalEstimate > megaThreshold) {
                     useMegaMode = true;
                     logger.info(`[MegaSchematic] Auto-detected mega schematic: ${streamResult.totalEstimate} blocks (threshold: ${megaThreshold})`);
@@ -1287,7 +1299,11 @@ async function loadSchematicFile(filename, player) {
         }
 
         logger.info(`[LitematicaBE] Using standard loader for: ${fullPath}`);
-        const schematic = await loader.load(fullPath);
+        // .mcstructure 用独立加载器（小端 NBT + BE 方块直通），其余走原 .litematic 加载器
+        const ext = require('path').extname(fullPath).toLowerCase();
+        const schematic = (ext === '.mcstructure')
+            ? await mcstructureLoader.load(fullPath)
+            : await loader.load(fullPath);
         schematic.isMega = false;
         schematic.schematicId = null;
         schematic.version = schematic.version || 0;
@@ -1311,7 +1327,7 @@ function getSchematicFiles() {
     
     const fileList = File.getFilesList(SCHEMATIC_PATH);
     for (const f of fileList) {
-        if (f.endsWith('.litematic') || f.endsWith('.json')) {
+        if (f.endsWith('.litematic') || f.endsWith('.mcstructure') || f.endsWith('.json')) {
             files.push(f.replace(SCHEMATIC_PATH, ''));
         }
     }

@@ -206,9 +206,9 @@ class GhostRenderer {
             const w = transformPosition(rel, projection);
             queue[i] = {
                 x: w.x, y: w.y, z: w.z,
-                gid: this.registry.resolve(b.name || b.type || ''),
+                gid: this.registry.resolve(b.renderName || b.name || b.type || ''),
                 st: (typeof this.registry.buildStates === 'function')
-                    ? this.registry.buildStates(b.name || b.type || '', b.bedrockState || b.state)
+                    ? this.registry.buildStates(b.renderName || b.name || b.type || '', b.bedrockState || b.state)
                     : undefined,
             };
         }
@@ -742,9 +742,9 @@ class GhostRenderer {
             }
             rebuilt.push({
                 x: w.x, y: w.y, z: w.z,
-                gid: this.registry.resolve(b.name || b.type || ''),
+                gid: this.registry.resolve(b.renderName || b.name || b.type || ''),
                 st: (typeof this.registry.buildStates === 'function')
-                    ? this.registry.buildStates(b.name || b.type || '', b.bedrockState || b.state)
+                    ? this.registry.buildStates(b.renderName || b.name || b.type || '', b.bedrockState || b.state)
                     : undefined,
             });
         }
@@ -789,9 +789,9 @@ class GhostRenderer {
             s.seen.add(key);
             s.queue.push({
                 x: w.x, y: w.y, z: w.z,
-                gid: this.registry.resolve(b.name || b.type || ''),
+                gid: this.registry.resolve(b.renderName || b.name || b.type || ''),
                 st: (typeof this.registry.buildStates === 'function')
-                    ? this.registry.buildStates(b.name || b.type || '', b.bedrockState || b.state)
+                    ? this.registry.buildStates(b.renderName || b.name || b.type || '', b.bedrockState || b.state)
                     : undefined,
             });
             out.added++;
