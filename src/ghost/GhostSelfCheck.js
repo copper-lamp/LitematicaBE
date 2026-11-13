@@ -110,7 +110,7 @@ class GhostSelfCheck {
                 const rep = this.addonCheck.summary ? this.addonCheck.summary() : {};
                 const first = rep.issues ? rep.issues.find(i => i.level === 'error') : null;
                 step('addon 版本校验', false, first ? `${first.code}: ${first.message}` : '版本不一致，ghost 写入已禁用');
-                this._say(player, '§7修复：node tools/build_addon.js --pack → 客户端重装 .mcaddon → 覆盖服务端 BP/RP → 重启');
+                this._say(player, '§7修复：npm run build → 客户端重装 build/ 的 .mcaddon → 覆盖服务端 BP/RP → 重启');
                 return this._done(player, steps, ok, ctx);
             }
             step('addon 版本校验', true, this.addonCheck ? '一致，写入可用' : '未注入校验（跳过）');

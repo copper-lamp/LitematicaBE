@@ -5,13 +5,45 @@
       "identifier": "lit:g_observer_front",
       "menu_category": {
         "category": "none"
+      },
+      "states": {
+        "lit:facing": {
+          "values": {
+            "min": 0,
+            "max": 5
+          }
+        }
       }
     },
     "components": {
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.lit_observer",
       "minecraft:material_instances": {
         "*": {
+          "texture": "ghost_observer_side",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "front": {
           "texture": "ghost_observer_front",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "back": {
+          "texture": "ghost_observer_back",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "side": {
+          "texture": "ghost_observer_side",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "top": {
+          "texture": "ghost_observer_top",
           "render_method": "blend",
           "face_dimming": false,
           "ambient_occlusion": false
@@ -23,7 +55,158 @@
       "minecraft:destructible_by_explosion": false,
       "minecraft:replaceable": {},
       "minecraft:light_dampening": 0,
-      "minecraft:map_color": "#888888"
-    }
+      "minecraft:map_color": "#888888",
+      "minecraft:transformation": {
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('lit:facing') == 0",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:facing') == 1",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              -90,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:facing') == 2",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:facing') == 3",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              180,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:facing') == 4",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              -90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:facing') == 5",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    ]
   }
 }

@@ -1,12 +1,11 @@
 /**
- * addon（BP/RP）与插件运行时索引的版本一致性校验
+ * addon（BP）与插件运行时索引的版本一致性校验
  *
  * 校验两侧：
  *   1. **数据侧**：插件 `data/ghost_index.json` 的 addonVersion/bpUuid/rpUuid
  *      必须与构建期写下的 `data/addon_expected.json` 一致（即"索引与代码同批"）。
- *   2. **部署侧**：服务端 `behavior_packs/` 里确实存在 header.uuid = bpUuid 的包，
- *      且版本等于期望版本。
- *      顺带看 `worlds/<世界>/world_behavior_packs.json` 有没有引用它。
+ *   2. **部署侧**：服务端 `behavior_packs/` 里确实存在 header.uuid = bpUuid 的包，且版本等于期望版本。顺带看 `worlds/<世界>/world_behavior_packs.json` 有没有引用它。
+ *   3. ~~部署侧 RP/资源包~~：不再校验。RP 版本不符/缺失不再告警，report.deployed.rp 恒为 null（仅保留字段兼容旧消费端读取）。
  */
 
 const fs = require('fs');
@@ -236,8 +235,8 @@ class AddonVersionCheck {
         return null;
     }
 
-    /** 世界里的 world_behavior_packs.json / world_resource_packs.json 引用情况 */
-    _readWorldRefs(bpUuid, rpUuid) {
+    /** 世界里的 world_behavior_packs.json 引用情况（RP 不校验，不再读 world_resource_packs.json） */
+    _readWorldRefs(bpUuid) {
         const out = [];
         const worldsDir = path.join(this.serverRoot, 'worlds');
         let worlds = [];
@@ -248,7 +247,7 @@ class AddonVersionCheck {
         }
         for (const w of worlds) {
             const wdir = path.join(worldsDir, w.name);
-            for (const [file, uuid] of [['world_behavior_packs.json', bpUuid], ['world_resource_packs.json', rpUuid]]) {
+            for (const [file, uuid] of [['world_behavior_packs.json', bpUuid]]) {
                 const p = path.join(wdir, file);
                 if (!fs.existsSync(p)) continue;      // 文件不存在 = 这个世界没引用，不是解析失败
                 const arr = this._readJson(p, { quiet: true });
@@ -317,7 +316,7 @@ class AddonVersionCheck {
                 issues.push({
                     level: 'error',
                     code: 'index-version-mismatch',
-                    message: `ghost_index 版本 ${vstr(indexRec.version)} ≠ 构建期望 ${vstr(expected.version)}（索引与插件代码不同批，需重跑 build_addon.js 并整目录复制）`,
+                    message: `ghost_index 版本 ${vstr(indexRec.version)} ≠ 构建期望 ${vstr(expected.version)}（索引与插件代码不同批，需 npm run build 并整目录复制）`,
                 });
             }
             if (expected.bpUuid && indexRec.bpUuid && String(expected.bpUuid).toLowerCase() !== String(indexRec.bpUuid).toLowerCase()) {
@@ -337,7 +336,8 @@ class AddonVersionCheck {
         report.serverRootUsable = hasBpDir || hasRpDir || hasWorlds;
 
         const wantBp = (expected && expected.bpUuid) || indexRec.bpUuid;
-        const wantRp = (expected && expected.rpUuid) || indexRec.rpUuid;
+        // 客户端 RP/资源包不再校验：服务端进程看不到玩家客户端，RP 只影响渲染，
+        // 不参与服务端写方块；report.deployed.rp 恒为 null（兼容旧消费端读取）。
         const wantVer = (expected && expected.version) || indexRec.version;
 
         if (!report.serverRootUsable) {
@@ -367,24 +367,7 @@ class AddonVersionCheck {
                 });
             }
 
-            if (wantRp) {
-                report.deployed.rp = this._findPack(rpDir, wantRp, MANIFEST_SCAN_DEPTH);
-            }
-            if (!report.deployed.rp) {
-                issues.push({
-                    level: 'warn',
-                    code: 'server-rp-missing',
-                    message: `resource_packs/ 下找不到 uuid=${wantRp || '?'} 的资源包（客户端侧仍需安装，否则看不到半透明 ghost）`,
-                });
-            } else if (!versionEq(report.deployed.rp.version, wantVer)) {
-                issues.push({
-                    level: 'warn',
-                    code: 'server-rp-version-mismatch',
-                    message: `服务端资源包版本 ${vstr(report.deployed.rp.version)} ≠ 期望 ${vstr(wantVer)}（${report.deployed.rp.path}）`,
-                });
-            }
-
-            report.worldRefs = this._readWorldRefs(wantBp, wantRp);
+            report.worldRefs = this._readWorldRefs(wantBp);
             const bpRefs = report.worldRefs.filter(r => r.file === 'world_behavior_packs.json');
             const badRefs = bpRefs.filter(r => r.unparsable);
             if (badRefs.length) {
@@ -440,7 +423,7 @@ class AddonVersionCheck {
         }
         if (!report.enabled) {
             this._warn('已禁用 ghost 写入（/litematica:ghost lay|undo|restore 与自动补齐），投影与其它功能不受影响');
-            this._warn('修复：重跑 node tools/build_addon.js --pack → 用新 .mcaddon 重装客户端 → 把 addon/LitematicaBE_BP|RP 覆盖到服务器并重启');
+            this._warn('修复：npm run build → 把新 packs（BP/RP）覆盖到服务器并重启');
         }
     }
 

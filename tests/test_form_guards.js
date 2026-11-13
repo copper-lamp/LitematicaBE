@@ -84,10 +84,19 @@ check('防御类型与表单类型匹配（CustomForm 用 Array.isArray，Simple
     assert.strictEqual(bad.length, 0, bad.join('\n     '));
 });
 
-check('放置面板的坐标索引有越界保护（label 数量变了不会取错控件）', () => {
+check('放置面板的坐标输入排在所有 label 之前（不依赖 label 是否占位）', () => {
     const src = fs.readFileSync(FILES[0], 'utf8');
-    assert.ok(/const labelCount = isMega \? 9 : 8;/.test(src), 'labelCount 常量应仍在');
-    assert.ok(/data\.length >= labelCount \+ 3/.test(src), '缺少 data.length 校验：加 label 忘改 labelCount 会静默错位');
+    const start = src.indexOf('showPlacementPanel(player, schematic, loadedSchematic)');
+    assert.ok(start > 0, '找不到 showPlacementPanel');
+    const body = src.slice(start, start + 5000);
+    const firstInput = body.indexOf('fm.addInput(');
+    const firstLabel = body.indexOf('fm.addLabel(');
+    assert.ok(firstInput > 0, '面板里应有 addInput');
+    assert.ok(firstLabel > 0, '面板里应有 addLabel');
+    assert.ok(firstInput < firstLabel,
+        '坐标输入必须排在所有 label 之前：label 是否占位在不同 LSE 实现下不稳定，按 label 数量取下标会取到 null → 坐标回退成玩家位置');
+    assert.ok(/toIntOr\(data\[0\]/.test(body), '坐标应走 toIntOr 解析（0 / 负数不能被 `|| 默认值` 吃掉）');
+    assert.ok(/clampCoord\(/.test(body), '坐标应夹紧到合法范围');
 });
 
 console.log(`\n结果: ${pass} 通过 / ${fail} 失败\n`);

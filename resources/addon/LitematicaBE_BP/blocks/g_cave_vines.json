@@ -8,11 +8,11 @@
       }
     },
     "components": {
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.lit_cross",
       "minecraft:material_instances": {
         "*": {
           "texture": "ghost_cave_vines",
-          "render_method": "blend",
+          "render_method": "alpha_test",
           "face_dimming": false,
           "ambient_occlusion": false
         }
@@ -24,6 +24,7 @@
       "minecraft:replaceable": {},
       "minecraft:light_dampening": 0,
       "minecraft:map_color": "#888888"
-    }
+    },
+    "permutations": []
   }
 }

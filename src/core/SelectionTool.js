@@ -4,7 +4,6 @@
 /**
  * 取玩家所在维度 ID。
  * LSE 的 Player 对象没有 dim / dimid 属性（只有 pos 是 FloatPos，带 dim 文字名与 dimid 数字），
- * 原来写 player.dim 恒为 undefined，导致跨维度校验永远通过、选区维度恒为 undefined。
  */
 function dimidOf(player) {
     const d = player && player.pos && player.pos.dimid;

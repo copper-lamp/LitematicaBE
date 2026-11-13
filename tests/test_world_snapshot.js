@@ -206,7 +206,7 @@ check('revert 后快照清空', () => assert.strictEqual(r1.remaining, 0));
         assert.strictEqual(r.restored, 1);
         assert.strictEqual(r.remaining, 0);
     });
-    check('孤儿会话文件已删除', () => assert.strictEqual(fs.existsSync(path.join(dir, 'orphan.json')), false));
+    check('无主会话文件已删除', () => assert.strictEqual(fs.existsSync(path.join(dir, 'orphan.json')), false));
     check('世界已还原为 stone', () => assert.strictEqual(getRaw(40, 50, 40, D).type, 'minecraft:stone'));
 }
 

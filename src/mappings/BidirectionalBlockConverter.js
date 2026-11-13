@@ -5,6 +5,7 @@
  */
 const { BlockMappingRegistry } = require('./BlockMappingRegistry');
 const { BlockStateConverters } = require('./BlockStateConverters');
+const { isSlabName, slabDoubleName, slabNameOfDouble, isDoubleSlabName } = require('./SlabNames');
 
 class BidirectionalBlockConverter {
     constructor() {
@@ -34,6 +35,16 @@ class BidirectionalBlockConverter {
         this.stats.javaToBe.total++;
         const javaName = javaBlock.name || '';
         const javaStates = javaBlock.states || {};
+
+        // 双半砖：Java 是「同一个半砖 + type=double」，基岩是**独立方块名**。
+        // 不换名就会把双半砖当普通半砖放下去（只放半格），名字三种排法见 mappings/SlabNames.js。
+        if (isSlabName(javaName) && String(javaStates.type || javaStates.half || '') === 'double') {
+            const dbl = slabDoubleName(javaName);
+            if (dbl) {
+                this.stats.javaToBe.success++;
+                return { name: dbl, states: {}, _originalJava: javaName, _nbt: javaBlock.nbt || null };
+            }
+        }
 
         if (!javaName || !this.registry.hasJava(javaName)) {
             this.stats.javaToBe.fallback++;
@@ -71,6 +82,20 @@ class BidirectionalBlockConverter {
 
         // Use _originalJava hint for many-to-one reverse fidelity
         const hintJava = beBlock._originalJava || null;
+
+        // 双半砖反向：基岩独立双半砖名 → Java 半砖 + type=double
+        if (isDoubleSlabName(beName)) {
+            const slabShort = slabNameOfDouble(beName);
+            if (slabShort) {
+                this.stats.beToJava.success++;
+                return {
+                    name: `minecraft:${slabShort}`,
+                    states: { type: 'double' },
+                    _originalBedrock: beName,
+                };
+            }
+        }
+
         const javaNames = this.registry.getJavaNames(beName);
 
         if (javaNames.length === 0) {

@@ -4,8 +4,49 @@
  * Covers: directional, rails, stairs, doors, trapdoors, beds, redstone, buttons, levers, etc.
  */
 const { BlockMappingRegistry } = require('./BlockMappingRegistry');
+const { isSlabName } = require('./SlabNames');
+const {
+    PISTON_FACING, JAVA_TO_PISTON_FACING, PISTON_FACING_TO_JAVA, isPistonName,
+} = require('./PistonFacing');
 
 const registry = new BlockMappingRegistry();
+
+// === 二高植物（double_plant 族）===
+// Java 侧这些方块有 `half: lower/upper`，基岩侧用 `upper_block_bit: 0/1` 表达上下半。
+// 缺这个转换的后果（2026-11-13 真机）：投影里的上格（half=upper）被当成 BE 默认状态
+// （upper_block_bit=0，即下格）放置 → 下方无固体支撑 → BDS 立即把植物破坏成凋落物 →
+// 打印机每轮重试 → 死循环 + 无限凋落物。BE 侧 `tall_grass` 本身就是双格高草。
+const DOUBLE_PLANT_JAVA = new Set([
+    'minecraft:rose_bush', 'minecraft:sunflower', 'minecraft:lilac',
+    'minecraft:peony', 'minecraft:large_fern', 'minecraft:tall_grass',
+]);
+const DOUBLE_PLANT_BE = new Set([
+    'rose_bush', 'sunflower', 'lilac', 'peony', 'large_fern', 'tall_grass',
+]);
+
+// === 方向族方块（2026-11-13 实机结论，勿再改回全局活塞表）===
+// ★ 2026-11-13 实测：把活塞表套到 dispenser 上会让水平四向整体反 180°。
+//   证据链：mcstructure 里 dispenser 的 facing_direction = 2/3/4/5，直接放置到世界后
+//   方向与数据一致（= 通用表 2=north 3=south 4=west 5=east）；
+//   而同一批数据经 litematic（Java 的 facing）转换时走活塞表 → 全部反 180°。
+//   结论：**只有活塞族**的 facing_direction 与通用枚举相反（见 mappings/PistonFacing.js），
+//   其余方向族（dispenser / dropper / hopper / crafter / furnace / smoker / blast_furnace）
+//   一律用 BE_FACING_MAP。observer 更特殊，见 _convertFacing 里的独立分支（带前缀 + 字符串值）。
+//
+// 原「DIRECTIONAL_USE_PISTON_FACING」开关已删除：它把活塞表全局应用，是上述 180° bug 的来源。
+
+/** 这 8 个方向族方块的 Java 名（_convertFacing 用） */
+const DIRECTIONAL_JAVA_NAMES = new Set([
+    'minecraft:dispenser', 'minecraft:dropper', 'minecraft:hopper',
+    'minecraft:observer', 'minecraft:crafter',
+    'minecraft:furnace', 'minecraft:smoker', 'minecraft:blast_furnace',
+]);
+
+/** 这 8 个方向族方块的 BE 名（_convertFacingReverse 用，映射自 mapping.b） */
+const DIRECTIONAL_BE_NAMES = new Set([
+    'dispenser', 'dropper', 'hopper', 'observer', 'crafter',
+    'furnace', 'smoker', 'blast_furnace',
+]);
 
 // === FACING MAPS ===
 const JAVA_FACING = ['down', 'up', 'north', 'south', 'west', 'east'];
@@ -21,7 +62,7 @@ const BE_DIRECTION_REVERSE = { 0: 'south', 1: 'west', 2: 'north', 3: 'east' };
 
 // CARDINAL (banners, signs, etc.)
 const BE_CARDINAL_MAP = { south: 0, west: 1, north: 2, east: 3 };
-const BE_CARDINAL_REVERSE = { 0: 'south', 1: 'west', 2: 'north', 3: 'east' };
+// 中继器/比较器：Bedrock direction 与 Java facing 同义（均为输出朝向）
 
 // === RAIL SHAPE MAPS ===
 const JAVA_RAIL_SHAPE = [
@@ -126,6 +167,28 @@ class BlockStateConverters {
         // 4. Remove Java-only states that have been fully handled by special converters
         // (Keep them otherwise - they pass through for round-trip fidelity)
 
+        // 4.5 二高植物：Java `half` → BE `upper_block_bit`（必须在 Object.assign 之后，
+        //    否则被灌回来的 `half` 会残留进 NBT；BDS 不认 `half` 键，会静默丢弃）。
+        //    half 只在投影里的上/下格出现；没有 half 的（如单格 Java 矮草）不动。
+        if (DOUBLE_PLANT_JAVA.has(javaName) && states.half !== undefined) {
+            be.upper_block_bit = (states.half === 'upper') ? 1 : 0;
+            delete be.half;
+        }
+
+        // 5. 半砖归一化 —— 必须放在最后。上面 `Object.assign(be, states)` 会把 Java 的
+        //    `type` / `waterlogged` 原样灌回来（slab 的 registry 映射没有 s 表），
+        //    只在特殊转换器里 delete 是删不干净的。
+        //    Java `type`(bottom/top/double) → 基岩 `vertical_half`(bottom/top)；
+        //    double 由方块名承载（见 mappings/SlabNames.js），状态整体清空。
+        //    历史 bug：打印机放置时 `type=top` 原样写进基岩 setBlock，基岩不认这个键 →
+        //    上下半砖状态丢失，永远放下半砖（且 waterlogged 会让 setBlock 整条失败）。
+        if (isSlabName(javaName)) {
+            const half = states.type !== undefined ? states.type : states.half;
+            const slabStates = {};
+            if (half === 'top' || half === 'bottom') slabStates.vertical_half = half;
+            return slabStates;
+        }
+
         return be;
     }
 
@@ -181,6 +244,17 @@ class BlockStateConverters {
 
         this._applySpecialConvertersReverse(beBlockId, beStates, java, javaName);
 
+        // 半砖反向：基岩 `vertical_half` → Java `type`（旧版存档的 `top_slot_bit` 一并兼容）。
+        // 不做这一步，.mcstructure 读回来的半砖会被当成"没有上下之分"。
+        if (beStates.vertical_half !== undefined) {
+            java.type = beStates.vertical_half;
+            delete java.vertical_half;
+        } else if (beStates.top_slot_bit !== undefined) {
+            const top = beStates.top_slot_bit === 1 || beStates.top_slot_bit === true;
+            java.type = top ? 'top' : 'bottom';
+            delete java.top_slot_bit;
+        }
+
         return java;
     }
 
@@ -197,10 +271,29 @@ class BlockStateConverters {
             return;
         }
 
-        // Piston / sticky_piston / dispenser / dropper / hopper / observer / crafter / furnace / dropper
-        if (javaName.includes('piston') || javaName === 'minecraft:dispenser' || javaName === 'minecraft:dropper' ||
-            javaName === 'minecraft:hopper' || javaName === 'minecraft:observer' || javaName === 'minecraft:crafter' ||
-            javaName === 'minecraft:furnace' || javaName === 'minecraft:smoker' || javaName === 'minecraft:blast_furnace') {
+        // 活塞族：facing_direction 的语义与通用枚举相反（2=south 3=north 4=east 5=west），
+        // 只有竖直两档与通用表相同。唯一真源见 mappings/PistonFacing.js。
+        if (javaName.includes('piston')) {
+            be.facing_direction = JAVA_TO_PISTON_FACING[facing] !== undefined
+                ? JAVA_TO_PISTON_FACING[facing]
+                : PISTON_FACING.DOWN;
+            delete be.facing;
+            return;
+        }
+
+        // observer 单列：基岩状态名带命名空间、值是字符串
+        // （实测 mcstructure 写的是 {"minecraft:facing_direction": "west"}，语义与 Java 的 facing 相同）。
+        // 不能走下面的整型方向表：observer 的 facing_direction 不是 0-5 编号。
+        if (javaName === 'minecraft:observer') {
+            be['minecraft:facing_direction'] = String(facing);
+            delete be.facing;
+            delete be.facing_direction;
+            return;
+        }
+
+        // dispenser / dropper / hopper / crafter / furnace —— 统一用通用表（见文件头 2026-11-13 结论）。
+        // 曾经全局套用活塞表，导致水平四向整体反 180°。
+        if (DIRECTIONAL_JAVA_NAMES.has(javaName)) {
             be.facing_direction = BE_FACING_MAP[facing] !== undefined ? BE_FACING_MAP[facing] : 0;
             delete be.facing;
             return;
@@ -210,6 +303,12 @@ class BlockStateConverters {
         if (javaName.endsWith('_stairs')) {
             be.weirdo_direction = STAIR_JAVA_TO_BE_FACING[facing] !== undefined ? STAIR_JAVA_TO_BE_FACING[facing] : 0;
             delete be.facing;
+            // Java half=top → 基岩 upside_down_bit=1（倒置楼梯）。不转就永远正放，
+            // 而且 BlockVerifier 的白名单里要校验 upside_down_bit，会判"对不上"。
+            if (js.half !== undefined) {
+                be.upside_down_bit = (js.half === 'top' || js.half === 'true' || js.half === true) ? 1 : 0;
+                delete be.half;
+            }
             return;
         }
 
@@ -299,6 +398,12 @@ class BlockStateConverters {
             const reverse = { 0: 'east', 1: 'west', 2: 'south', 3: 'north' };
             java.facing = reverse[bs.weirdo_direction] || 'north';
             delete java.weirdo_direction;
+            // 基岩 upside_down_bit=1 → Java half=top
+            if (bs.upside_down_bit !== undefined) {
+                const top = bs.upside_down_bit === 1 || bs.upside_down_bit === true;
+                java.half = top ? 'top' : 'bottom';
+                delete java.upside_down_bit;
+            }
             return;
         }
 
@@ -329,7 +434,13 @@ class BlockStateConverters {
 
         // General facing_direction -> facing
         if (bs.facing_direction !== undefined) {
-            java.facing = BE_FACING_REVERSE[bs.facing_direction] || 'down';
+            // 只有活塞族的 facing_direction 与通用枚举相反（2=south 3=north 4=east 5=west），
+            // 其余方向族（dispenser/dropper/hopper/crafter/furnace…）一律用通用反向表。
+            // 与 _convertFacing 对称：2026-11-13 实测，全局套活塞表会让水平四向反 180°。
+            const usePiston = isPistonName(mapping.b);
+            java.facing = usePiston
+                ? (PISTON_FACING_TO_JAVA[bs.facing_direction] || 'down')
+                : (BE_FACING_REVERSE[bs.facing_direction] || 'down');
             delete java.facing_direction;
             return;
         }
@@ -468,9 +579,11 @@ class BlockStateConverters {
 
         // REPEATER
         if (javaName.includes('repeater') || javaName === 'minecraft:powered_repeater') {
+            const _rf = js.facing || 'north';
+            be.direction = BE_CARDINAL_MAP[_rf] !== undefined ? BE_CARDINAL_MAP[_rf] : 2;
             const delay = parseInt(js.delay || '1', 10);
             be.repeater_delay = Math.max(0, Math.min(3, delay - 1));
-            be.powered_bit = javaName.includes('powered') ? 1 : (js.powered === 'true' || js.powered === true ? 1 : 0);
+            be.powered_bit = (javaName === 'minecraft:powered_repeater' || javaName === 'powered_repeater' || (javaName === 'minecraft:repeater' && (js.powered === 'true' || js.powered === true))) ? 1 : 0;
             if (js.locked) {
                 be.locked_bit = (js.locked === 'true' || js.locked === true) ? 1 : 0;
                 delete be.locked;
@@ -482,8 +595,10 @@ class BlockStateConverters {
 
         // COMPARATOR
         if (javaName.includes('comparator')) {
+            const _cf = js.facing || 'north';
+            be.direction = BE_CARDINAL_MAP[_cf] !== undefined ? BE_CARDINAL_MAP[_cf] : 2;
             be.output_subtract_bit = (js.mode === 'subtract') ? 1 : 0;
-            be.output_lit_bit = javaName.includes('powered') ? 1 : (js.powered === 'true' || js.powered === true ? 1 : 0);
+            be.output_lit_bit = (javaName === 'minecraft:powered_comparator' || javaName === 'powered_comparator' || (javaName === 'minecraft:comparator' && (js.powered === 'true' || js.powered === true))) ? 1 : 0;
             delete be.mode;
             delete be.powered;
             return;
@@ -648,6 +763,18 @@ class BlockStateConverters {
             return;
         }
 
+        // DOUBLE PLANTS: BE `upper_block_bit` → Java `half`（与正向转换对称）。
+        // 缺反向的后果：.mcstructure 读回 / 投影保存时上格丢失 half 信息，
+        // 二高植物上格被当"没有上下之分"，再次打印又变成下格 → 死循环复现。
+        const bareBlock = String(beBlockId).includes(':')
+            ? String(beBlockId).slice(String(beBlockId).indexOf(':') + 1)
+            : String(beBlockId);
+        if (DOUBLE_PLANT_BE.has(bareBlock) && bs.upper_block_bit !== undefined) {
+            java.half = (bs.upper_block_bit === 1 || bs.upper_block_bit === true) ? 'upper' : 'lower';
+            delete java.upper_block_bit;
+            return;
+        }
+
         // TRAPDOORS
         if (beBlockId.includes('trapdoor') || beBlockId === 'iron_trapdoor' || beBlockId === 'copper_trapdoor') {
             const reverseDir = { 0: 'south', 1: 'west', 2: 'north', 3: 'east' };
@@ -674,6 +801,10 @@ class BlockStateConverters {
 
         // REPEATER
         if (beBlockId.includes('repeater')) {
+            if (bs.direction !== undefined) {
+                java.facing = BE_CARDINAL_REVERSE[bs.direction] || 'north';
+                delete java.direction;
+            }
             java.delay = String((bs.repeater_delay || 0) + 1);
             java.powered = (bs.powered_bit === 1) ? 'true' : 'false';
             delete java.repeater_delay;
@@ -683,6 +814,10 @@ class BlockStateConverters {
 
         // COMPARATOR
         if (beBlockId.includes('comparator')) {
+            if (bs.direction !== undefined) {
+                java.facing = BE_CARDINAL_REVERSE[bs.direction] || 'north';
+                delete java.direction;
+            }
             java.mode = (bs.output_subtract_bit === 1) ? 'subtract' : 'compare';
             java.powered = (bs.output_lit_bit === 1) ? 'true' : 'false';
             delete java.output_subtract_bit;

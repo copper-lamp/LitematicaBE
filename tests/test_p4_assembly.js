@@ -52,7 +52,9 @@ check('ConfigManager：默认 render.mode = ghost，新键齐全', () => {
     assert.strictEqual(cm.get('render.ghostMaxBlocks'), 60000);
     assert.strictEqual(cm.get('render.ghostOverwriteReplaceable'), true);
     assert.strictEqual(cm.get('render.tickBudgetMs'), 8);
-    assert.strictEqual(cm.get('render.enableMega'), false);
+    // 2026-11-13：默认值改为 true（超大投影默认开启）。要临时关闭请改 config.json 的
+    // render.enableMega=false —— 这里断言的是**默认配置**，不是用户配置。
+    assert.strictEqual(cm.get('render.enableMega'), true);
 });
 
 check('ConfigManager：老配置里的 particle 被强制改成 ghost，其它键保留', () => {
@@ -197,11 +199,15 @@ check('全仓库仅保留一个 onTick 入口（RenderScheduler.start）', () =>
             }
         });
     }
-    // 只允许 RenderScheduler 内部那一个；UIManager/其它模块的降级分支不许被调用，但也允许存在
+    // 只允许 RenderScheduler 内部那一个；UIManager/其它模块的降级分支不许被调用，但也允许存在。
+    // 断言"哪个文件"而不是"哪一行"：行号会随文件里加注释/require 漂移（这里吃过一次）。
     assert.ok(hits.some(h => h.startsWith('RenderScheduler.js')), '调度器必须持有 onTick');
     const outside = hits.filter(h => !h.startsWith('RenderScheduler.js'));
-    assert.deepStrictEqual(outside, ['UIManager.js:74'],
+    const outsideFiles = [...new Set(outside.map(h => h.split(':')[0]))].sort();
+    assert.deepStrictEqual(outsideFiles, ['UIManager.js'],
         `除调度器外只允许 UIManager 的未调用降级分支，实际: ${outside.join(', ')}`);
+    assert.strictEqual(outside.length, 1,
+        `UIManager 只应有一处 onTick 降级分支，实际: ${outside.join(', ')}`);
 });
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);

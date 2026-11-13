@@ -88,7 +88,7 @@ class GhostProbe {
         const first = rep && rep.issues ? rep.issues.find(i => i.level === 'error') : null;
         player.tell('§cghost 写入已禁用：addon 与插件版本不一致');
         if (first) player.tell(`§7原因：${first.message}`);
-        player.tell('§7修复：node tools/build_addon.js --pack → 客户端重装 .mcaddon → 服务器覆盖 addon/LitematicaBE_BP|RP → 重启');
+        player.tell('§7修复：npm run build → 客户端重装 build/ 的 .mcaddon → 服务器覆盖新 packs → 重启');
         player.tell('§7用法：/litematica:ghost info 可查看完整校验结果');
         return true;
     }
@@ -332,8 +332,8 @@ class GhostProbe {
             player.tell(`§7状态: ${this.addonCheck.summaryText()}`);
             const rep = this.addonCheck.summary();
             if (rep.deployed) {
-                const bp = rep.deployed.bp, rp = rep.deployed.rp;
-                player.tell(`§7服务端 BP: §f${bp ? (bp.version || []).join('.') : '未找到'} §7/ RP: §f${rp ? (rp.version || []).join('.') : '未找到'}`);
+                const bp = rep.deployed.bp;
+                player.tell(`§7服务端 BP: §f${bp ? (bp.version || []).join('.') : '未找到'}`);
             }
             if (rep.issues && rep.issues.length) {
                 for (const i of rep.issues.slice(0, 4)) {

@@ -1,4 +1,4 @@
-// MegaSchematicManager v3.1 — 超大型投影数据管理器
+// MegaSchematicManager v3.0 — 超大型投影数据管理器
 // 使用 .mcmega 二进制分块存储（调色板 + 位打包 + GZip 压缩）
 // 分块大小: 32×32×32，LRU 内存缓存
 // 异步分批加载，不阻塞游戏进程

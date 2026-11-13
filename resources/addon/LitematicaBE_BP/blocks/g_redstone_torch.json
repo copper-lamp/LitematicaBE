@@ -5,10 +5,18 @@
       "identifier": "lit:g_redstone_torch",
       "menu_category": {
         "category": "none"
+      },
+      "states": {
+        "lit:dir": {
+          "values": {
+            "min": 0,
+            "max": 4
+          }
+        }
       }
     },
     "components": {
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.lit_torch",
       "minecraft:material_instances": {
         "*": {
           "texture": "ghost_redstone_torch",
@@ -23,7 +31,70 @@
       "minecraft:destructible_by_explosion": false,
       "minecraft:replaceable": {},
       "minecraft:light_dampening": 0,
-      "minecraft:map_color": "#888888"
-    }
+      "minecraft:map_color": "#888888",
+      "minecraft:transformation": {
+        "rotation": [0, 0, 0],
+        "rotation_pivot": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "translation": [0, 0, 0]
+      }
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('lit:dir') == 0",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [90, 0, 0],
+            "rotation_pivot": [0, 0, 0],
+            "scale": [1, 1, 1],
+            "translation": [0, 0.25, 0]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 1",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [0, 0, 90],
+            "rotation_pivot": [0, 0, 0],
+            "scale": [1, 1, 1],
+            "translation": [0, 0.25, 0]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 2",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [-90, 0, 0],
+            "rotation_pivot": [0, 0, 0],
+            "scale": [1, 1, 1],
+            "translation": [0, 0.25, 0]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 3",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [0, 0, -90],
+            "rotation_pivot": [0, 0, 0],
+            "scale": [1, 1, 1],
+            "translation": [0, 0.25, 0]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 4",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [0, 0, 0],
+            "rotation_pivot": [0, 0, 0],
+            "scale": [1, 1, 1],
+            "translation": [0, 0, 0]
+          }
+        }
+      }
+    ]
   }
 }

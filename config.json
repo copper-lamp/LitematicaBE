@@ -1,27 +1,40 @@
 {
-  // ===== 渲染（ghost 是唯一渲染路径；粒子渲染已整体移除）=====
+  // ===== 投影渲染 =====
   "render": {
-    "mode": "ghost",  // 渲染模式：只有 ghost（往世界写真实半透明方块）
-    "ghostWritesPerTick": 300,  // 每 tick 最多写多少格 ghost（1 万方块 ≈ 34 tick）
-    "ghostMaxBlocks": 60000,  // 单个投影最多写多少格，超限直接拒绝（防写爆存档）
-    "ghostOverwriteReplaceable": true,  // 是否覆盖花草/水/雪这类可替换方块（玩家放的永远不覆盖）
+    "mode": "ghost",  // 渲染模式：只有 ghost
+    "ghostWritesPerTick": 300,  // 每 tick 最多写入数（1 万方块 ≈ 34 tick）
+    "ghostMaxBlocks": 60000,  // 单个投影最多写入数（防写爆存档）
+    "ghostOverwriteReplaceable": true,  // 是否覆盖花草/水/雪这类可替换方块
     "tickBudgetMs": 8,  // 统一调度器单 tick 给周期任务的总预算（毫秒）
-    "enableMega": true  // 超大投影（> megaSchematic.threshold）走 .mcmega 分块存储 + ghost 分块注入
+    "enableMega": true  // 超大投影（分块存储 + ghost 分块注入）
   },
 
   // ===== 轻松放置 =====
   "easyPlace": {
-    "enabled": true,  // 启用轻松放置（判定为 ghost 即视为"空位可放"）
+    "enabled": true,  // 启用轻松放置
 
-    // 投影打印机：把半径内的 ghost 格自动填成真方块
+    // 投影打印机
     "printer": {
-      "radius": 5,  // 搜索半径（格）
-      "maxPerCycle": 12,  // 每轮（200ms）最多放多少格（调大容易卡服）
-      "budgetMs": 6,  // 单轮时间预算（毫秒），超出的格留到下一轮
-      "placeDelayMs": 0,  // 大于 0 时每格之间等待的毫秒数（用于控制放置速度）
+      "radius": 6,  // 搜索半径（格）：以玩家为中心的球体
+      "maxPerCycle": 12,  // 每轮（200ms）最多放置数
+      "budgetMs": 6,  // 单轮时间预算（毫秒），溢出顺延
+      "placeDelayMs": 0,  // 放置间隔（毫秒），为 0 时立即放置
       "overwriteReplaceable": true,  // 顶掉花草/雪/水；玩家自己放的方块永远不覆盖
       "debug": false  // true = 写 logs/LitematicaBE/easyplace_debug.log（最多 5 秒一条）
     }
+  },
+
+  // ===== 保存投影（选区 → 文件） =====
+  // litematic   = Java 版 Litematica 投影（位打包 + gzip）
+  // mcstructure = 基岩版结构文件（**不压缩**，体积 ≈ 格数 × 8 B，两层 int32 各 4 B）
+  "schematicSave": {
+    "defaultFormat": "litematic",  // 表单默认项：litematic | mcstructure | both
+    "maxVolume": 1000000,  // .mcstructure 单次导出格数上限（≈ 100×100×100）；超限在读方块前就截停
+    "includeBlockEntities": true,  // 写入箱子/漏斗等方块实体（block_position_data）
+    "writeLiquidLayer": true,  // 第二层 block_indices 整层 -1 占位（+体积 × 4 B）
+    "blockVersion": 18168865,  // 写进 block_palette[*].version（实测样本值 = 1.21.60.33）
+    "formatVersion": 1,  // root.format_version
+    "verboseScan": false  // 逐格扫描日志（排查用）；默认只打汇总
   },
 
   // ===== 投影显示 =====
@@ -48,10 +61,10 @@
     ]
   },
 
-  // ===== 超大投影（MEGA）加载参数 ====
-  // enableMega=false 时只用于判定"是否超过阈值"，超阈值会回退普通加载
+  // ===== 超大投影（MEGA模式） ====
+  "enableMega":true,  // false时超阈值会回退普通加载
   "megaSchematic": {
-    "threshold": 30000,  // 超大型投影阈值（方块数）
+    "threshold": 100000,  // MEGA投影方块数阈值
     "enabled": true,  // 允许超大型投影加载（仍需 render.enableMega 才能真渲染）
     "chunkSize": 32,  // 仅作说明：实际分块大小由 BinaryChunkStorage.CHUNK_SIZE 固定为 32，改这里无效
     "storagePath": "./plugins/LitematicaBE/mega_schematics/"  // 分块存储路径
@@ -60,6 +73,43 @@
   // ===== Mega 调试（全量注入模式无可调渲染参数：注入速度跟随 render.ghostWritesPerTick）=====
   "megaRender": {
     "debug": false,  // true = 输出 [MegaRender] 详细调试信息
-    "fileDebug": false  // true = 额外写 plugins/LitematicaBE/logs/ 下的注入日志（排查卡住时开）
+    "fileDebug": false  // true = 额外写 plugins/LitematicaBE/logs/ 下的注入日志
+  },
+
+  // ===== 内置 HTTP 上传站 =====
+  // 文件直接落进 schematics/ 目录，游戏内 /litematica load 立即可用。
+  "web": {
+    "enabled": true,
+    "engine": "node",  // node = Node 原生 http（默认，回调不受引擎作用域限制）；lse = ll.network 的 HttpServer（0.17.x 下回调会 500，仅兼容保留）
+    "host": "0.0.0.0",  // 服务器 IP
+    "port": 8080,
+    "tokenRequired": false,  // 是否开启令牌认证
+    "localhostNoToken": true,  // 本机访问省略令牌认证
+    "token": "INPUT-YOUR_TOKEN_HERE",
+    "allowIps": [],  // 前缀匹配，如 ["192.168.", "10.0."]；空 = 不限制
+    "maxFileMB": 64,  // 单文件上限
+    "chunkKB": 512,  // 分片大小（LSE 的 req.body 是字符串，二进制 base64 分片传）
+    "allowExt": [".litematic", ".mcstructure"],
+    "overwrite": false,  // false = 同名文件自动加 -1/-2，防顶投影
+    "maxUploadsPerMinute": 10,  // 单 IP 每分钟最多上传次数
+    "targetDir": "./plugins/LitematicaBE/schematics/",
+    "publicUrl": ""  // 反代时填对外地址，仅用于日志和页面展示
+  },
+
+  // ===== 版本更新检查 =====
+  // 服务端启动、插件被激活时检查更新
+  // 不传输任何用户数据，仅获取最新版本号和下载地址
+  "updateCheck": {
+    "enabled": true,  // false = 彻底关闭联网检查
+    "repo": "copper-lamp/LitematicaBE",
+    "mirror": "",  // 镜像站（可选），支持 {repo} 占位
+    "timeoutMs": 8000  // 单次请求超时（1000-30000）
+  },
+
+  // ===== 杂项 =====
+  "misc": {
+    "showLayerInfo": false,  // 分层切换成功时是否显示"当前层/方块数"提示；默认静默（false）。失败提示始终保留
+    "verboseCommandLog": false,  // 命令注册成功日志；默认静默（6 条命令 × 每次启动）。排查命令没注册上时改 true
+    "verboseStartupLog": false  // 启动期信息日志总开关（LogCleaner 启动/停止/配置更新、命令注册等一次性 INFO）；warn/error 始终保留
   }
 }

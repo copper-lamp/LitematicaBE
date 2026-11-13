@@ -99,7 +99,7 @@ console.log('=== addon 版本校验 ===');
     const exp = makeExpected(root);
     const { rep } = run(root, exp, stats());
     ok('一致 → state=ok / enabled=true', rep.state === 'ok' && rep.enabled === true, JSON.stringify(rep.issues));
-    ok('   部署侧识别到 BP 与 RP', !!(rep.deployed.bp && rep.deployed.rp));
+    ok('   部署侧识别到 BP', !!(rep.deployed.bp));
     ok('   世界已启用行为包', rep.worldRefs.some(r => r.file === 'world_behavior_packs.json' && r.active));
 }
 
@@ -164,13 +164,13 @@ console.log('=== addon 版本校验 ===');
     ok('   错误码为 expected-missing', rep.issues.some(i => i.code === 'expected-missing'));
 }
 
-// 9. 资源包版本不符 → 只告警（外观问题，禁不掉服务端写入）
+// 9. 资源包版本不符 → 不再校验（RP 只影响客户端渲染，服务端不校验、不告警）
 {
     const root = makeServer({ rpVersion: [1, 1, 3] });
     const exp = makeExpected(root);
     const { rep } = run(root, exp, stats());
-    ok('RP 旧版 → warn 但 enabled=true', rep.state === 'warn' && rep.enabled === true, JSON.stringify(rep.issues));
-    ok('   错误码为 server-rp-version-mismatch', rep.issues.some(i => i.code === 'server-rp-version-mismatch'));
+    ok('RP 版本不一致不再影响校验 → state=ok / enabled=true', rep.state === 'ok' && rep.enabled === true, JSON.stringify(rep.issues));
+    ok('   不产生 server-rp-* 告警', !rep.issues.some(i => String(i.code).startsWith('server-rp-')));
 }
 
 // 10. 期望文件的 bpUuid 与索引不一致（构建产物被换过）

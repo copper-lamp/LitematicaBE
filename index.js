@@ -1,5 +1,5 @@
-// Litematica BE v3.0.0 review - Minecraft Bedrock Edition Projection Tool
-// 全服共享投影系统，支持木剑操作、多模式切换
+// Litematica BE v3.1.0
+// 全服共享投影集成系统
 
 // 测试zlib是否可用
 let zlib = null;
@@ -31,13 +31,20 @@ const { SelectionTool } = require('./src/core/SelectionTool');
 const { SchematicSaver } = require('./src/core/SchematicSaver');
 const { BlockVerifier } = require('./src/easyplace/BlockVerifier');
 const { MaterialCounter } = require('./src/utils/MaterialCounter');
+// 坐标解析唯一实现（表单 / 命令文本 / `~` 相对坐标）
+const { toIntOr, clampCoord, parseXYZText } = require('./src/utils/coordText');
 
 // 导入超大型投影模块
 const { MegaSchematicManager } = require('./src/core/MegaSchematicManager');
 const { StreamingLitematicLoader } = require('./src/core/StreamingLitematicLoader');
 const { MegaProjectionRenderer } = require('./src/render/MegaProjectionRenderer');
-const { BinaryChunkStorage } = require('./src/core/BinaryChunkStorage');
 const { McstructureLoader } = require('./src/core/McstructureLoader');
+
+// 内置 HTTP 上传站：服务器启动后拉起网页，玩家在浏览器上传结构文件到 schematics/
+const { WebUploadServer } = require('./src/web/WebUploadServer');
+
+// 版本更新检查：插件激活/服务端启动后联网问 GitHub Release，只读元数据（不下载、不自动更新）
+const { UpdateChecker, formatLogLine } = require('./src/net/UpdateChecker');
 
 // Ghost 子系统
 const { GhostBlockRegistry } = require('./src/ghost/GhostBlockRegistry');
@@ -50,16 +57,31 @@ const { GhostRenderer } = require('./src/ghost/GhostRenderer');
 const { RenderScheduler } = require('./src/render/RenderScheduler');
 const { WorldSnapshot } = require('./src/world/WorldSnapshot');
 
+// 版本号唯一来源。manifest / package.json / tooth.json 由 `npm run check:version` 对齐到同一个字符串，
+// 这里再派生出 LSE 注册用的数字三元组。
+//
+// ⚠ `ll.registerPlugin` 的版本会被 legacy-script-engine 在注册插件时**回写进
+// `plugins/LitematicaBE/manifest.json`**（C++ 文本模式写，LF 会变 CRLF），写成 `x.y.z`
+// （丢掉 `-prerelease` 后缀）。历史坑：这里写死过旧版本三元组（3.0.0），于是每次启动清单都被刷回
+// 3.0.0，与 PLUGIN_VERSION（3.0.3-test.6）对不上，排查"版本号自己变了"时被误判成清单被改。
+// **永远从 PLUGIN_VERSION 派生，不要写死数字数组**（check-version 会拦）。
+const PLUGIN_VERSION = '3.1.0';
+// 先切掉 `-prerelease`，再取前三段数字：`3.1.0` → [3, 1, 0]
+const PLUGIN_VERSION_TUPLE = PLUGIN_VERSION.split('-')[0]
+    .split('.')
+    .slice(0, 3)
+    .map((n) => parseInt(n, 10) || 0);
+const PLUGIN_VERSION_CORE = PLUGIN_VERSION_TUPLE.join('.');
+
 ll.registerPlugin(
     "LitematicaBE",
     "Minecraft Bedrock Edition projection tool with shared projections",
-    [3, 0, 0],
+    PLUGIN_VERSION_TUPLE,
     {}
 );
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
-const PLUGIN_VERSION = '3.0.3-test.1';
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
 
 // 全局实例
@@ -84,17 +106,27 @@ const easyPlaceManager = new EasyPlaceManager(projManager, dataManager, megaMana
 const selectionTool = new SelectionTool();
 const schematicSaver = new SchematicSaver();
 
+// HTTP 上传站实例（构造不碰网络；真正 listen 在 onServerStarted，那时工作目录与端口才可靠）
+const webServer = new WebUploadServer({ logger, configManager });
+
+// 版本更新检查实例（构造不碰网络：只在服务端启动、插件被激活时查一次并打一行日志）。
+// 开关在 config 的 updateCheck.enabled —— false 时完全不联网。
+const updateChecker = new UpdateChecker({
+    currentVersion: PLUGIN_VERSION,
+    getConfig: (key, def) => configManager.get(key, def),
+});
+
 // 验证器和材料统计器实例
 const blockVerifier = new BlockVerifier();
 const materialCounter = new MaterialCounter();
 
 // Ghost 子系统
-// 期望集合：记录"这一格应该有 ghost"，是玩家盖方块→破坏后能自动补回的唯一依据
-// 默认落在 plugins/LitematicaBE/data/ghost_expect.json（与本文件的相对位置固定）
+// 期望集合：记录 ghost ，是玩家盖方块再破坏后能自动补回的唯一依据
+// 默认落在 plugins/LitematicaBE/data/ghost_expect.json
 const ghostRegistry = new GhostBlockRegistry();
 const ghostExpect = new GhostExpectStore({ logger }).load();
 const ghostGuard = new GhostGuard(ghostRegistry);
-// addon 与插件版本一致性校验。不一致时仅禁用 ghost 写入，其余功能不受影响
+// 服务端 addon 与插件版本一致性校验。不一致时禁用 ghost 写入
 const addonCheck = new AddonVersionCheck({ logger });
 
 // 写世界前的原方块快照（data/sessions/）。启动时先收拾上次异常退出留下的会话，
@@ -125,7 +157,7 @@ const ghostRenderer = new GhostRenderer({
 // 投影会话层不在此处显式装配：ProjectionRenderer 通过 _gr() 惰性获取 global.ghostRenderer，
 // 以保持外部访问基线不被装配细节污染。
 
-// /litematica selfcheck —— 一条命令验证"读原状→快照→写幽灵→读回→撤销"整条链路
+// /litematica selfcheck ：一条命令验证"读原状→快照→写幽灵→读回→撤销"整条链路
 const ghostSelfCheck = new GhostSelfCheck({
     registry: ghostRegistry,
     addonCheck,
@@ -134,7 +166,7 @@ const ghostSelfCheck = new GhostSelfCheck({
 });
 ghostGuard.install({ expectStore: ghostExpect, logger });
 // 轻松放置 / 投影打印机认 ghost：ghost 是真实方块（lit:g_*），判定必须显式注入，
-// 否则它们会拿 `type !== 'minecraft:air'` 比，整片投影判成"非空" → 一格都放不了。
+// 否则会拿 `type !== 'minecraft:air'`比，整片投影判成"非空" ，无法放置。
 try {
     easyPlaceManager.attachGhostChecks({ isAirLike: (b) => ghostGuard.isAirLike(b) });
 } catch (e) {
@@ -164,6 +196,8 @@ global.logCleaner = logCleaner;
 global.easyPlaceManager = easyPlaceManager;
 global.selectionTool = selectionTool;
 global.schematicSaver = schematicSaver;
+global.webServer = webServer;
+global.updateChecker = updateChecker;
 global.blockVerifier = blockVerifier;
 global.materialCounter = materialCounter;
 global.ghostRegistry = ghostRegistry;
@@ -206,9 +240,16 @@ renderScheduler.add('mega-render', () => megaRenderer.onTick(), {
     everyTicks: 1,
     priority: 40,
     // 任务常开：开关由 megaRenderer.isEnabled() 在任务体内实时判定。
-    // 不要用 enabled: !!megaRenderer.enabled —— 那会在注册时求值一次并固定，导致开关永久失效。
+    // 不要用 enabled: !!megaRenderer.enabled ，会在注册时求值一次并固定，导致开关永久失效。
     enabled: true,
 });
+// 日志清理：总开关与扫描间隔都读 config（logCleaner.enabled / logCleaner.scanInterval）。
+const logCleanerEnabled = configManager.get('logCleaner.enabled', true) !== false;
+const logCleanerInterval = (() => {
+    const n = Number(configManager.get('logCleaner.scanInterval', 60000));
+    if (!Number.isFinite(n)) return 60000;
+    return Math.min(3600000, Math.max(1000, Math.floor(n)));
+})();
 renderScheduler.add('actionbar', () => uiManager.updateActionBars(), { everyTicks: 2, priority: 60 });
 renderScheduler.add('debug-flush', () => megaRenderer.flushLogs(), { everyMs: 5000, priority: 80 });
 renderScheduler.add('log-cleaner', () => {
@@ -217,12 +258,29 @@ renderScheduler.add('log-cleaner', () => {
         const p = logCleaner.cleanRenderLogs();
         if (p && typeof p.catch === 'function') p.catch(() => { });
     } catch (e) { /* 清理失败不影响主循环 */ }
-}, { everyMs: 60000, priority: 90 });
+}, { everyMs: logCleanerInterval, priority: 90, enabled: logCleanerEnabled });
+// 版本更新检查（启动时一次，配置项 updateCheck.enabled 可关，关闭时不注册任务）：
+// 网络结果只能在主线程打印，此处挂一次性任务，onServerStarted 发起后由它取结果并打日志。
+if (updateChecker.isEnabled()) {
+    renderScheduler.add('update-check', () => drainUpdateCheck(), { everyMs: 500, priority: 95 });
+}
 renderScheduler.start();
 
-// 调度器就绪后再启动日志自动清理（LogCleaner 构造期不再自己 setInterval）
+// 调度器就绪后再装配并启动日志自动清理（LogCleaner 构造期不再自己 setInterval）
 try {
-    logCleaner.startAutoClean();
+    // 启动期信息日志默认静默（config 的 misc.verboseStartupLog ）
+    logCleaner.setVerboseStartup(configManager.get('misc.verboseStartupLog', false) === true);
+    // 把 config 的 logCleaner 段真正装配进 cleaner：此前 configure() 没有调用点，
+    // 段里的 scanInterval / backupEnabled / maxBackupFiles / patterns 全部形同虚设（一直吃构造期默认值）。
+    // patterns 在 config 里是字符串数组，编译成 RegExp 由 LogCleaner.configure 内部完成。
+    logCleaner.configure({
+        scanInterval: logCleanerInterval,
+        backupEnabled: configManager.get('logCleaner.backupEnabled', true),
+        maxBackupFiles: configManager.get('logCleaner.maxBackupFiles', 10),
+        patterns: configManager.get('logCleaner.patterns', null)
+    });
+    // enabled=false 时保持停用：调度器任务注册时就带了 enabled:false，不会被 tick 调度
+    if (logCleanerEnabled) logCleaner.startAutoClean();
 } catch (e) {
     logger.warn(`[LitematicaBE] 日志自动清理启动失败: ${e && e.message ? e.message : e}`);
 }
@@ -251,10 +309,8 @@ function isHoldingWoodenSword(player) {
         
         const itemType = String(item.type || item.name || item.id || '');
         
-        // 木剑的几种可能名称
-        return itemType.includes('wooden_sword') || 
-               itemType === 'sword' || 
-               itemType === 'minecraft:wooden_sword';
+        const baseName = String(itemType).split(':').pop();
+        return baseName === 'wooden_sword';
     } catch (e) {
         logger.error(`Error checking hand: ${e.message}`);
         return false;
@@ -274,7 +330,7 @@ const playerCooldowns = new Map();
 
 // ==================== 轻松放置事件监听 ====================
 
-// 方法1: onUseItemOn - 在放置前拦截（用于取消/替换手持物品）
+// onUseItemOn ：在放置前拦截
 mc.listen("onUseItemOn", (player, item, block, side, pos) => {
     const enabled = easyPlaceManager.isEnabled(player);
     if (!enabled) return true;
@@ -283,7 +339,7 @@ mc.listen("onUseItemOn", (player, item, block, side, pos) => {
     return result;
 });
 
-// 方法2: afterPlaceBlock - 在放置后检测并修正（更可靠）
+// afterPlaceBlock ：在放置后检测并修正
 // 注意：correctionEnabled 开关在 correctBlockPlacement 内部判断
 mc.listen("afterPlaceBlock", (player, block) => {
     easyPlaceManager.correctBlockPlacement(player, block);
@@ -291,8 +347,8 @@ mc.listen("afterPlaceBlock", (player, block) => {
 
 // ==================== 木剑操作事件监听 ====================
 
-// 监听使用物品事件
-mc.listen("onUseItemOn", (player, item, block, side, pos) => {
+// 监听使用物品事件（注：_side 占位）
+mc.listen("onUseItemOn", (player, item, block, _side, pos) => { 
     // 检查是否是木剑
     if (!item || !item.type || item.type !== 'minecraft:wooden_sword') {
         return;
@@ -383,14 +439,14 @@ mc.listen("onUseItem", (player, item) => {
 });
 
 // 监听点击空气事件（用于旋转模式和建造模式）
-// 注意：onClick 事件在 LeviLamina 中可能不可用，使用 onUseItemOn 代替
+// onClick 事件在 LeviLamina 中可能不可用？使用 onUseItemOn 代替
 
 // ==================== 模式处理函数 ====================
 
 /**
  * 处理放置模式
  */
-function handlePlaceMode(player, block, pos, session) {
+function handlePlaceMode(player, _block, pos, session) {
     if (!session.selectedSchematic) {
         player.tell('§c请先加载原理图');
         player.tell('§f使用 §e/litematica menu §f打开菜单');
@@ -447,13 +503,9 @@ function handlePlaceMode(player, block, pos, session) {
         // 顺序要紧：先建 Mega 注入状态（读分块索引），再建 ghost 会话（空队列）。
         // onTick 里的 pumpChunks 会先确认会话存在再注入，所以两者都就绪后才开始喂数据。
         const megaState = megaRenderer.initRenderState(player, schematic.schematicId, projection);
-        renderer.layerRenderMode.set(player.xuid, false);
-        renderer.currentRenderLayer.set(player.xuid, -1);
         renderer.startRender(player, projection, -1);
         if (megaState) logger.info('[LitematicaBE] 超大型投影注入已启动');
     } else {
-        renderer.layerRenderMode.set(player.xuid, false);
-        renderer.currentRenderLayer.set(player.xuid, -1);
         renderer.startRender(player, projection);
     }
 
@@ -462,12 +514,28 @@ function handlePlaceMode(player, block, pos, session) {
     player.tell(`方块数: ${projection.totalBlocks}`);
     player.tell(`已自动切换到建造模式`);
     player.tell(`抬头/低头+木剑切换层，平视切换显示`);
+    reportActiveCount(player);
+}
+
+/**
+ * 放置/加载完一个投影后，告诉玩家"现在一共几个、木剑控制哪一个"。
+ * 多投影并存时这条提示是玩家理解"点加载不会挤掉上一个"的唯一反馈。
+ */
+function reportActiveCount(player) {
+    try {
+        if (!player || typeof renderer.getPlayerProjections !== 'function') return;
+        const list = renderer.getPlayerProjections(player);
+        if (list.length <= 1) return;
+        const primary = list.find(t => t.primary);
+        player.tell(`§7当前同时显示 §f${list.length}§7 个投影，木剑控制：§f${(primary && primary.projection && primary.projection.name) || '—'}`);
+        player.tell('§7菜单「投影操作 → 选择木剑控制的投影」或 §f/litematica select§7 可切换');
+    } catch (e) { /* 提示失败不影响放置 */ }
 }
 
 /**
  * 处理旋转模式
  */
-function handleRotateMode(player, session) {
+function handleRotateMode(player, _session) {
     const activeProj = projManager.getActiveProjectionByPlayer(player);
 
     if (!activeProj) {
@@ -481,10 +549,15 @@ function handleRotateMode(player, session) {
         return;
     }
 
-    renderer.clearPlayerProjection(player);
+    // 多投影：只重建**这一个**投影的会话，其它已加载的投影必须原样留着
+    const rotateId = activeProj.projection.id;
+    renderer.clearProjection(player, rotateId);
 
     activeProj.projection.rotation = (activeProj.projection.rotation + 90) % 360;
     activeProj.lastUpdate = Date.now();
+    try {
+        dataManager.updateProjection(rotateId, { rotation: activeProj.projection.rotation });
+    } catch (e) { /* 落盘失败不影响本次旋转 */ }
 
     renderer.startRender(player, activeProj.projection, activeProj.renderLayer);
 
@@ -494,7 +567,7 @@ function handleRotateMode(player, session) {
 /**
  * 处理建造模式 - 逐层渲染
  */
-function handleBuildMode(player, session) {
+function handleBuildMode(player, _session) {
     // 首先检查 projManager 中是否有活动投影
     let activeProj = projManager.getActiveProjectionByPlayer(player);
 
@@ -519,10 +592,6 @@ function handleBuildMode(player, session) {
 
         // 激活投影
         activeProj = projManager.activateProjection(player, projection);
-
-        // 默认关闭逐层
-        renderer.layerRenderMode.set(player.xuid, false);
-        renderer.currentRenderLayer.set(player.xuid, -1);
     }
 
     // 获取当前俯仰角和方向
@@ -542,37 +611,38 @@ function handleBuildMode(player, session) {
 
     if (result) {
         const newLayer = result.renderLayer;
-        const isMegaProj = result.projection.isMega && result.projection.schematicId;
+        const isMegaProj = !!(result.projection.isMega && result.projection.schematicId);
 
+        // 统一入口：普通投影 gr.setLayer / MEGA setLayerMode，且**只动这一个投影的会话**
+        const r = renderer.applyLayer(player, result.projection, newLayer);
+        if (!r.ok) {
+            const why = (r.reason === 'mega-not-ready')
+                ? '分块注入状态缺失，请重新放置该投影'
+                : renderer._reasonText(r.reason);
+            player.tell(`§c分层切换失败：${why}`);
+            return;
+        }
+        if (r.unchanged) return;
+
+        // 成功提示默认静默（config）；失败提示始终保留
+        const showLayerInfo = configManager.get('misc.showLayerInfo', false);
         if (isMegaProj) {
-            // 超大型投影：Mega 只决定"注入哪些分块"，世界侧 ghost 由 GhostRenderer 会话决定。
-            // setMegaLayer 内部会调 mega.setLayerMode 重算计划，并靠 enqueue 撤回旧层的 ghost。
-            const r = renderer.applyLayer(player, result.projection, newLayer);
-            if (!r.ok) {
-                const why = (r.reason === 'mega-not-ready')
-                    ? '分块注入状态缺失，请重新放置该投影'
-                    : renderer._reasonText(r.reason);
-                player.tell(`§c分层切换失败：${why}`);
-            } else if (newLayer === -1) {
+            if (newLayer === -1) {
                 const totalBlocks = result.projection.totalBlocks || 0;
-                player.tell(`§a显示全部层 §7(${totalBlocks} 方块，${r.chunks} 个分块)`);
+                if (showLayerInfo) player.tell(`§a显示全部层 §7(${totalBlocks} 方块，${r.chunks} 个分块)`);
             } else {
                 const layers = (result.projection.dimensions && result.projection.dimensions.y) || 1;
-                player.tell(`§a当前层: §e${newLayer} §7/ ${layers}§a，${r.chunks} 个分块待注入`);
+                if (showLayerInfo) player.tell(`§a当前层: §e${newLayer} §7/ ${layers}§a，${r.chunks} 个分块待注入`);
             }
         } else {
-            // 普通投影渲染
-            renderer.currentRenderLayer.set(player.xuid, newLayer);
-            renderer.layerRenderMode.set(player.xuid, true);
-            renderer.clearPlayerProjection(player);
-            renderer.startRender(player, result.projection, newLayer);
-
             const info = projManager.getLayerInfo(result.projection, newLayer);
             if (newLayer === -1) {
-                player.tell(`§a显示全部层 §7(${info.totalBlocks} 方块)`);
+                if (showLayerInfo) player.tell(`§a显示全部层 §7(${info.totalBlocks} 方块)`);
             } else {
-                player.tell(`§a当前层: §e${newLayer} §7/ ${info.totalLayers}`);
-                player.tell(`§7本层方块: §f${info.currentLayerBlocks}`);
+                if (showLayerInfo) {
+                    player.tell(`§a当前层: §e${newLayer} §7/ ${info.totalLayers}`);
+                    player.tell(`§7本层方块: §f${info.currentLayerBlocks}`);
+                }
             }
         }
     }
@@ -602,7 +672,11 @@ function setupCommand(label, builder) {
         const ok = cmd.setup();
         if (ok) {
             registeredCommands.add(label);
-            logger.info(`[LitematicaBE] 命令 ${label} 已注册`);
+            // 注册成功属于启动噪音（6 条命令 × 每次启动）：默认静默，
+            // 排查命令注册问题时把 config 的 misc.verboseCommandLog（或总开关 verboseStartupLog）改 true。
+            if (configManager.get('misc.verboseStartupLog', false) || configManager.get('misc.verboseCommandLog', false)) {
+                logger.info(`[LitematicaBE] 命令 ${label} 已注册`);
+            }
             return true;
         }
         logger.warn(`[LitematicaBE] 命令 ${label} 注册失败: setup() 返回 false`);
@@ -613,129 +687,89 @@ function setupCommand(label, builder) {
     }
 }
 
-/** ghost 子动作分派：主命令 `/litematica ghost` 与独立命令 `/litematica:ghost` 共用同一套逻辑 */
+/** ghost 子动作分派：主命令 `/litematica ghost` 与独立命令 `/litematica:ghost` 共用同一套逻辑。
+ *  运维兜底 clean（清无主 ghost）与 sweep（坐标读世界清理）。 */
 function dispatchGhost(player, sub) {
     if (!player) return false;
     const s = String(sub === undefined || sub === null ? '' : sub).trim().toLowerCase();
-    if (s === 'undo') return ghostProbe.undo(player);
-    if (s === 'info') {
-        const ok = ghostProbe.info(player);
-        // 追加会话级诊断：有多少格正被原地形挡住（挖掉会自动补，但玩家要知道）
-        try {
-            const sum = ghostRenderer.summary();
-            if (sum.sessions) {
-                player.tell(`§7会话 §f${sum.sessions}§7 个 / 待补 §f${sum.pending}§7 格`
-                    + ` / 被原地形挡住 §f${sum.blocked}§7 格（挖掉后自动补，已补 §f${sum.counters.blockedPlaced || 0}§7 格）`);
-                for (const it of sum.list) {
-                    if (!it.blocked && !it.pending) continue;
-                    player.tell(`§7  · §f${it.name || '?'}§7 层 §f${it.layer}§7：已写 §f${it.placed}`
-                        + `§7，挡住 §f${it.blocked}§7，待补 §f${it.pending}`);
-                }
-            }
-        } catch (e) { /* 诊断失败不影响 info 本身 */ }
-        return ok;
-    }
-    if (s === 'restore') {
-        if (!addonCheck.isEnabled()) {
-            player.tell('§cghost 写入已禁用：addon 与插件版本不一致（详见 /litematica:ghost info）');
-            return false;
-        }
-        const r = ghostGuard.restoreAll('manual');
-        player.tell(`§a期望补齐：补写 §e${r.placed} §a格 / 已有方块跳过 §e${r.skipped} §a格 / 待重试 §e${r.failed}§a（共 ${r.total} 格）`);
-        if (!r.total) player.tell('§7期望集合为空：先 /litematica:ghost 铺墙');
-        if (r.failed) {
-            player.tell(`§7待恢复队列现有 ${ghostGuard.summary().pending} 格；区块未加载是主因，靠近该区域或站在旁边再执行一次即可`);
-        }
-        return true;
-    }
-    if (s === 'clean' || s === 'reset') {
+    if (s === 'clean') {
         // 不依赖任何内存会话：把"世界里留着 ghost、期望账本还认、但没会话能撤销"的残留
         // （强退/重启后的 MEGA 投影是必踩场景）一次性清干净。活跃会话不受影响。
         const r = renderer.reclaimOrphans(player);
         player.tell(`§a清理无主 ghost：期望删 §e${r.expect} §a格 / 会话 §e${r.sessions} §a个`
             + ` / 还原世界 §e${r.restored} §a格 / 失败 §e${r.failed}`);
         if (r.remaining) {
-            player.tell(`§7还有 ${r.remaining} 格没还原（区块未加载居多）：站在残留区域附近再执行一次`);
-            player.tell('§7或者重启服务器后再执行（启动时也会自动清一次）');
+            player.tell(`§7还有 ${r.remaining} 格未还原（区块未加载居多）：靠近残留区域再执行一次`);
+            player.tell('§7或者重启服务器后再执行（启动时也会自动清理）');
         }
-        if (!r.expect && !r.sessions) player.tell('§7没有发现无主 ghost，世界是干净的');
+        if (!r.expect && !r.sessions) player.tell('§7未发现无主 ghost');
         return true;
     }
-    if (s === 'array') {
-        return ghostTestArray(player);
-    }
-    return ghostProbe.lay(player);
-}
-
-/**
- * /litematica:ghost array — 生成 ghost 方块测试阵列，验证几何建模与朝向。
- *
- * 在玩家面前铺一个网格，包含对建模/方向敏感的方块（楼梯、锁链、灯笼、红石中继器、红石比较器），
- * 每个朝向敏感的方块放 4 个 lit:dir（0-3），用于目视检查形状 + 旋转是否都正确。
- */
-function ghostTestArray(player) {
-    if (!player) return false;
-    if (typeof addonCheck !== 'undefined' && addonCheck && !addonCheck.isEnabled()) {
-        player.tell('§cghost 写入已禁用：addon 与插件版本不一致（详见 /litematica:ghost info）');
-        return false;
-    }
-    const p = player.pos;
-    const yaw = (player.direction && typeof player.direction.yaw === 'number') ? player.direction.yaw : 0;
-    const rad = yaw * Math.PI / 180;
-    // 基岩 yaw：0=南(+Z)，90=西(-X)，180=北(-Z)，270=东(+X)
-    const fx = Math.round(-Math.sin(rad));
-    const fz = Math.round(Math.cos(rad));
-    const dim = (typeof p.dimid === 'number') ? p.dimid : 0;
-    const bx = Math.round(p.x), by = Math.round(p.y), bz = Math.round(p.z);
-
-    // 阵列起点：玩家面前 4 格（水平前方）
-    const ox = bx + fx * 4;
-    const oz = bz + fz * 4;
-
-    const rows = [
-        { name: 'minecraft:oak_stairs', dirs: [0, 1, 2, 3] },
-        { name: 'minecraft:unpowered_repeater', dirs: [0, 1, 2, 3] },
-        { name: 'minecraft:unpowered_comparator', dirs: [0, 1, 2, 3] },
-        { name: 'minecraft:chain', dirs: [null] },
-        { name: 'minecraft:lantern', dirs: [null] },
-    ];
-
-    let placed = 0, failed = 0, skipped = 0;
-    for (let r = 0; r < rows.length; r++) {
-        const row = rows[r];
-        for (let c = 0; c < row.dirs.length; c++) {
-            const d = row.dirs[c];
-            // 行沿"前方"推进，列沿"横向"（垂直前方）排开
-            const x = ox + fx * r + (-fz) * c;
-            const z = oz + fz * r + (fx) * c;
-            const y = by; // 玩家脚下一层
-            const gid = ghostRegistry.resolve(row.name);
-            if (!gid) { skipped++; continue; }
-            try {
-                let ok;
-                if (d !== null && typeof ghostRenderer._buildGhostNbt === 'function') {
-                    ok = !!mc.setBlock(x, y, z, dim, ghostRenderer._buildGhostNbt(gid, { 'lit:dir': d }));
-                } else {
-                    ok = !!mc.setBlock(x, y, z, dim, gid, 0);
-                }
-                if (ok) placed++; else failed++;
-            } catch (e) { failed++; }
+    if (s.indexOf('sweep') === 0 || s.indexOf('scan') === 0) {
+        // /lit ghost sweep                     → 以自身为中心的 5×5 区块（默认）
+        // /lit ghost sweep 3                   → 3×3 区块（1..9 视为区块数）
+        // /lit ghost sweep 32                  → 兼容旧用法：>9 按"格半径"处理（上限 32）
+        // /lit ghost sweep box x1 y1 z1 x2 y2 z2 [dry]
+        // 用于"快照与期望都已散失"的残留：只能按坐标读世界、判 ghost、写回空气。
+        if (!addonCheck.isEnabled()) {
+            player.tell('§cghost 写入已禁用：addon 与插件版本不一致（详见 /litematica:ghost clean）');
+            return false;
         }
+        const parts = s.split(/\s+/).filter(Boolean);
+        const opts = { chunks: 5 };
+        if (parts[1] === 'box' && parts.length >= 8) {
+            const n = parts.slice(2, 8).map((v) => Number(v));
+            if (n.every(Number.isFinite)) {
+                opts.box = {
+                    minX: Math.floor(Math.min(n[0], n[3])), maxX: Math.floor(Math.max(n[0], n[3])),
+                    minY: Math.floor(Math.min(n[1], n[4])), maxY: Math.floor(Math.max(n[1], n[4])),
+                    minZ: Math.floor(Math.min(n[2], n[5])), maxZ: Math.floor(Math.max(n[2], n[5])),
+                };
+                delete opts.chunks;
+            }
+        } else if (parts[1]) {
+            const n = Number(parts[1]);
+            if (Number.isFinite(n) && n > 0) {
+                if (n <= 9) {
+                    opts.chunks = n;          // 区块数（N×N，以自身所在区块为中心）
+                } else {
+                    opts.radius = n;          // 兼容旧用法：格半径
+                    delete opts.chunks;
+                }
+            }
+        }
+        if (parts.includes('dry')) opts.dryRun = true;
+
+        const r = renderer.sweepGhosts(player, opts);
+        if (r.error === 'no-player') {
+            player.tell('§c取不到玩家位置，无法扫描');
+            return false;
+        }
+        const bx = r.box || {};
+        const where = (bx.minX !== undefined)
+            ? `(${bx.minX},${bx.minY},${bx.minZ})~(${bx.maxX},${bx.maxY},${bx.maxZ})`
+            : '未知范围';
+        const scope = opts.chunks ? `${opts.chunks}×${opts.chunks} 区块 ` : '';
+        player.tell(`§aghost 扫描 ${scope}${where}：扫描 §e${r.scanned}§a 格，${opts.dryRun ? '发现' : '清掉'} ghost §e${r.cleared}§a 个`
+            + (r.kept ? `，§7活跃投影保留 ${r.kept} 格` : '')
+            + (r.failed ? `，失败 §c${r.failed}` : '')
+            + (r.skipped ? `§7，区块未加载跳过 ${r.skipped} 格（靠近后再扫一次）` : ''));
+        if (opts.dryRun) player.tell('§7演练模式：只统计、未写世界（去掉末尾 dry 才真清）');
+        if (!r.cleared && !r.skipped) player.tell('§7这个范围内没有 ghost 方块，世界是干净的');
+        return true;
     }
-    player.tell(`§a测试阵列已生成：写入 §e${placed} §a格 / 失败 §e${failed}§a / 跳过 §e${skipped}`);
-    if (failed) player.tell('§7有失败格：确认 addon 1.1.9 已装、且该位置区块已加载（站近些重试）');
-    return true;
+    player.tell('§7用法：/litematica:ghost clean | sweep [n|box x y z x2 y2 z2] [dry]');
+    return false;
 }
 
 function buildMainCommand() {
     const cmd = mc.newCommand("litematica", "Litematica projection tool", PermType.Any, 0x80);
 
-    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "correction", "verify", "materials", "clear", "list", "remove", "info", "debug", "save", "failures", "ghost", "selfcheck"]);
+    cmd.setEnum("ActionEnum", ["menu", "load", "place", "placeat", "rotate", "build", "easyplace", "printer", "correction", "verify", "materials", "clear", "list", "remove", "info", "debug", "save", "failures", "ghost", "selfcheck", "web", "select"]);
 
-    // 重载铁律（1.1.1 的故障根因）：
+    // 重载铁律（远古bug）：
     //   1. mandatory 参数必须出现在每一条重载里，`overload([])` 会让整条命令注册失败；
-    //   2. RawText「只能作为最后一个参数」，而且只能有一个 —— 原来 filename 与 args
-    //      都是 RawText，等于两条形态相同的重复重载，同样会被 BDS 拒收。
+    //   2. RawText「只能作为最后一个参数」，而且只能有一个：原来 filename 与 args都是 RawText，等于两条形态相同的重复重载，同样会被 BDS 拒收。
     cmd.mandatory("action", ParamType.Enum, "ActionEnum", 1);
     cmd.optional("x", ParamType.Int);
     cmd.optional("y", ParamType.Int);
@@ -747,15 +781,15 @@ function buildMainCommand() {
     cmd.overload(["ActionEnum", "args"]);
     cmd.overload(["ActionEnum", "x", "y", "z"]);
 
-    cmd.setCallback((cmd, origin, output, results) => {
+    cmd.setCallback((_cmd, origin, output, results) => {    // _cmd 占位
         const player = origin.player;
         if (!player) {
             output.success("This command must be used by a player");
             return;
         }
 
-        // 自由文本统一走 args；filename 是 1.1.1 遗留的重载参数名，这里做兼容读取
-        const argText = (results.args !== undefined && results.args !== null) ? results.args : results.filename;
+        // 自由文本统一走 args
+        const argText = results.args;
         dispatchMainAction(player, results.action, results, argText, output);
     });
 
@@ -765,9 +799,8 @@ function buildMainCommand() {
 /**
  * 主命令动作分发（/litematica 与 /lit 共用）。
  *
- * 抽出来的原因：`/lit` 原来只声明了空重载，玩家照着提示敲 `/lit printer` 会被 BDS
- * 判成"重载不匹配"—— 命令在、功能在，但入口不可达。现在短命令把文本转成 action 后
- * 直接走这里，两条命令的行为永远一致。
+ * 抽出来的原因：`/lit` 原来只声明了空重载，玩家照着提示敲 `/lit printer` 会被 BDS 判成"重载不匹配"，命令在、功能在，但入口不可达。
+ * 现在短命令把文本转成 action 后直接走这里，两条命令的行为永远一致。
  *
  * @param {object} player
  * @param {string} action
@@ -788,7 +821,8 @@ function dispatchMainAction(player, action, results, argText, output) {
                 handlePlaceCommand(player, argText, output);
                 break;
             case "placeat":
-                handlePlaceAtCommand(player, results.x, results.y, results.z, output);
+                // 短命令/ RawText 重载拿不到 results.x，必须把 argText 一起传下去兜底解析
+                handlePlaceAtCommand(player, results.x, results.y, results.z, output, argText);
                 break;
             case "rotate":
                 dataManager.setPlayerToolMode(player.xuid, 'rotate');
@@ -821,15 +855,27 @@ function dispatchMainAction(player, action, results, argText, output) {
                 handleMaterialsCommand(player, output);
                 break;
             case "clear":
-                // clearPlayerProjection 内部已经连同"重进自动恢复"的记录一起清掉
+                // clearPlayerProjection 内部已经连同"重进自动恢复"的记录一起清掉。
+                // 多投影：/lit clear 是"全部清掉"；只清一个请用「投影操作 → 卸载某个投影」。
                 renderer.clearPlayerProjection(player);
-                // 先获取活动投影信息，再删除
-                const activeForClear = projManager.getActiveProjection(player.xuid);
-                if (activeForClear && activeForClear.projection && activeForClear.projection.schematicId) {
-                    megaRenderer.stopRender(`${player.xuid}_${activeForClear.projection.schematicId}`);
-                }
+                // 逐个回收 MEGA 注入状态（不能只看主控那一个）
+                try {
+                    const leftList = (typeof renderer.getPlayerProjections === 'function')
+                        ? renderer.getPlayerProjections(player) : [];
+                    for (const row of leftList) {
+                        const pj = row.projection;
+                        if (!pj || !pj.schematicId) continue;
+                        const sid = (typeof megaRenderer.stateIdFor === 'function')
+                            ? megaRenderer.stateIdFor(player, pj)
+                            : `${player.xuid}_${pj.schematicId}`;
+                        if (sid) megaRenderer.stopRender(sid);
+                    }
+                } catch (e) { /* 状态回收失败不影响清除 */ }
                 projManager.removeActiveProjection(player.xuid);
-                output.success("§a已清除当前投影显示");
+                output.success("§a已清除全部投影显示");
+                break;
+            case "select":
+                handleSelectCommand(player, argText, output);
                 break;
             case "list":
                 listProjections(player, output);
@@ -852,6 +898,10 @@ function dispatchMainAction(player, action, results, argText, output) {
             case "ghost":
                 dispatchGhost(player, argText);
                 break;
+            case "web":
+                // `/litematica web` 等价于 `/litematica:web status`
+                sendWebStatus(player, output);
+                break;
             case "selfcheck":
                 // 写世界链路自检。逐项 PASS/FAIL，失败停在该层并说明原因
                 try {
@@ -872,7 +922,7 @@ function buildShortCommand() {
     cmdShort.optional("args", ParamType.RawText);
     cmdShort.overload([]);
     cmdShort.overload(["args"]);
-    cmdShort.setCallback((cmd, origin, output, results) => {
+    cmdShort.setCallback((_cmd, origin, output, results) => {
         const player = origin.player;
         if (!player) return;
         const text = String((results && results.args) || '').trim();
@@ -895,7 +945,7 @@ function buildLogCleanCommand() {
     cmdLogClean.setEnum("LogCleanAction", ["status", "clean", "config"]);
     cmdLogClean.mandatory("action", ParamType.Enum, "LogCleanAction", 1);
     cmdLogClean.overload(["LogCleanAction"]);
-    cmdLogClean.setCallback((cmd, origin, output, results) => {
+    cmdLogClean.setCallback((_cmd, origin, _output, results) => {
         const action = results.action;
 
         // 支持玩家和后台执行
@@ -947,7 +997,7 @@ function buildConfigCommand() {
     cmdConfig.optional("key", ParamType.RawText);
     cmdConfig.overload(["ConfigAction"]);
     cmdConfig.overload(["ConfigAction", "key"]);
-    cmdConfig.setCallback((cmd, origin, output, results) => {
+    cmdConfig.setCallback((_cmd, origin, output, results) => {
         const player = origin.player;
         if (!player) {
             output.success("This command must be used by a player");
@@ -988,18 +1038,128 @@ function buildConfigCommand() {
  */
 function buildGhostCommand() {
     const cmdGhost = mc.newCommand("litematica:ghost", "Ghost block probe verification", PermType.Any, 0x80);
-    cmdGhost.setEnum("GhostAction", ["lay", "undo", "info", "restore", "array"]);
+    // 运维兜底 clean / sweep
+    cmdGhost.setEnum("GhostAction", ["clean", "sweep"]);
     cmdGhost.mandatory("action", ParamType.Enum, "GhostAction", 1);
+    cmdGhost.optional("args", ParamType.RawText);
     cmdGhost.overload(["GhostAction"]);
-    cmdGhost.setCallback((cmd, origin, output, results) => {
+    cmdGhost.overload(["GhostAction", "args"]);
+    cmdGhost.setCallback((_cmd, origin, output, results) => {
         const player = origin.player;
         if (!player) {
             output.success("This command must be used by a player");
             return;
         }
-        dispatchGhost(player, results.action);
+        // sweep 可带参数（sweep 3 / box ...）：枚举只认 "sweep"，参数经 RawText 追加后交给同一分派
+        const sub = (results.action === 'sweep' && results.args)
+            ? `sweep ${String(results.args)}`
+            : results.action;
+        dispatchGhost(player, sub);
     });
     return cmdGhost;
+}
+
+/**
+ * 上传站状态输出（`/litematica web` 与 `/litematica:web status` 共用）。
+ * 令牌只对控制台与 OP 展示。
+ */
+function sendWebStatus(player, output) {
+    const s = webServer.summary();
+    const say = player
+        ? (m) => player.tell(m)
+        : (m) => { try { output.success(m); } catch (e) { logger.info(m); } };
+    const isOp = !player || (typeof player.isOP === 'function' && player.isOP());
+
+    say('§6========== HTTP 上传站 ==========');
+    say(`§e状态: §f${s.running ? '运行中' : (s.enabled ? '已停止' : '未启用 (web.enabled=false)')}`);
+    say(`§e监听: §f${s.host}:${s.port}  §7公共地址: ${s.url}`);
+    say(`§e目录: §f${s.targetDir}`);
+    const wc = webServer.config();
+    say(`§e分片/上限: §f${wc.chunkKB} KB / ${wc.maxFileMB} MB`);
+    say(`§e进行中会话: §f${s.sessions}`);
+    const st = s.stats;
+    say(`§e累计: §f文件 ${st.files} 个 / 分片 ${st.chunks} / ${(st.bytes / 1048576).toFixed(1)} MB / 拒绝 ${st.rejected}`);
+    if (st.lastFile) say(`§e最近: §f${st.lastFile.name} §7(${st.lastFile.size} 字节)`);
+    if (s.tokenRequired) {
+        if (isOp) {
+            say(`§e令牌: §f${s.token}`);
+            say(`§7访问: http://${s.host}:${s.port}/?token=${s.token}`);
+            say(`§7令牌文件: ${s.tokenFile}`);
+        } else {
+            say('§7令牌仅管理员可见');
+        }
+    } else {
+        say('§c令牌校验已关闭（web.tokenRequired=false）');
+    }
+}
+
+/**
+ * `/litematica:web` 独立命令：上传站的启停与令牌管理。
+ */
+function buildWebCommand() {
+    const cmdWeb = mc.newCommand("litematica:web", "Structure upload web server", PermType.Any, 0x80);
+    cmdWeb.setEnum("WebAction", ["status", "start", "stop", "restart", "token", "url"]);
+    cmdWeb.mandatory("action", ParamType.Enum, "WebAction", 1);
+    cmdWeb.overload(["WebAction"]);
+    cmdWeb.setCallback((_cmd, origin, output, results) => {
+        const player = origin.player;
+        const say = player
+            ? (m) => player.tell(m)
+            : (m) => { try { output.success(m); } catch (e) { logger.info(m); } };
+        const isOp = !player || (typeof player.isOP === 'function' && player.isOP());
+        const action = results.action;
+
+        // 启停与令牌属于服务端管理动作：控制台或 OP
+        if (action !== 'status' && action !== 'url' && !isOp) {
+            say('§c该操作需要管理员权限');
+            return;
+        }
+
+        switch (action) {
+            case "status":
+                sendWebStatus(player, output);
+                break;
+            case "start":
+                if (webServer.isRunning()) {
+                    say('§7上传站已在运行');
+                    break;
+                }
+                if (webServer.start()) {
+                    const s = webServer.summary();
+                    say(`§a上传站已启动: §f${s.url}`);
+                    if (s.tokenRequired) say(`§7带令牌地址: §fhttp://${s.host}:${s.port}/?token=${s.token}`);
+                } else {
+                    say('§c启动失败：详见服务端控制台日志（常见原因：端口被占用 / web.enabled=false / 运行时无 HttpServer）');
+                }
+                break;
+            case "stop":
+                if (webServer.stop()) say('§a上传站已停止');
+                else say('§7上传站未在运行');
+                break;
+            case "restart":
+                webServer.stop();
+                say(webServer.start() ? '§a上传站已重启' : '§c重启失败，详见控制台日志');
+                break;
+            case "token": {
+                const t = webServer.regenerateToken();
+                const wc = webServer.config();
+                say('§a已重新生成上传令牌（旧地址立即失效）');
+                say(`§e新令牌: §f${t}`);
+                say(`§7访问: http://${wc.host}:${wc.port}/?token=${t}`);
+                say(`§7已写入: ${webServer.summary().tokenFile}`);
+                break;
+            }
+            case "url": {
+                const s = webServer.summary();
+                if (!s.running) say('§7上传站未运行，先执行 §f/litematica:web start');
+                say(`§e访问地址: §fhttp://${s.host}:${s.port}/`
+                    + (s.tokenRequired && isOp ? `?token=${s.token}` : ''));
+                if (!isOp) say('§7（令牌请向服主索取）');
+                break;
+            }
+        }
+    });
+    return cmdWeb;
 }
 
 /**
@@ -1012,9 +1172,10 @@ function registerCommands(reason = 'load') {
     setupCommand('/litematica:logclean', buildLogCleanCommand);
     setupCommand('/litematica:config', buildConfigCommand);
     setupCommand('/litematica:ghost', buildGhostCommand);
+    setupCommand('/litematica:web', buildWebCommand);
 
     const okList = Array.from(registeredCommands);
-    logger.info(`[LitematicaBE] 命令注册(${reason}): ${okList.length}/5 条可用 [${okList.join(', ')}]`);
+    logger.info(`[LitematicaBE] 命令注册(${reason}): ${okList.length} 条可用 [${okList.join(', ')}]`);
     return okList.length;
 }
 
@@ -1101,15 +1262,11 @@ function handlePlaceCommand(player, filename, output) {
 
         if (isMega) {
             const megaState = megaRenderer.initRenderState(player, schematic.schematicId, projection);
-            renderer.layerRenderMode.set(player.xuid, false);
-            renderer.currentRenderLayer.set(player.xuid, -1);
             renderer.showBounds(projection, player);
             // 之前这里缺 startRender：MEGA 投影只建了注入状态、没有 ghost 会话，等于不出投影
             renderer.startRender(player, projection, -1);
             if (megaState) logger.info('[LitematicaBE] 超大型投影注入已启动');
         } else {
-            renderer.layerRenderMode.set(player.xuid, false);
-            renderer.currentRenderLayer.set(player.xuid, -1);
             renderer.showBounds(projection, player);
             renderer.startRender(player, projection, -1);
         }
@@ -1119,6 +1276,7 @@ function handlePlaceCommand(player, filename, output) {
         output.success(`方块数: ${schematic.totalBlocks}`);
         output.success(`当前层: 0 / ${projection.dimensions?.y || 1}`);
         output.success(`使用 /lit build 切换到建造模式`);
+        reportActiveCount(player);
     }).catch(err => {
         logger.error(`[LitematicaBE] loadSchematicFile error: ${err.message}`);
         output.error(`§c加载失败: ${err.message}`);
@@ -1126,27 +1284,53 @@ function handlePlaceCommand(player, filename, output) {
 }
 
 /**
- * 在指定坐标放置投影
+ * 在指定坐标放置投影：`/litematica placeat <x> <y> <z>`（或 `/lit placeat ...`）。
+ *
+ * 短命令 `/lit` 只有一个 RawText 参数，拿不到 x/y/z 三个 Int；长命令也可能被
+ * `ActionEnum + args(RawText)` 重载先吃掉（BDS 的重载匹配顺序），于是 results.x 恒为
+ * undefined —— 旧实现直接报"缺少坐标"，玩家只能改用界面或 `/lit place`（按玩家位置），
+ * 表现出来就是"设置坐标无效、只在玩家位置生成"。这里统一从 argText 兜底解析，
+ * 并支持 `~` 相对玩家坐标。
+ *
+ * @param {object} player
+ * @param {number|undefined} x
+ * @param {number|undefined} y
+ * @param {number|undefined} z
+ * @param {object} output
+ * @param {string} [argText] 自由文本（"100 64 200" / "~ ~5 ~-3"）
  */
-function handlePlaceAtCommand(player, x, y, z, output) {
-    if (x === undefined || y === undefined || z === undefined) {
+function handlePlaceAtCommand(player, x, y, z, output, argText) {
+    const base = (player.pos && typeof player.pos.x === 'number')
+        ? [player.pos.x, player.pos.y, player.pos.z]
+        : [0, 0, 0];
+
+    let px = toIntOr(x, NaN);
+    let py = toIntOr(y, NaN);
+    let pz = toIntOr(z, NaN);
+
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
+        const parsed = parseXYZText(argText, base);
+        if (parsed) [px, py, pz] = parsed;
+    }
+
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
         output.error("§c缺少坐标");
         output.success("§f用法: /litematica placeat <x> <y> <z>");
-        output.success("§f示例: /litematica placeat 100 64 200");
+        output.success("§f示例: /litematica placeat 100 64 200  或  /lit placeat ~ ~ ~");
         return;
     }
-    
+
     const session = getPlayerSession(player.xuid);
-    
+
     const schematic = session.selectedSchematic;
-    
+
     if (!schematic) {
         output.error("§c没有加载的原理图");
         output.success("§f打开gui或使用 /litematica load <文件名>");
         return;
     }
-    
-    const placePos = { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) };
+
+    const placePos = { x: clampCoord(px), y: clampCoord(py), z: clampCoord(pz) };
     
     const isMega2 = !!(schematic.isMega && schematic.schematicId);
     
@@ -1182,23 +1366,20 @@ function handlePlaceAtCommand(player, x, y, z, output) {
 
     if (isMega2) {
         const megaState = megaRenderer.initRenderState(player, schematic.schematicId, projection);
-        renderer.layerRenderMode.set(player.xuid, false);
-        renderer.currentRenderLayer.set(player.xuid, -1);
         renderer.showBounds(projection, player);
-        // 同 L988：补上 ghost 会话，否则 MEGA 投影不会出现
+        // 同前，补上 ghost 会话，否则 MEGA 投影不会出现
         renderer.startRender(player, projection, -1);
         if (megaState) logger.info('[LitematicaBE] 超大型投影注入已启动');
     } else {
-        renderer.layerRenderMode.set(player.xuid, false);
-        renderer.currentRenderLayer.set(player.xuid, -1);
         renderer.showBounds(projection, player);
         renderer.startRender(player, projection, -1);
     }
-    
+
     output.success(`投影已放置: ${schematic.name}`);
     output.success(`位置: (${placePos.x}, ${placePos.y}, ${placePos.z})`);
     output.success(`方块数: ${schematic.totalBlocks || 0}`);
     output.success(`当前层: 0 / ${projection.dimensions?.y || 1}`);
+    reportActiveCount(player);
 }
 
 async function loadSchematicFile(filename, player) {
@@ -1474,7 +1655,7 @@ function handleDebugCommand(player, args, output) {
     }
 }
 
-function handleFailuresCommand(player, output) {
+function handleFailuresCommand(_player, output) {
     const stats = easyPlaceManager.getPlacementFailureStats();
     if (!stats) {
         output.success("§7暂无放置失败统计");
@@ -1494,7 +1675,7 @@ function handleFailuresCommand(player, output) {
     output.success("§7详细日志: plugins/LitematicaBE/logs/placement_failures_YYYY-MM-DD.log");
 }
 
-function listProjections(player, output) {
+function listProjections(_player, output) {
     const projections = dataManager.getAllProjections();
     if (projections.length === 0) {
         output.success("当前没有放置的投影");
@@ -1526,13 +1707,102 @@ function handleRemoveCommand(player, projectionId, output) {
         return;
     }
 
-    // 清除所有玩家的显示
-    for (const onlinePlayer of mc.getOnlinePlayers()) {
-        renderer.clearPlayerProjection(onlinePlayer);
+    // ═══ 删除前先把世界清干净 ═══
+    // MEGA 注入状态纯内存，强退/重启后内存会话消失，世界残留 ghost。
+    // 现在的顺序：世界净空之前不删记录（保留撤销线索，玩家靠近后重新删除）。
+    const purgeTargets = [];
+    try {
+        for (const onlinePlayer of mc.getOnlinePlayers()) purgeTargets.push(onlinePlayer);
+    } catch (e) { /* 取在线玩家失败不阻塞删除 */ }
+    try {
+        // 离线玩家也有快照残留：把他们按 xuid 补进来（伪玩家对象足够：只用到 xuid）
+        const loading = (typeof dataManager.getPlayersLoadingProjection === 'function')
+            ? dataManager.getPlayersLoadingProjection(projectionId) : [];
+        const seen = new Set(purgeTargets.map((p) => p && p.xuid));
+        for (const xuid of loading) {
+            if (!xuid || seen.has(xuid)) continue;
+            const pl = mc.getPlayer(xuid);
+            purgeTargets.push(pl || { xuid });
+            seen.add(xuid);
+        }
+    } catch (e) { /* 忽略 */ }
+
+    const purge = renderer.purgeProjection(purgeTargets, projection, { dimid: projection.dimension });
+    if (!purge.ok) {
+        output.error(`§c还有 §e${purge.remaining}§c 格投影未还原（区块未加载）—— 记录已保留`);
+        output.success(`§7请靠近投影再执行一次 §f/litematica remove ${projectionId}`);
+        output.success(`§7或先执行 §f/litematica ghost clean§7 清除无主 ghost `);
+        return;
     }
+    output.success(`§7清理世界：还原 §f${purge.restored}§7 格（会话 ${purge.sessions} / 期望 ${purge.expect} / MEGA状态 ${purge.megaStopped}）`);
+
+    // 净空再动记录：先撤各玩家的会话与"已加载"记录，再删投影本身
+    for (const onlinePlayer of mc.getOnlinePlayers()) {
+        try {
+            if (typeof renderer.isProjectionLoaded === 'function'
+                && renderer.isProjectionLoaded(onlinePlayer, projectionId)) {
+                renderer.cancelRender(onlinePlayer, projectionId);
+            }
+        } catch (e) {
+            logger.warn(`[LitematicaBE] 撤销 ${onlinePlayer.name} 的投影 ${projectionId} 失败: ${e && e.message ? e.message : e}`);
+        }
+    }
+
+    // 离线玩家的"已加载列表"也要摘掉，否则下次进服会恢复一个已删除的投影
+    try {
+        if (typeof dataManager.removeProjectionFromAllPlayers === 'function') {
+            dataManager.removeProjectionFromAllPlayers(projectionId);
+        }
+    } catch (e) { /* 记录清理失败不影响删除本身 */ }
 
     dataManager.removeProjection(projectionId);
     output.success(`已删除投影: ${projection.name}`);
+}
+
+/**
+ * /litematica select [序号|名称|ID]
+ *
+ * 多投影并存时，木剑（切层 / 旋转 / 建造）只作用于"当前控制"的那一份。
+ * 不带参数时列出全部已加载投影与木剑当前控制目标。
+ */
+function handleSelectCommand(player, argText, output) {
+    const list = (typeof renderer.getPlayerProjections === 'function')
+        ? renderer.getPlayerProjections(player) : [];
+
+    if (!list.length) {
+        output.error("§c当前没有已加载的投影");
+        output.success("§7用 §f/litematica load <名称>§7 或菜单加载，可同时加载多个");
+        return;
+    }
+
+    const want = String(argText || '').trim();
+    if (!want) {
+        output.success("§6========== 已加载的投影 ==========");
+        list.forEach((row, i) => {
+            const tag = row.primary ? '§a← 木剑控制' : '§7       ';
+            const mega = row.isMega ? ' §8[MEGA]' : '';
+            const ly = row.layer < 0 ? '全部层' : `第 ${row.layer} 层`;
+            output.success(`§7[${i + 1}] §f${(row.projection && row.projection.name) || row.id}${mega} ${tag} §8(${ly})`);
+        });
+        output.success("§7用法: §f/litematica select <序号|名称|ID>");
+        return;
+    }
+
+    let hit = null;
+    const num = Number(want);
+    if (Number.isInteger(num) && num >= 1 && num <= list.length) hit = list[num - 1];
+    if (!hit) hit = list.find(r => r.id === want);
+    if (!hit) hit = list.find(r => ((r.projection && r.projection.name) || '') === want);
+    if (!hit) hit = list.find(r => ((r.projection && r.projection.name) || '').includes(want));
+
+    if (!hit) {
+        output.error(`§c未找到已加载的投影: ${want}`);
+        output.success("§7/litematica select §7查看序号");
+        return;
+    }
+
+    renderer.setPrimaryProjection(player, hit.id, { notify: true });
+    output.success(`§a木剑已切换到: §f${(hit.projection && hit.projection.name) || hit.id}`);
 }
 
 function handleVerifyCommand(player, output) {
@@ -1636,12 +1906,14 @@ mc.listen("onJoin", (player) => {
 
     // 显示欢迎消息
     player.tell(`§a欢迎使用 ${PLUGIN_NAME} v${PLUGIN_VERSION}`);
-    player.tell('§7手持木剑，蹲下点击打开菜单');
+    player.tell('§a基岩版服务器一站式投影集成工具');
+    player.tell('§7手持木剑，蹲下点击即可打开菜单');
 
     // ═══ 退出重进后把投影接回来 ═══
     // 两条路：
     //   1. 内存里还留着保活会话（玩家掉线后又回来）→ 只 resume，零重写
-    //   2. 会话已不在（服务器重启过）→ 按 playerData.currentProjectionId 重建
+    //   2. 会话已不在（服务器重启过）→ 按 playerData.loadedProjections 逐个重建，
+    //      currentProjectionId 那一个是木剑控制目标
     try {
         let restored = false;
         try {
@@ -1651,32 +1923,66 @@ mc.listen("onJoin", (player) => {
         }
 
         if (restored) {
-            const task = renderer.activeProjections.get(player.xuid);
-            const nm = task && task.projection ? (task.projection.name || task.projection.id) : '投影';
-            player.tell(`§a已恢复投影 "${nm}"`);
+            const list = renderer.getPlayerProjections(player);
+            const names = list.map(t => (t.projection && t.projection.name) || t.id);
+            player.tell(`§a已恢复 §f${list.length}§a 个投影：§f${names.join('§7、§f')}`);
+            const primary = list.find(t => t.primary);
+            if (primary) player.tell(`§7木剑控制：§f${(primary.projection && primary.projection.name) || primary.id}`);
         } else {
             const pd = dataManager.getPlayerData(player.xuid) || {};
-            const pid = pd.currentProjectionId;
-            if (pid) {
+            const wanted = Array.isArray(pd.loadedProjections) ? pd.loadedProjections.slice() : [];
+            if (pd.currentProjectionId && !wanted.includes(pd.currentProjectionId)) {
+                wanted.push(pd.currentProjectionId);
+            }
+            const restoredIds = [];
+            const missingIds = [];
+            for (const pid of wanted) {
                 const projection = dataManager.getProjection(pid);
-                if (projection) {
-                    const lay = Number.isFinite(pd.currentRenderLayer) ? pd.currentRenderLayer : -1;
-                    if (pd.renderLayerMode) renderer.layerRenderMode.set(player.xuid, true);
-                    renderer.currentRenderLayer.set(player.xuid, lay);
-                    // 同步 projManager：easyPlace / 建造模式都从这里取活动投影
-                    try { projManager.activateProjection(player, projection); } catch (e) { /* 已有的会覆盖 */ }
-                    const ok = renderer.startRender(player, projection, lay);
-                    if (ok) {
-                        player.tell(`§a已恢复上次的投影 "${projection.name || projection.id}"`
-                            + (lay >= 0 ? `§7（第 ${lay} 层）` : ''));
-                        logger.info(`[LitematicaBE] ${player.name} 重进恢复投影 ${pid}（层 ${lay}）`);
-                    }
-                } else {
-                    // 投影已被删除：清除记录，避免重复提示
+                if (!projection) { missingIds.push(pid); continue; }
+                const lay = (pd.projectionLayers && Number.isFinite(pd.projectionLayers[pid]))
+                    ? pd.projectionLayers[pid]
+                    : (Number.isFinite(pd.currentRenderLayer) ? pd.currentRenderLayer : -1);
+                // primary:false + persist:false → 逐个恢复，最后一次性确定木剑控制并落盘
+                // （中途落盘会把还没恢复的投影的层记录覆盖掉）
+                const ok = renderer.startRender(player, projection, lay, { primary: false, persist: false });
+                if (ok) {
+                    restoredIds.push(pid);
+                    logger.info(`[LitematicaBE] ${player.name} 重进恢复投影 ${pid}（层 ${lay}）`);
+                }
+            }
+
+            // 木剑控制：优先 currentProjectionId，其次最后加载的那一个
+            const preferPrimary = (pd.currentProjectionId && restoredIds.includes(pd.currentProjectionId))
+                ? pd.currentProjectionId
+                : (restoredIds.length ? restoredIds[restoredIds.length - 1] : null);
+            if (preferPrimary && typeof renderer.setPrimaryProjection === 'function') {
+                renderer.setPrimaryProjection(player, preferPrimary, { persist: true });
+            }
+
+            if (restoredIds.length) {
+                const shown = restoredIds.map(id => {
+                    const pj = dataManager.getProjection(id);
+                    return (pj && pj.name) || id;
+                });
+                player.tell(`§a已恢复 §f${restoredIds.length}§a 个投影：§f${shown.join('§7、§f')}`);
+                const pj = preferPrimary ? dataManager.getProjection(preferPrimary) : null;
+                player.tell(`§7木剑控制：§f${(pj && pj.name) || preferPrimary}`);
+            }
+
+            if (missingIds.length) {
+                for (const pid of missingIds) {
+                    try { dataManager.removeProjectionFromAllPlayers(pid); } catch (e) { /* 已删的投影清记录失败不影响进服 */ }
+                }
+                const rest = Array.isArray(pd.loadedProjections) ? pd.loadedProjections.filter(id => !missingIds.includes(id)) : [];
+                if (!rest.length) {
                     dataManager.updatePlayerData(player.xuid, { currentProjectionId: null });
                     player.tell('§7上次的投影已被删除，记录已清理');
+                } else {
+                    player.tell(`§7有 §f${missingIds.length}§7 个投影已被删除，其余照常恢复`);
                 }
-            } else {
+            }
+
+            if (!restoredIds.length) {
                 // 没有恢复记录（首进 / 上次被清掉）但有投影：给一条可操作的提示，
                 // 别让玩家以为投影丢了 —— 记录在 projections.json 里，重新放置即可。
                 let n = 0;
@@ -1693,23 +1999,24 @@ mc.listen("onJoin", (player) => {
             }
         }
 
-        // 没有恢复出任何投影，但快照/期望账本里还留着他上一次的 ghost（强退、重启、
-        // 或上次的投影已被删）→ 直接清掉，别让玩家自己去敲 /litematica ghost clean。
+        // 没有恢复出任何投影，但快照/期望账本里还保留着上一次的 ghost（强退、重启、或上次的投影已被删）：直接清掉。
         // reclaimOrphans 会跳过内存里还活着的会话，不会误伤正在显示的投影。
-        if (!renderer.activeProjections.has(player.xuid)) {
+        const activeCount = (typeof renderer.getPlayerProjections === 'function')
+            ? renderer.getPlayerProjections(player).length : 0;
+        if (activeCount === 0 && !renderer.activeProjections.has(player.xuid)) {
             try {
                 const orph = renderer.reclaimOrphans(player);
                 if (orph.sessions || orph.expect) {
                     logger.info(`[LitematicaBE] ${player.name} 进服清理残留 ghost：期望 ${orph.expect} 格 / 会话 ${orph.sessions} 个 / 还原 ${orph.restored} 格 / 残留 ${orph.remaining}`);
                     player.tell(`§7已清理上次残留的 ghost：还原 §f${orph.restored}§7 格`
-                        + (orph.remaining ? `，还有 §f${orph.remaining}§7 格因区块未加载暂缓（站在该区域附近再执行 §f/litematica ghost clean§7）` : ''));
+                        + (orph.remaining ? `，还有 §f${orph.remaining}§7 格因区块未加载暂缓（靠近该区域再执行 §f/litematica ghost clean§7）` : ''));
                 }
             } catch (e) {
                 logger.warn(`[LitematicaBE] ${player.name} 进服清理残留失败: ${e && e.message ? e.message : e}`);
             }
         }
 
-        // 进服时他附近的区块一定已加载 —— 补一轮"当时没加载"的 ghost
+        // 进服时附近的区块一定已加载，补一轮当时没加载的 ghost
         const r = ghostRenderer.retryPending();
         if (r && r.placed) logger.info(`[LitematicaBE] ${player.name} 进服补写 ghost ${r.placed} 格（剩余 ${r.remaining}）`);
         if (r && r.blocked && r.blocked.remaining) {
@@ -1747,25 +2054,74 @@ mc.listen("onLeft", (player) => {
     try {
         const kept = renderer.suspendPlayer(player);
         if (kept) {
-            const task = renderer.activeProjections.get(player.xuid);
+            const list = (typeof renderer.getPlayerProjections === 'function')
+                ? renderer.getPlayerProjections(player) : [];
+            const ids = list.map(t => t.id).join(', ');
             logger.info(`[LitematicaBE] ${player.name} 离线，会话保活`
-                + `（投影 ${task && task.projection ? task.projection.id : '?'}，30 分钟内回来可直接恢复）`);
+                + `（投影 ${ids || '?'}，共 ${list.length} 个，30 分钟内回来可直接恢复）`);
         }
     } catch (e) {
         logger.warn(`[LitematicaBE] 会话保活失败，退回撤销: ${e && e.message ? e.message : e}`);
         try { renderer.clearPlayerProjection(player); } catch (e2) { /* 兜底也失败就交给 prune */ }
     }
 
-    // 先获取活动投影信息，再删除（Mega 是纯内存状态，必须回收）
-    const activeForLeft = projManager.getActiveProjection(player.xuid);
-    if (activeForLeft && activeForLeft.projection && activeForLeft.projection.schematicId) {
-        megaRenderer.stopRender(`${player.xuid}_${activeForLeft.projection.schematicId}`);
+    // Mega 注入状态是纯内存的，必须逐个回收（不能只看主控那一个）
+    try {
+        const list = (typeof renderer.getPlayerProjections === 'function')
+            ? renderer.getPlayerProjections(player) : [];
+        for (const row of list) {
+            const proj = row.projection;
+            if (!proj || !proj.schematicId) continue;
+            const stateId = (typeof megaRenderer.stateIdFor === 'function')
+                ? megaRenderer.stateIdFor(player, proj)
+                : `${player.xuid}_${proj.schematicId}`;
+            if (stateId) megaRenderer.stopRender(stateId);
+        }
+    } catch (e) {
+        logger.warn(`[LitematicaBE] 回收 MEGA 注入状态失败: ${e && e.message ? e.message : e}`);
     }
     projManager.removeActiveProjection(player.xuid);
     playerSessions.delete(player.xuid);
+    // 清掉打印机/轻松放置按 xuid 攒的状态（否则离线玩家的 tick 空转、提示标记被永久吃掉）
+    try { easyPlaceManager.onPlayerLeave(player); } catch (e) { /* 清理失败不影响其他离线逻辑 */ }
     // 清理选区状态
     if (selectionTool) selectionTool.cleanup(player.xuid);
 });
+
+// ═══════════════════ 版本更新检查（启动时一次） ═══════════════════
+//   · src/net/UpdateChecker.js 在 Node 的 http(s) 回调里**只写纯数据**（没有 EngineScope，碰 logger 会抛 "call engine APIs without a ::script::EngineScope"，
+//     抛出点在事件循环里，容易把服务端带走）。它全程零日志。
+//   · 打印必须回到主线程，即下方的 tick 任务。
+// 整个功能只有三件事：onServerStarted 发起一次 → 取结果 → 打一行日志。
+
+/** 日志前缀（用户可见文案的一部分，改这里会影响两行提示） */
+const UPDATE_LOG_TAG = '[LitematicaBE]';
+
+let updateCheckFired = false;
+
+/** 发起一次检查（幂等）。updateCheck.enabled=false 时什么都不做。 */
+function startUpdateCheck() {
+    if (updateCheckFired) return false;
+    if (!updateChecker.isEnabled()) return false;
+    updateCheckFired = true;
+    return updateChecker.checkOnce();
+}
+
+/** 调度器任务：结果一出来就打日志，然后把自己摘掉（一次性任务） */
+function drainUpdateCheck() {
+    const r = updateChecker.takeResult();
+    if (!r) return;
+    renderScheduler.remove('update-check');
+
+    // 文案由 UpdateChecker.formatLogLine 统一生成（纯函数、可单测）：
+    //   「[LitematicaBE]发现新版本vX.Y.Z，前往<主页>以了解更多」
+    //   「[LitematicaBE]当前已是最新版本」
+    //   「[LitematicaBE]版本检查失败：…」
+    const line = formatLogLine(r, { tag: UPDATE_LOG_TAG, home: updateChecker.homeUrl() });
+    if (!line) return;
+    if (r.status === 'update' || r.status === 'error') logger.warn(line);
+    else logger.info(line);
+}
 
 // ==================== 初始化 ====================
 
@@ -1774,6 +2130,16 @@ registerCommands('load');
 // 命令系统在 onServerStarted 才完全就绪：加载期注册失败的在这里补一次，成功的不会重复注册
 mc.listen('onServerStarted', () => {
     registerCommands('serverStarted');
+    // 版本更新检查：到这里才算插件被激活、服务端已启动，检查一次就结束
+    // （结果由调度器的 update-check 任务在主线程打印，网络回调里没有 EngineScope）。
+    startUpdateCheck();
+    // HTTP 上传站：此刻端口/工作目录才可靠。启动失败（端口占用、运行时无 HttpServer）
+    // 只打 warn，插件其余功能必须照常运行。
+    try {
+        webServer.start();
+    } catch (e) {
+        logger.warn(`[LitematicaBE] 上传站启动异常: ${e && e.message ? e.message : e}`);
+    }
     // 此刻工作目录与世界才真正就绪：再校验一次 addon 版本（部署侧路径这时才可靠）
     giCheckWiring();
     // 世界已就绪，但此刻目标区块通常尚未加载进内存（附近无玩家），setBlock 会全部失败。
@@ -1783,7 +2149,7 @@ mc.listen('onServerStarted', () => {
         // shouldRestore 的判据是"期望集合已不认这一格"——说明上次撤销只做了一半；
         // 期望仍认的格属于正常投影（重启后本来就该补回），绝不能在这里还原掉。
         //
-        // 例外：**MEGA 投影**。它的注入状态（MegaProjectionRenderer.renderStates）只活在内存里，
+        // 例外：MEGA 投影。它的注入状态（MegaProjectionRenderer.renderStates）只活在内存里，
         // 重启后没有任何东西能接管那些 ghost —— 若照普通投影那样"保留 + 补齐"，世界里就会
         // 永久留着一片 ghost，玩家进服看不到"已加载"、也没有会话可以撤销。所以先把 MEGA
         // 会话的期望记录删掉，再让 restoreOrphaned 无条件还原它们（玩家重进后重新加载投影即可）。
@@ -1797,21 +2163,20 @@ mc.listen('onServerStarted', () => {
             );
             if (n) {
                 ghostExpect.flush();
-                logger.info(`[LitematicaBE] MEGA 残留会话：清理期望 ${n} 格（重启后无法接管 → 直接还原世界，不用等玩家进服）`);
+                logger.info(`[LitematicaBE] MEGA 残留会话：清理期望 ${n} 格`);
             }
         } catch (e) {
             logger.warn(`[LitematicaBE] MEGA 残留期望清理失败: ${e && e.message ? e.message : e}`);
         }
         try {
-            const sr = worldSnapshot.restoreOrphaned({
+            // 汇总日志由 WorldSnapshot.restoreOrphaned 内部统一输出（含 跳过/失败/残留），
+            // 这里不再重复打一行，否则同一次清理会在控制台出现两条数字相同的汇总。
+            worldSnapshot.restoreOrphaned({
                 restoreMega: true,
                 shouldRestore: (dimid, x, y, z) => !ghostExpect.get(dimid, x, y, z),
             });
-            if (sr.sessions) {
-                logger.info(`[LitematicaBE] 快照孤儿会话: ${sr.sessions} 个 / 续做还原 ${sr.restored} 格 / 保留待撤销 ${sr.held} 格 / 保留现状 ${sr.kept} / 失败 ${sr.failed} / 残留 ${sr.remaining}`);
-            }
         } catch (e) {
-            logger.warn(`[LitematicaBE] 快照孤儿会话清理失败: ${e && e.message ? e.message : e}`);
+            logger.warn(`[LitematicaBE] 快照无主会话清理失败: ${e && e.message ? e.message : e}`);
         }
         try {
             ghostGuard.restoreAll('serverStarted');
@@ -1820,6 +2185,17 @@ mc.listen('onServerStarted', () => {
         }
     }, 3000);
 });
+
+// 卸载/热重载时释放 HTTP 端口，避免旧 socket 把端口占死导致下次 start 失败
+if (typeof ll !== 'undefined' && ll && typeof ll.onUnload === 'function') {
+    try {
+        ll.onUnload(() => {
+            try { webServer.stop(); } catch (e) { /* 卸载期静默 */ }
+        });
+    } catch (e) {
+        logger.warn(`[LitematicaBE] 注册 onUnload 失败: ${e && e.message ? e.message : e}`);
+    }
+}
 
 // 导出加载函数供UI使用（必须在函数定义之后）
 global.loadSchematicFile = loadSchematicFile;
@@ -1843,9 +2219,12 @@ function logGhostRegistryStatus() {
 
 logGhostRegistryStatus();
 const addonSummary = addonCheck.summary();
-logger.info(`[LitematicaBE] addon 版本校验: ${addonSummary.state}${addonSummary.enabled ? '（ghost 写入可用）' : '（ghost 写入已禁用，其余功能正常）'}`);
+logger.info(`[LitematicaBE] addon 版本校验: ${addonSummary.state}${addonSummary.enabled ? '（ghost 写入可用）' : '（ghost 写入已禁用）'}`);
+const ucOn = updateChecker.isEnabled();
+logger.info(`[LitematicaBE] 版本更新检查: ${ucOn
+    ? `已开启（${updateChecker.repo()}，服务端启动时检查）`
+    : '已关闭（updateCheck.enabled=false）'}`);
 const snapStats = worldSnapshot.stats();
 logger.info(`[LitematicaBE] 快照: ${snapStats.sessions} 个未还原会话 / ${snapStats.blocks} 格 / 目录 ${snapStats.dir}`);
 logger.info(`Commands: ${Array.from(registeredCommands).join(', ') || '(none)'}`);
 logger.info("Use wooden sword to operate");
-logger.info("[LogCleaner] Auto-clean enabled");

@@ -1,6 +1,7 @@
-/** GhostRenderer — ghost 渲染器（取代粒子渲染） */
+/** GhostRenderer — ghost 渲染器 */
 
 const { SurfaceExtractor } = require('./SurfaceExtractor');
+const { inferPistonExtendedStates } = require('./PistonStateInfer');
 
 const DEFAULT_WRITES_PER_TICK = 300;
 const DEFAULT_MAX_BLOCKS = 60000;
@@ -56,6 +57,63 @@ function dimidOf(player) {
     return typeof d === 'number' ? d : 0;
 }
 
+/* ============================================================================
+ * 会话身份：一个玩家可以同时铺**多个投影**
+ * ----------------------------------------------------------------------------
+ * 3.0.x 及以前，sessions 的 key 就是 xuid，于是"再加载一个投影"必然挤掉上一个：
+ * enqueue 看到已有会话就 clear，玩家永远只能看一份 ghost。
+ *
+ * 现在 key 升维成 `xuid::projectionId`（不影响同一玩家同一投影"同层续用"），
+ * 并额外记 `primarySession: xuid -> sessionKey`，表示"木剑当前控制的那份"。
+ *
+ * SessionMap 是一层兼容垫片：外部/旧代码仍可以 `sessions.get('P1')` / `has('P1')` /
+ * `delete('P1')`，会解析到该玩家的主控会话（没有主控记录时退化为"该玩家第一个会话"）。
+ * 遍历（values/keys/forEach/size）拿到的仍是**全部**会话，多投影共享 tick 预算。
+ * ========================================================================== */
+
+const SESSION_SEP = '::';
+
+/** 会话键：xuid + 投影 id。projectionId 为空（旧数据/无 id 投影）时为 `xuid::-` */
+function sessionKeyOf(xuid, projectionId) {
+    const x = (xuid === undefined || xuid === null || xuid === '') ? 'unknown' : String(xuid);
+    const p = (projectionId === undefined || projectionId === null || projectionId === '')
+        ? '-' : String(projectionId);
+    return `${x}${SESSION_SEP}${p}`;
+}
+
+/** 投影 id → 稳定的短后缀（sessionId 落在文件名里，只留 [0-9a-z]） */
+function shortHash(str) {
+    let h = 5381;
+    const s = String(str || '');
+    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+}
+
+class SessionMap extends Map {
+    /** @param {{primarySession: Map<string,string>}} owner */
+    constructor(owner) {
+        super();
+        this.owner = owner;
+    }
+
+    /** 把"玩家级" key 解析成真实的 sessionKey；真实 key 原样返回 */
+    _resolve(k) {
+        if (typeof k !== 'string' || k.indexOf(SESSION_SEP) >= 0) return k;
+        const primary = this.owner && this.owner.primarySession;
+        const sk = primary && primary.get(k);
+        if (sk && super.has(sk)) return sk;
+        const prefix = k + SESSION_SEP;
+        for (const key of super.keys()) {
+            if (typeof key === 'string' && key.indexOf(prefix) === 0) return key;
+        }
+        return k;
+    }
+
+    get(k) { return super.get(this._resolve(k)); }
+    has(k) { return super.has(this._resolve(k)); }
+    delete(k) { return super.delete(this._resolve(k)); }
+}
+
 class GhostRenderer {
     /**
      * @param {{registry:object, expectStore?:object, addonCheck?:object, snapshot?:object,
@@ -83,8 +141,12 @@ class GhostRenderer {
         /** 是否允许覆盖花草/水/雪这类"可替换"方块（玩家建筑永远不覆盖） */
         this.overwriteReplaceable = o.overwriteReplaceable !== false;
 
-        /** @type {Map<string, object>} xuid -> session */
-        this.sessions = new Map();
+        /**
+         * @type {SessionMap} `xuid::projectionId` -> session（同一玩家可有多份）
+         * 兼容读取：`sessions.get(xuid)` 解析到该玩家的主控会话。
+         */
+        this.primarySession = new Map();   // xuid -> sessionKey（木剑控制的那份）
+        this.sessions = new SessionMap(this);
         /**
          * "被真实方块挡住"的格索引：`dim:x,y,z` -> { xuid, dimid, entry }
          * 用途：玩家挖掉那格时 O(1) 命中，立刻补 ghost（事件驱动，不用等轮转）
@@ -123,13 +185,47 @@ class GhostRenderer {
         return true;
     }
 
-    _newSessionId(xuid, dimid) {
+    _newSessionId(xuid, dimid, projectionId) {
         const safe = String(xuid || 'unknown').replace(/[^0-9a-zA-Z]/g, '').slice(0, 12) || 'unknown';
-        return `proj-${safe}-${dimid}-${Date.now()}`;
+        // 同一玩家可能同时开多份会话：光靠毫秒时间戳会撞名（快照文件名相同 → 互相覆盖）。
+        // 加投影短哈希保证唯一；前缀 `proj-<xuid>-` 不变，reclaimOrphans 仍能按玩家找孤儿。
+        const tail = projectionId ? `-${shortHash(projectionId)}` : '';
+        return `proj-${safe}-${dimid}-${Date.now()}${tail}`;
     }
 
-    _isReplaceableBlock(block) {
-        if (!this.overwriteReplaceable) return false;
+    /** 记下"木剑当前控制的那份会话"（同一玩家多投影时，会话级 API 默认作用在它上面） */
+    _setPrimary(xuid, sessionKey) {
+        if (!xuid || !sessionKey) return;
+        this.primarySession.set(String(xuid), sessionKey);
+    }
+
+    /** 会话键（供外部按投影定位，别自己拼字符串） */
+    keyOf(xuid, projectionId) {
+        return sessionKeyOf(xuid, projectionId);
+    }
+
+    /** 该玩家的全部会话（多投影），按建会话的先后 */
+    sessionsOfPlayer(xuid) {
+        const x = (xuid === undefined || xuid === null) ? '' : String(xuid);
+        if (!x) return [];
+        const prefix = x + SESSION_SEP;
+        const out = [];
+        for (const [key, s] of this.sessions) {
+            if (typeof key === 'string' && key.indexOf(prefix) === 0) out.push(s);
+        }
+        return out;
+    }
+
+    /** 精确定位某个投影的会话（projectionId 省略时退化为该玩家的主控会话） */
+    getSessionOf(player, projectionId) {
+        const xuid = player && player.xuid ? player.xuid : player;
+        if (projectionId === undefined || projectionId === null || projectionId === '') {
+            return this.sessions.get(xuid) || null;
+        }
+        return this.sessions.get(sessionKeyOf(xuid, projectionId)) || null;
+    }
+
+    _isReplaceableBlock(block) {        if (!this.overwriteReplaceable) return false;
         const n = shortName(block && (block.type || block.name));
         if (!n) return true;
         if (REPLACEABLE.has(n)) return true;
@@ -155,17 +251,29 @@ class GhostRenderer {
 
         const dimid = dimidOf(player);
         const layer = (typeof o.layer === 'number') ? o.layer : -1;
+        const projectionId = projection.id || null;
+        const sessionKey = sessionKeyOf(player.xuid, projectionId);
+        // keepOthers=true → 保留该玩家**其他投影**的会话（多投影并存）。
+        // 缺省仍沿用旧语义：同一玩家换投影时先撤干净的，避免老数据和调用方混账。
+        const keepOthers = o.keepOthers === true;
 
         // 已有会话时分两种处理：
         //   同一投影 + 同一层 → 直接续用（重进游戏、重复点"加载"都不该把整面墙撤了重写）
-        //   换了投影/换了层   → 先撤干净再建（两次铺投影混进同一会话，撤销时会连带还原别的墙）
-        const prev = this.sessions.get(player.xuid);
+        //   同一投影换了层   → 先撤这一份再建（同一个投影的两层不能共存于一个会话）
+        const prev = this.sessions.get(sessionKey);
+        if (!keepOthers) {
+            // 旧语义：该玩家的其它投影一并撤掉（新放置的投影取代旧投影）
+            for (const s of this.sessionsOfPlayer(player.xuid)) {
+                if (s !== prev) this._clearOne(s, { silent: true });
+            }
+        }
         if (prev) {
-            const sameProj = !!projection.id && prev.projectionId === projection.id;
+            const sameProj = !!projectionId && prev.projectionId === projectionId;
             const sameLayer = prev.layer === layer;
             if (sameProj && sameLayer) {
                 prev.projection = projection;                       // 位置/旋转可能被重新设置过
                 prev.playerName = player.name || prev.playerName;
+                this._setPrimary(player.xuid, prev.key);
                 if (prev.state === 'suspended') this.resume(player);
                 return {
                     ok: true,
@@ -175,7 +283,7 @@ class GhostRenderer {
                     stats: { input: prev.queue.length, culled: 0 },
                 };
             }
-            this.clear(player, { silent: true });
+            this._clearOne(prev, { silent: true });
         }
 
         // deferBlocks=true：MEGA 投影的方块在 .mcmega 分块里，由 MegaProjectionRenderer
@@ -186,6 +294,9 @@ class GhostRenderer {
             const ex = this.extractor.extract(projection, { layerFilter: layer });
             blocks = ex.blocks;
             stats = ex.stats;
+            // .mcstructure 的伸出活塞本体只带 facing_direction（没有 extended_bit），
+            // "已伸出"由前方那格的活塞头方块体现 —— 不补这一步就会一律按收缩态建模
+            try { stats.pistonExtended = inferPistonExtendedStates(blocks); } catch (e) { /* 推断失败不影响渲染 */ }
             if (stats.input === 0) {
                 return { ok: false, reason: 'empty', stats };
             }
@@ -206,14 +317,16 @@ class GhostRenderer {
             const w = transformPosition(rel, projection);
             queue[i] = {
                 x: w.x, y: w.y, z: w.z,
-                gid: this.registry.resolve(b.renderName || b.name || b.type || ''),
+                gid: (typeof this.registry.resolveWithState === 'function'
+            ? this.registry.resolveWithState(b.renderName || b.name || b.type || '', b.bedrockState || b.state)
+            : this.registry.resolve(b.renderName || b.name || b.type || '')),
                 st: (typeof this.registry.buildStates === 'function')
                     ? this.registry.buildStates(b.renderName || b.name || b.type || '', b.bedrockState || b.state)
                     : undefined,
             };
         }
 
-        const sessionId = this._newSessionId(player.xuid, dimid);
+        const sessionId = this._newSessionId(player.xuid, dimid, projectionId);
         let snapOk = false;
         if (this.snapshot) {
             try {
@@ -228,9 +341,10 @@ class GhostRenderer {
         }
 
         const session = {
+            key: sessionKey,
             xuid: player.xuid,
             playerName: player.name || String(player.xuid),
-            projectionId: projection.id || null,
+            projectionId: projectionId,
             projection,
             dimid,
             layer,
@@ -248,7 +362,8 @@ class GhostRenderer {
             doneAt: null,
             lastError: null,
         };
-        this.sessions.set(player.xuid, session);
+        this.sessions.set(sessionKey, session);
+        this._setPrimary(player.xuid, sessionKey);
 
         this.stats.projections++;
         this.stats.queued += queue.length;
@@ -310,7 +425,14 @@ class GhostRenderer {
         const k = `${s.dimid}:${entry.x},${entry.y},${entry.z}`;
         if (this.blockedIndex.has(k)) return;
         s.blocked.push(entry);
-        this.blockedIndex.set(k, { xuid: s.xuid, dimid: s.dimid, entry });
+        // 记 sessionKey：同一玩家多投影时，光靠 xuid 定位不到是哪一份会话
+        this.blockedIndex.set(k, {
+            xuid: s.xuid,
+            projectionId: s.projectionId || null,
+            sessionKey: s.key || null,
+            dimid: s.dimid,
+            entry,
+        });
     }
 
     /** 补写成功/转入 pending 后，从 blocked 移除 */
@@ -386,7 +508,7 @@ class GhostRenderer {
         const k = `${dimid}:${x},${y},${z}`;
         const hit = this.blockedIndex.get(k);
         if (!hit) return 'none';
-        const s = this.sessions.get(hit.xuid);
+        const s = this.sessions.get(hit.sessionKey || hit.xuid);
         if (!s) { this.blockedIndex.delete(k); return 'none'; }
 
         const entry = hit.entry;
@@ -422,17 +544,23 @@ class GhostRenderer {
 
         this.blockedIndex.delete(`${d}:${xs},${ys},${zs}`);
 
-        const s = this.sessions.get(xuid);
-        if (!s) return false;
+        const targets = this.sessionsOfPlayer(xuid);
+        if (!targets.length) {
+            const one = this.sessions.get(xuid);
+            if (!one) return false;
+            targets.push(one);
+        }
 
         let touched = false;
-        for (let i = s.blocked.length - 1; i >= 0; i--) {
-            const e = s.blocked[i];
-            if (e.x === xs && e.y === ys && e.z === zs) { s.blocked.splice(i, 1); touched = true; }
-        }
-        for (let i = s.pending.length - 1; i >= 0; i--) {
-            const e = s.pending[i];
-            if (e.x === xs && e.y === ys && e.z === zs) { s.pending.splice(i, 1); touched = true; }
+        for (const s of targets) {
+            for (let i = s.blocked.length - 1; i >= 0; i--) {
+                const e = s.blocked[i];
+                if (e.x === xs && e.y === ys && e.z === zs) { s.blocked.splice(i, 1); touched = true; }
+            }
+            for (let i = s.pending.length - 1; i >= 0; i--) {
+                const e = s.pending[i];
+                if (e.x === xs && e.y === ys && e.z === zs) { s.pending.splice(i, 1); touched = true; }
+            }
         }
         if (touched) {
             this.stats.blockedCount = this._countBlocked();
@@ -517,8 +645,11 @@ class GhostRenderer {
         // 已经是 ghost：仅当「无朝向状态 或 状态与目标一致」才跳过；状态不一致必须重写
         // （楼梯等形状方块换个朝向，同一格必须重写，否则永远停在旧朝向）
         if (isGhost) {
+            // 目标方块 ID 也可能变（例如墙挂火把从「站立火把 ghost」改到「斜插火把 ghost」）。
+            // 只比对 states 会把"换了模型但 state 相同"误判为无需重写，画面永远停在旧方块上。
+            const sameType = !entry.gid || curType === entry.gid;
             const needSt = entry.st && Object.keys(entry.st).length > 0;
-            if (!needSt || this._statesEqual(this._readGhostStates(cur), entry.st)) return 'skipped';
+            if (sameType && (!needSt || this._statesEqual(this._readGhostStates(cur), entry.st))) return 'skipped';
             // 状态不一致 → 继续往下重写，但**不重复记快照**（首次写入已记过真原方块）
         }
 
@@ -590,7 +721,8 @@ class GhostRenderer {
                     if (s.pending.length) parts.push(`§7${s.pending.length} 格待补`);
                     if (s.blocked.length) parts.push(`§7${s.blocked.length} 格被原地形挡住（挖掉后自动补上）`);
                     const extra = parts.length ? `（${parts.join('，')}）` : '';
-                    pl.tell(`§a投影已铺设 §e${c.placed} §a格${extra}`);
+                    const nm = (s.projection && s.projection.name) ? `"${s.projection.name}"` : '投影';
+                    pl.tell(`§a${nm}已铺设 §e${c.placed} §a格${extra}`);
                 }
             } catch (e) { /* 玩家不在线，无所谓 */ }
         }
@@ -652,26 +784,74 @@ class GhostRenderer {
      */
     setLayer(player, projection, layer) {
         if (!player || !player.xuid) return { ok: false, reason: 'no-player' };
-        const prev = this.sessions.get(player.xuid);
+        // 按投影定位：多投影下切层绝不能顺手把别的投影也撤了
+        const prev = projection && projection.id
+            ? this.sessions.get(sessionKeyOf(player.xuid, projection.id))
+            : this.sessions.get(player.xuid);
         if (prev && prev.layer === layer) {
             return { ok: true, count: 0, unchanged: true };
         }
         this.stats.layerSwitches++;
-        const reverted = this.clear(player, { silent: true });
-        const r = this.enqueue(player, projection, { layer: layer === undefined ? -1 : layer });
+        const reverted = this.clear(player, {
+            silent: true,
+            projectionId: projection && projection.id ? projection.id : undefined,
+        });
+        const r = this.enqueue(player, projection, {
+            layer: layer === undefined ? -1 : layer,
+            keepOthers: true,
+        });
         return { ...r, reverted };
     }
 
     /**
      * 撤销会话：先删期望 → 再按快照还原世界
+     *   opts.projectionId  只撤这一个投影（多投影）
+     *   opts.sessionKey    直接指定会话键（prune 内部用）
+     *   都不给             撤该玩家全部会话（旧语义，单投影时等价）
      * @param {object} player
-     * @param {{silent?: boolean}} [opts]
+     * @param {{silent?: boolean, projectionId?: string, sessionKey?: string}} [opts]
      */
     clear(player, opts) {
         const o = opts || {};
         const xuid = player && player.xuid ? player.xuid : player;
-        const s = this.sessions.get(xuid);
-        if (!s) return { ok: false, removed: 0 };
+
+        let targets;
+        if (o.sessionKey) {
+            const one = this.sessions.get(o.sessionKey);
+            targets = one ? [one] : [];
+        } else if (o.projectionId) {
+            const one = this.sessions.get(sessionKeyOf(xuid, o.projectionId));
+            targets = one ? [one] : [];
+        } else {
+            targets = this.sessionsOfPlayer(xuid);
+            if (!targets.length) {
+                const one = this.sessions.get(xuid);
+                if (one) targets = [one];
+            }
+        }
+        if (!targets.length) return { ok: false, removed: 0 };
+
+        const out = { ok: true, removed: 0, restored: 0, remaining: 0, kept: 0, failed: 0 };
+        for (const s of targets) {
+            const r = this._clearOne(s, o);
+            out.removed++;
+            out.restored += r.restored;
+            out.remaining += r.remaining;
+            out.kept += r.kept;
+            out.failed += r.failed;
+        }
+        this.stats.pendingCount = this._countPending();
+        this.stats.blockedCount = this._countBlocked();
+        return out;
+    }
+
+    /**
+     * 撤掉**一个**会话（内部实现）。调用方负责决定撤哪些。
+     * @returns {{restored:number, remaining:number, kept:number, failed:number}}
+     */
+    _clearOne(s, opts) {
+        const o = opts || {};
+        const xuid = s.xuid || (s.player && s.player.xuid);
 
         // 先删除期望记录：否则还原完成后 GhostGuard 会重新补回 ghost
         if (this.expect) {
@@ -706,28 +886,32 @@ class GhostRenderer {
         // blocked 是尚未写入世界的格，撤销时直接销账即可（不涉及还原）
         for (const e of s.blocked) this.blockedIndex.delete(`${s.dimid}:${e.x},${e.y},${e.z}`);
         s.blocked = [];
-        this.sessions.delete(xuid);
-        this.stats.pendingCount = this._countPending();
-        this.stats.blockedCount = this._countBlocked();
+        this.sessions.delete(s.key || sessionKeyOf(xuid, s.projectionId));
+        if (this.primarySession.get(String(xuid)) === (s.key || null)) {
+            this.primarySession.delete(String(xuid));
+        }
 
         if (!o.silent) {
             this._log('info', `[GhostRenderer] 撤销 "${s.projection && s.projection.name}" | 还原 ${restored}`
                 + ` / 玩家方块保持 ${kept} / 失败 ${failed} / 剩余 ${remaining}`);
             try {
                 const pl = mc.getPlayer(xuid);
+                const nm = (s.projection && s.projection.name) ? `"${s.projection.name}"` : '';
                 if (pl) {
-                    pl.tell(`§a投影已撤销：还原 §e${restored} §a格` + (kept ? `，§7${kept} 格已被你放的方块占据，保持原样` : ''));
+                    pl.tell(`§a${nm}投影已撤销：还原 §e${restored} §a格` + (kept ? `，§7${kept} 格已被你放的方块占据，保持原样` : ''));
                     if (remaining) pl.tell(`§7还有 ${remaining} 格因区块未加载未还原，已留在快照里，重启或靠近后会再试`);
                 }
             } catch (e) { /* 忽略 */ }
         }
-        return { ok: true, restored, remaining, kept, failed };
+        return { restored, remaining, kept, failed };
     }
+
 
     /** Mega 注入 / 会话可见集更新：只换未写的队列，已写的不动 */
     updateBlocks(xuid, newBlocks) {
         const s = this.sessions.get(xuid);
         if (!s || !Array.isArray(newBlocks) || newBlocks.length === 0) return 0;
+        try { inferPistonExtendedStates(newBlocks); } catch (e) { /* 推断失败不影响渲染 */ }
 
         const rebuilt = [];
         for (const b of newBlocks) {
@@ -742,7 +926,9 @@ class GhostRenderer {
             }
             rebuilt.push({
                 x: w.x, y: w.y, z: w.z,
-                gid: this.registry.resolve(b.renderName || b.name || b.type || ''),
+                gid: (typeof this.registry.resolveWithState === 'function'
+            ? this.registry.resolveWithState(b.renderName || b.name || b.type || '', b.bedrockState || b.state)
+            : this.registry.resolve(b.renderName || b.name || b.type || '')),
                 st: (typeof this.registry.buildStates === 'function')
                     ? this.registry.buildStates(b.renderName || b.name || b.type || '', b.bedrockState || b.state)
                     : undefined,
@@ -773,11 +959,22 @@ class GhostRenderer {
      *        坐标必须是**相对投影原点**的（分块存储就是这个坐标系），内部统一走 transformPosition
      * @returns {{added:number, dup:number, total:number}}
      */
-    appendBlocks(xuid, blocks) {
+    appendBlocks(xuid, blocks, projectionId) {
+        // projectionId 省略 = 该玩家主控会话（旧调用方 / 单投影）
+        const s = this.getSessionOf(xuid, projectionId);
+        if (!s || !Array.isArray(blocks) || blocks.length === 0) {
+            return { added: 0, dup: 0, total: 0 };
+        }
+        return this._appendTo(s, blocks);
+    }
+
+    /** appendBlocks 的实现体：往指定会话尾部追加 */
+    _appendTo(s, blocks) {
         const out = { added: 0, dup: 0, total: 0 };
-        const s = this.sessions.get(xuid);
-        if (!s || !Array.isArray(blocks) || blocks.length === 0) return out;
         if (!s.seen) s.seen = new Set();
+        // 活塞伸出态推断走「本批可见的邻居」：MEGA 一个 32³ 分块里活塞臂几乎总与本体同块，
+        // 只有正好压在分块边界上的极少数会漏判（漏判 = 保持收缩态，不会画错别的方块）。
+        try { inferPistonExtendedStates(blocks); } catch (e) { /* 推断失败不影响渲染 */ }
 
         for (const b of blocks) {
             const p = b && b.pos;
@@ -789,7 +986,9 @@ class GhostRenderer {
             s.seen.add(key);
             s.queue.push({
                 x: w.x, y: w.y, z: w.z,
-                gid: this.registry.resolve(b.renderName || b.name || b.type || ''),
+                gid: (typeof this.registry.resolveWithState === 'function'
+            ? this.registry.resolveWithState(b.renderName || b.name || b.type || '', b.bedrockState || b.state)
+            : this.registry.resolve(b.renderName || b.name || b.type || '')),
                 st: (typeof this.registry.buildStates === 'function')
                     ? this.registry.buildStates(b.renderName || b.name || b.type || '', b.bedrockState || b.state)
                     : undefined,
@@ -809,7 +1008,7 @@ class GhostRenderer {
         return out;
     }
 
-    /** 某玩家当前会话 */
+    /** 某玩家当前（主控）会话 */
     getSession(player) {
         const xuid = player && player.xuid ? player.xuid : player;
         return this.sessions.get(xuid) || null;
@@ -819,22 +1018,35 @@ class GhostRenderer {
         return this.sessions.has(player && player.xuid ? player.xuid : player);
     }
 
+    /** 某玩家有没有**这个投影**的会话（多投影判定，别用 has() 代替） */
+    hasProjection(player, projectionId) {
+        const xuid = player && player.xuid ? player.xuid : player;
+        if (projectionId === undefined || projectionId === null || projectionId === '') return this.has(player);
+        return this.sessions.has(sessionKeyOf(xuid, projectionId));
+    }
+
     // ==================== 会话保活 ====================
 
     /**
-     * 玩家离线：暂停写入，**不撤销世界 ghost**。
+     * 玩家离线：暂停写入，**不撤销世界 ghost**。同一玩家的所有投影一起暂停。
      * @returns {boolean} 是否有会话被暂停
      */
     suspend(player) {
         const xuid = player && player.xuid ? player.xuid : player;
-        const s = this.sessions.get(xuid);
-        if (!s) return false;
-        if (s.state === 'suspended') return true;
-        s.prevState = s.state;
-        s.state = 'suspended';
-        s.suspendedAt = Date.now();
-        this._log('info', `[GhostRenderer] 会话暂停（玩家离线）"${s.projection && s.projection.name}"`
-            + ` | 已写 ${s.written.length} 格 / 待补 ${s.pending.length} 格`);
+        const targets = this.sessionsOfPlayer(xuid);
+        if (!targets.length) {
+            const one = this.sessions.get(xuid);
+            if (one) targets.push(one);
+        }
+        if (!targets.length) return false;
+        for (const s of targets) {
+            if (s.state === 'suspended') continue;
+            s.prevState = s.state;
+            s.state = 'suspended';
+            s.suspendedAt = Date.now();
+            this._log('info', `[GhostRenderer] 会话暂停（玩家离线）"${s.projection && s.projection.name}"`
+                + ` | 已写 ${s.written.length} 格 / 待补 ${s.pending.length} 格`);
+        }
         return true;
     }
 
@@ -844,22 +1056,34 @@ class GhostRenderer {
      */
     resume(player) {
         const xuid = player && player.xuid ? player.xuid : player;
-        const s = this.sessions.get(xuid);
-        if (!s || s.state !== 'suspended') return false;
-        if (player && player.xuid && player.name) s.playerName = player.name;
-        const unfinished = s.cursor < s.queue.length || s.pending.length > 0;
-        s.state = unfinished ? 'building' : 'done';
-        s.suspendedAt = null;
-        s.prevState = null;
-        this._log('info', `[GhostRenderer] 会话恢复"${s.projection && s.projection.name}"`
-            + ` | 剩余 ${Math.max(0, s.queue.length - s.cursor)} 格 / 待补 ${s.pending.length} 格`);
-        return true;
+        const targets = this.sessionsOfPlayer(xuid);
+        if (!targets.length) {
+            const one = this.sessions.get(xuid);
+            if (one) targets.push(one);
+        }
+        let resumed = false;
+        for (const s of targets) {
+            if (s.state !== 'suspended') continue;
+            if (player && player.xuid && player.name) s.playerName = player.name;
+            const unfinished = s.cursor < s.queue.length || s.pending.length > 0;
+            s.state = unfinished ? 'building' : 'done';
+            s.suspendedAt = null;
+            s.prevState = null;
+            resumed = true;
+            this._log('info', `[GhostRenderer] 会话恢复"${s.projection && s.projection.name}"`
+                + ` | 剩余 ${Math.max(0, s.queue.length - s.cursor)} 格 / 待补 ${s.pending.length} 格`);
+        }
+        return resumed;
     }
 
     isSuspended(player) {
         const xuid = player && player.xuid ? player.xuid : player;
-        const s = this.sessions.get(xuid);
-        return !!s && s.state === 'suspended';
+        const targets = this.sessionsOfPlayer(xuid);
+        if (!targets.length) {
+            const one = this.sessions.get(xuid);
+            return !!one && one.state === 'suspended';
+        }
+        return targets.some((s) => s.state === 'suspended');
     }
 
     /**
@@ -879,7 +1103,7 @@ class GhostRenderer {
         for (const s of [...this.sessions.values()]) {
             if (s.state !== 'suspended' || !s.suspendedAt) continue;
             if (t - s.suspendedAt < age) continue;
-            const r = this.clear(s.xuid, { silent: true });
+            const r = this.clear(s.xuid, { silent: true, sessionKey: s.key });
             out.pruned++;
             out.restored += (r && r.restored) || 0;
             this._log('info', `[GhostRenderer] 保活会话超时（离线 ${Math.round((t - s.suspendedAt) / 60000)} 分钟），已撤销 "${s.projection && s.projection.name}"`);
@@ -898,7 +1122,9 @@ class GhostRenderer {
             blocked += s.blocked.length;
             if (s.state === 'suspended') suspended++;
             sessions.push({
+                key: s.key,
                 xuid: s.xuid,
+                projectionId: s.projectionId || null,
                 name: s.projection && s.projection.name,
                 layer: s.layer,
                 state: s.state,
@@ -923,4 +1149,8 @@ class GhostRenderer {
     }
 }
 
-module.exports = { GhostRenderer, transformPosition, shortName, dimidOf, REPLACEABLE };
+module.exports = {
+    GhostRenderer, transformPosition, shortName, dimidOf, REPLACEABLE,
+    // 会话身份相关：snapshot 侧的会话标定（删除投影时按哈希后缀认亲）要用同一套算法
+    sessionKeyOf, shortHash,
+};

@@ -126,6 +126,10 @@ const BlockConversions = {
         'explode_bit',
         'output_lit_bit',
         'output_subtract_bit',
+        // 半砖的上下半：基岩 `vertical_half`（1.16+）/ `top_slot_bit`（旧版）。
+        // 不在白名单里会被这里丢掉 → 打印机把所有半砖都放下半砖。
+        'vertical_half',
+        'top_slot_bit',
         // Java Edition directional/visual state keys (Mega mode compatibility)
         'facing', 'axis', 'half', 'shape', 'type', 'hinge', 'face', 'rotation',
         'open', 'extended', 'powered', 'lit', 'attached', 'part', 'mode', 'in_wall',
@@ -181,7 +185,10 @@ const BlockConversions = {
     filterDirectionStates(blockStates) {
         const newStates = {};
         for (const [key, value] of Object.entries(blockStates)) {
-            if (this.directionStates.includes(key)) {
+            // 状态键可能带命名空间（实测观察者是 `minecraft:facing_direction`），
+            // 匹配时去前缀，但**输出保留原始键名** —— 写回世界时 BDS 认的是原名。
+            const bare = key.startsWith('minecraft:') ? key.slice('minecraft:'.length) : key;
+            if (this.directionStates.includes(bare)) {
                 newStates[key] = value;
             }
         }

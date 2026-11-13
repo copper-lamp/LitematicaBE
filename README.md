@@ -1,15 +1,15 @@
 <div align="center">
   <img src="resources/pack_icon.png" alt="LitematicaBE icon" width="160">
   <h1>LitematicaBE</h1>
-  <p><strong>基岩版服务器一站式投影的最佳方案</strong></p>
-  <p>加载与保存 <code>.litematic</code>，用半透明 ghost 方块显示投影，支持逐层建造、轻松放置与材料清单导出。</p>
+  <p><strong>基岩版服务器一站式投影集成的最佳方案</strong></p>
+  <p>兼容 bedrock / java 双版本结构投影文件，使用 georetry 原生渲染，全服共享并发控制，优秀版本兼容性，一站式集成投影功能</p>
 
   <p>
-    <img src="https://img.shields.io/badge/release-v3.0.3-4c8bf5?style=flat-square" alt="LitematicaBE v3.0.3">
-    <img src="https://img.shields.io/badge/Minecraft%20Bedrock-1.21.132%2B-62b47a?style=flat-square" alt="Minecraft Bedrock 1.21.132+">
-    <img src="https://img.shields.io/badge/LeviLamina-26.10%2B-7b68ee?style=flat-square" alt="LeviLamina 26.10+">
-    <img src="https://img.shields.io/badge/LegacyScriptEngine-nodejs%200.22.x-ffb300?style=flat-square" alt="LegacyScriptEngine nodejs 0.22.x">
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"></a>
+    <img src="https://img.shields.io/badge/release-v3.1.0-4c8bf5?style=flat-square" alt="LitematicaBE v3.1.0">
+    <img src="https://img.shields.io/badge/Minecraft%20Bedrock-1.21.70%2B-62b47a?style=flat-square" alt="Minecraft Bedrock 1.21.70+">
+    <img src="https://img.shields.io/badge/LeviLamina-1.2.0%2B-7b68ee?style=flat-square" alt="LeviLamina 1.2.0+">
+    <img src="https://img.shields.io/badge/LegacyScriptEngine-nodejs%200.11.1+-ffb300?style=flat-square" alt="LegacyScriptEngine nodejs 0.11.1+">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL 3.0-blue?style=flat-square" alt="AGPL-3.0 license"></a>
   </p>
 
   <p>
@@ -27,15 +27,12 @@
   </p>
 </div>
 
-> [!WARNING]
-> 3.x 仍在重构与预览阶段：部分功能尚未经过严格测试，可能存在未知问题，若发现敬请反馈
-
-LitematicaBE 是一个面向基岩版（BDS + LeviLamina）服务端的投影插件：同时支持读取 .litematica 及 .mcstructure 双格式。采用自定义 ghost 方块写入投影，支持超大文件、逐层查看、投影打印机、litematica格式导出等实用功能。无需客户端玩家装载，为基岩版服务器提供一站式投影服务
+LitematicaBE 是一个面向基岩版（BDS + LeviLamina）服务端的投影插件：同时支持读取 .litematica 及 .mcstructure 双格式。采用 geometry 原生自定义方块写入投影，支持超大文件、逐层查看、投影打印机、litematica格式导出等实用功能。致力于为基岩版服务器提供一站式投影服务
 
 ## 快速开始
 
 > [!IMPORTANT]
-> LitematicaBE 由「服务端插件 + BP/RP 扩展包」组成，全部内容在 LLBDS 服务端装载。
+> LitematicaBE 由「服务端插件 + BP/RP 扩展包」组成，全部内容在 LLBDS 服务端装载，玩家进入服务器自动推送资源包。
 
 1. 安装 lip（已安装可跳过）：
 
@@ -51,15 +48,7 @@ LitematicaBE 是一个面向基岩版（BDS + LeviLamina）服务端的投影插
 
    插件会安装到 `plugins/LitematicaBE/`，BP/RP 分别安装到 `behavior_packs/` 与 `resource_packs/`。
 
-3. **客户端**：在 LeviLauncher 的「内容下载 → lip」中搜索 LitematicaBE 安装，或在客户端实例根目录执行：
-
-   ```shell
-   lip install github.com/copper-lamp/LitematicaBE#client
-   ```
-
-   无法使用 lip 的玩家可以直接导入 Release 里的 `LitematicaBE-client-<版本>.mcaddon`。
-
-4. **在世界中启用扩展包**：把 BP/RP 的 `pack_id` 与 `version` 写入 `worlds/<世界名>/world_behavior_packs.json` 和 `world_resource_packs.json`（或在世界设置界面勾选），然后重启服务器。
+3. **启用扩展包**：把 BP/RP 的头`pack_id` 与 `version` 写入 `worlds/<世界名>/world_behavior_packs.json` 和 `world_resource_packs.json`（或在存档中设置启用后上传存档至服务端），然后重启服务器。
 
    ```json
    [
@@ -67,53 +56,55 @@ LitematicaBE 是一个面向基岩版（BDS + LeviLamina）服务端的投影插
    ]
    ```
 
-5. 把 `.litematic` 文件放进 `plugins/LitematicaBE/schematics/`，进游戏手持木剑蹲下点击打开主菜单。
+4. 上传结构或投影文件：
+- 服务器管理员：把需要加载的文件手动放入 `plugins/LitematicaBE/schematics/`
+- 普通玩家：访问本插件提供的服务器上传站地址并上传你的文件（见使用指南部分）
 
 指定版本安装（推荐锁定版本）：
 
 ```shell
-lip install github.com/copper-lamp/LitematicaBE@3.0.1          # 服务端
-lip install github.com/copper-lamp/LitematicaBE#client@3.0.1   # 客户端
+lip install github.com/copper-lamp/LitematicaBE@3.1.0
 ```
 
-升级用 `lip update github.com/copper-lamp/LitematicaBE`。`lip` 只管理服务端工作区；客户端实例由 LeviLauncher 管理，命令中的 `#client` 变体不可省略。
+升级用 `lip update github.com/copper-lamp/LitematicaBE`。
 
 ## 兼容性
 
 | 组件 | 版本 |
 | ---- | ---- |
-| Minecraft Bedrock Server | 1.21.132+ |
-| LeviLamina | 26.10+ |
-| LegacyScriptEngine（nodejs 变体） | 0.22.x |
-| LitematicaBE 插件 / addon | 随 Release 一同发布，插件会校验两侧版本一致 |
-| 客户端平台 | Windows x64（其他平台请手动导入 `.mcaddon`） |
+| Minecraft Bedrock Server | 1.21.70+ |
+| LeviLamina | 1.2.0+ |
+| LegacyScriptEngine（nodejs 变体） | 0.11.0+ |
+| LitematicaBE 插件 / addon | 随 Release 一同发布 |
+- tip：本插件对服务端版本不敏感，以上为理论兼容范围，若存在兼容问题请报告处理。
 
 ## 功能特性
 
 | 功能 | 说明 |
 | ---- | ---- |
-| 原理图加载 | 加载 Java 版 `.litematic` 文件 |
-| 原理图保存 | 把基岩版建筑保存为 `.litematic`，与 Java 版 Litematica 互通 |
-| ghost 投影 | 自定义 ghost 方块渲染，半透明显示，贴近原版观感 |
-| 逐层建造 | 按 Y 层切换显示，抬头看上层 / 低头看下层 |
-| 轻松放置 | 手持材料对准投影精确放置，支持快速连续放置 |
-| 投影打印机 | 开启后自动把半径内（默认 5 格）的 ghost 格填成真方块，可限速、可逐层 |
-| 直接放置 | OP + 创造模式把投影方块直接写入世界（NBT 直放） |
-| 方块转换 | Java ↔ 基岩版双向映射，含 legacy 回退表 |
-| 投影管理 | 多投影存储、加载 / 卸载 / 删除、材料清单导出 |
-| Mega 投影 | 分块存储 + 流式加载 + LOD 渲染（重构中；未启用时自动回退普通渲染） |
-| 自检 | `/litematica selfcheck` 校验整条 ghost 写入链路 |
+| 原理图加载 | 支持加载 Java 版 `.litematic` 或基岩版 `.mcstructure` 文件 |
+| 原理图保存 | 把选区保存为 `.litematic`（与 Java 版 Litematica mod 互通）或基岩版 `.mcstructure`（可直接用结构方块加载）；导出时可选格式，也可两者同时导出 |
+| 投影放置 | geometry 方块原生渲染，半透明显示，最贴近原版观感 |
+| 逐层建造 | 手持木剑右键切换显示，抬头看上层 / 低头看下层 |
+| 轻松放置 | 手持材料对准投影即可精确放置 |
+| 投影打印机 | 开启后自动打印范围内投影，可限速、可逐层 |
+| 直接放置 | OP + 创造模式把投影直接写入世界（NBT 直放） |
+| 投影管理 | 多投影同时储存，全服玩家共享可见，自由切换控制，支持材料清单导出 |
+| Mega 投影 | 分块存储、流式加载，最高可支持百万级超大型投影加载 |
+| http上传站 | 插件内置 http 服务器，允许全体玩家自助上传投影文件，且无需重启即生效 |
+| 更新检查 | 插件激活时自动检查仓库并提示新版本（可在 config 关闭该功能） |
 
 ### 操作方式
 
 | 操作 | 说明 |
 | ---- | ---- |
 | 手持木剑 + 蹲下 + 点击 | 打开主菜单 |
-| 抬头 / 低头 + 木剑点击 | 逐层模式时切换显示层 |
+| 抬头 / 低头 + 木剑右键 | 建造模式时切换显示层 |
 | 平视 + 木剑点击 | 切换显示全部层 |
 | `/lit` / `/litematica` | 命令系统入口 |
 
 ## 命令
+- 以下命令功能可通过木剑打开主菜单可视化操作
 
 ```shell
 # 基础命令
@@ -132,21 +123,48 @@ lip install github.com/copper-lamp/LitematicaBE#client@3.0.1   # 客户端
 /litematica clear         # 清除当前投影显示
 /litematica info          # 查看投影详细信息
 /litematica debug <sub>   # 调试命令（mega/stats/config）
-/litematica selfcheck     # 投影流程自检
+/litematica selfcheck     # 投影生成流程自检
 
 # 工具命令
 /litematica:logclean status|clean|config   # 日志清理
 /litematica:config reload|reset|get <key>  # 配置管理
 /litematica:ghost lay|undo|info|restore    # ghost 测试
+/litematica:web status|start|stop|restart  # 网页上传站
+/litematica:web token|url                  # 查看/重生成上传令牌、访问地址
 ```
 
 ## 使用指南
 
 ### 加载与放置投影
 
-1. 把 `.litematic` 放进 `plugins/LitematicaBE/schematics/`。
-2. 手持木剑蹲下点击打开主菜单，点击「加载投影」并选择文件。
-3. 在放置面板调整坐标（默认脚下），提交后投影显示在目标位置。
+1. 把 `.litematic` 或 `.mcstructure` 文件放进 `plugins/LitematicaBE/schematics/`。
+2. 手持木剑蹲下点击打开 LitematicaBE 主菜单，点击「加载投影」并选择文件。
+3. 在放置面板调整坐标，提交后投影显示在目标位置。
+
+### 网页上传投影结构文件
+
+服务器启动时插件会拉起一个轻量 HTTP 上传站。
+
+1. 在 `config.json` 中设置服务器公网 IP 并开放相应端口（默认8080）（NAT 网络需部署反代）；
+2. 服务端启动后控制台输出：`[Web] 上传站已启动 http://<地址>:8080/`；
+3. 若启用令牌认证：令牌首次自动生成并写入 `plugins/LitematicaBE/data/web_token.txt`；也可用 `/litematica:web token` 重新生成（旧地址立即失效）；
+4. 浏览器打开地址，选择上传 `.litematic` / `.mcstructure` ，文件自动放入 `plugins/LitematicaBE/schematics/`，游戏内立刻可用，无需重启。
+5. 上传方式为分片 + base64，单文件上限 `web.maxFileMB`（默认 64MB），支持断点续传。
+
+上传站配置参数见 `config.json`
+
+### 版本更新检查
+
+服务端启动、插件被激活时，向 GitHub Release 问一次最新版本，结果只往控制台打一行日志：
+
+1. 有新版：`[LitematicaBE]发现新版本vX.Y.Z，前往https://github.com/copper-lamp/LitematicaBE以了解更多`；
+2. 已是最新：`[LitematicaBE]当前已是最新版本`；
+3. 取数顺序：GitHub API → 官方网页（API 不可用时读 `releases/latest` 的 302）→ `updateCheck.mirror`（若配置，支持 `{repo}` 占位，例如 `"mirror": "https://gh-proxy.com/https://api.github.com/repos/{repo}/releases/latest"`）；
+4. 只查这一次，不复查、不重试；断网、被墙、限流只打一条 `[LitematicaBE]版本检查失败：…`，插件其它功能完全不受影响；
+5. 只读元数据：**不下载、不写入、不自动更新**；
+6. 关闭：`"updateCheck": { "enabled": false }` —— 完全不联网，连任务都不注册。
+
+更新检查配置参数见 `config.json`
 
 ### 逐层建造
 
@@ -156,29 +174,21 @@ lip install github.com/copper-lamp/LitematicaBE#client@3.0.1   # 客户端
 ### 轻松放置
 
 1. 在投影操作面板开启**轻松放置**，手持材料对准投影即可精确放置。
-2. 需要连续放置时再开启**投影打印机**（`/litematica printer` 或 `/lit printer`）；再次点击菜单可关闭。
-3. 打印机只填 ghost / 空气 / 花草雪水这类可替换方块，**不会覆盖你自己放的方块**；逐层模式下只放当前层。
+2. 同时具有**投影打印机**功能（`/litematica printer` 或 `/lit printer`）；再次点击菜单可关闭。
+3. 打印机只填 ghost / 空气 / 花草雪水这类可替换方块，**不会覆盖其它方块**；逐层模式下只放当前层。
 
-打印机可调参数（`config.json` 的 `easyPlace.printer`，改完即时生效）：
-
-| 键 | 默认 | 说明 |
-|---|---|---|
-| `radius` | 5 | 搜索半径（格） |
-| `maxPerCycle` | 12 | 每轮（200ms）最多放多少格，调大容易卡服 |
-| `budgetMs` | 6 | 单轮时间预算，超出的格留到下一轮 |
-| `placeDelayMs` | 0 | >0 = 每轮只放一格（想要"慢慢放"才改） |
-| `overwriteReplaceable` | true | 是否顶掉花草/雪/水 |
-| `debug` | false | 写 `logs/LitematicaBE/easyplace_debug.log`（最多 5 秒一条） |
+打印机配置参数见 `config.json`
 
 ### 直接放置（管理员）
 
-1. 需要 **OP 权限 + 创造模式**。
+1. 需要 **OP 权限 + 创造模式**；
 2. 在「投影管理」中选择已放置的投影并进入详情，点击「直接放置全部方块」。
 
 ### 保存原理图
 
-1. 打开菜单点击**保存投影**，点击「开始选区」，用木剑右键选取两个对角点。
-2. 选区完成后输入名称与描述，文件会保存为 `.litematic`。
+1. 打开菜单点击**保存投影**，点击「开始选区」，用木剑右键选取两个对角点；
+2. 选区完成后先在表单顶部的「导出格式」里选：`.litematic`（Java 版 Litematica）/ `.mcstructure`（基岩版结构方块文件）/ 两者都导出；
+3. 再输入名称与描述即可保存。`.mcstructure` **不压缩**（约 8 字节/格），因此受 `schematicSave.maxVolume` 限制（默认 100 万格 ≈ 100×100×100）；超限的选区会在读取任何方块之前就被拒绝。
 
 ### 验证
 
@@ -188,30 +198,38 @@ lip install github.com/copper-lamp/LitematicaBE#client@3.0.1   # 客户端
 
 不使用 lip 时，可下载 Release 中的 `LitematicaBE-<版本>.zip`：
 
-1. 把 `plugins/LitematicaBE/` 解压到 BDS 的 `plugins/` 目录。
-2. 把 `LitematicaBE-server-BP/`、`LitematicaBE-server-RP/` 分别放到 BDS 的 `behavior_packs/` 与 `resource_packs/`。
+1. 将 `plugins/LitematicaBE/` 解压到 BDS 的 `plugins/` 目录；
+2. 将 `LitematicaBE-BP/`、`LitematicaBE-RP/` 分别放到 BDS 的 `behavior_packs/` 与 `resource_packs/`；
 3. 按「快速开始」第 4 步在世界中启用扩展包，然后重启服务器。
-4. 把 `.mcaddon` 交给玩家导入客户端。
-5. 把 `.litematic` 放进 `plugins/LitematicaBE/schematics/`。
 
 ## 目录结构
 
 ```text
 LitematicaBE/
-├── index.js                        # 主入口
-├── manifest.json                   # LSE 插件清单
-├── tooth.json                      # lip 包描述（服务端 + 客户端变体）
-├── config.json                     # 默认配置
+├── index.js                        # 插件入口：命令注册、事件、各子系统装配
+├── manifest.json                   # LSE 插件清单（可被直接复制进 plugins/）
+├── tooth.json                      # lip 包清单（v3，含服务端默认变体与 client 变体）
+├── config.json                     # 用户配置（允许 // 注释与尾随逗号）
+├── package.json                    # 运行时依赖（仅 xlsx）
+├── src/
+│   ├── core/                       # NBT、.litematic 解析、流式加载、Mega 分块存储、配置、日志、选区
+│   ├── render/                     # 渲染调度：ProjectionRenderer、RenderScheduler、LODRenderer、MegaProjectionRenderer
+│   ├── ghost/                      # ghost 方块注册/守护/校验，addon 版本一致性检查
+│   ├── easyplace/                  # 轻松放置：射线、库存、放置校验
+│   ├── mappings/                   # Java ↔ 基岩方块/状态映射
+│   ├── ui/                         # 表单 UI
+│   ├── utils/                      # 材质统计等工具
+│   ├── data/                       # 存档、世界快照
+│   ├── world/                      # 世界相关模块
+│   └── web/                        # 内置 HTTP 上传站：WebUploadServer、upload.html、uploadGuard
 ├── resources/
 │   ├── pack_icon.png               # 项目图标
-│   ├── addon/                      # BP / RP / mcaddon 源
-│   └── data/                       # ghost 索引与 addon 期望版本
-├── src/                            # 核心、渲染、ghost、映射、UI 等模块
-├── tools/                          # 版本校验与发布打包脚本
-└── .github/workflows/              # CI 与 tag 发布
+│   ├── addon/                      # BP / RP 源文件（LitematicaBE_BP、_RP，已入库）
+│   └── data/                       # 运行时索引：ghost_index.json、addon_expected.json
+├── tools/                          # 构建工具：zip.mjs、check-version.mjs、build-release.mjs（仅这三个入库）
+├── tests/                          # 离线回归测试（35 个 test_*.js + 2 个体检器 + run_all.js；npm test 串跑）
+└── .github/workflows/              # ci.yml（push/PR 校验 + 测试 + 构建）、release.yml（tag → Release）
 ```
-
-运行时目录（不随仓库提交）：`schematics/`、`mega_schematics/`、`exports/`、`data/`、`logs/`。
 
 ## 从源码构建
 
@@ -227,49 +245,28 @@ npm run build
 
 | 文件 | 用途 |
 | ---- | ---- |
-| `LitematicaBE-server-<版本>.zip` | lip 服务端变体（插件 + BP/RP） |
-| `LitematicaBE-client-<版本>.zip` | lip 客户端变体（BP/RP） |
 | `LitematicaBE-<版本>.zip` | 手动安装包 |
-| `LitematicaBE-client-<版本>.mcaddon` | 手动导入兜底 |
 | `SHA256SUMS.txt` | 校验和 |
-
-## 发布流程
-
-1. 同步版本号：`package.json`、`manifest.json`、`tooth.json`，并在 `CHANGELOG.md` 写入 `## [<版本>]` 段落。
-2. 打 tag 并推送：
-
-   ```shell
-   git tag v3.0.1
-   git push origin v3.0.1
-   ```
-
-3. `.github/workflows/release.yml` 会自动校验版本一致性、构建全部产物并创建 GitHub Release；tag 含 `-preview` / `-beta` / `-rc` 时自动标记为 prerelease。
 
 ## 常见问题
 
-**Q：为什么部分 3.x 功能无法使用？**
-A：第三代 LitematicaBE 在逐块恢复旧功能。ghost 投影、逐层建造、轻松放置、**投影打印机**已可用；Mega 投影的分块视口跟随 / 卸载 / LOD、以及 `verify` 对 ghost 的判定仍在补齐。
+**Q：为什么部分功能存在问题？**
+A：第三代 LitematicaBE 正在重构更新中，部分功能尚未经大范围严格测试，若发现问题请向开发者反馈处理。
 
-**Q：投影显示为空气或错误材质？**
+**Q：投影显示为未知或错误材质？**
 A：多为方块映射问题。Java 与基岩版方块差异较大，遇到请提交 Issue 并附上方块名与截图。
 
 **Q：ghost 写入被禁用 / 提示版本不一致？**
-A：插件、服务端 BP/RP、客户端 addon 必须同批。重新执行 `/litematica selfcheck` 查看具体项，并确认世界已启用对应扩展包。
+A：插件与服务端 addon（BP/RP） 必须为同批版本。重新执行 `/litematica selfcheck` 查看具体项，并确认世界已启用对应扩展包。
 
-**Q：大型投影加载卡顿或失败？**
-A：Mega 模式仍在重构，当前版本对超过 30,000 方块的投影会自动回退普通渲染；超大投影仍建议先拆分或用逐层显示。
-
-**Q：轻松放置无法使用？**
-A：检查投影文件是否读取成功、方块映射是否完整，以及是否正确开启轻松放置。
-
-**Q：直接放置提示权限不足？**
-A：需要同时满足 **OP 权限** 与 **创造模式**。
+**Q：大型投影加载卡顿？**
+A：受限于基岩版，帧率取决于玩家客户端渲染能力，服务端插件无法直接解决该问题。数十万级超大投影建议先拆分或用逐层显示。（后期将推出相应优化）
 
 **Q：保存的原理图能在 Java 版打开吗？**
-A：可以，保存格式兼容 Java 版 Litematica。
+A：选 `.litematic` 时可以，格式兼容 Java 版 Litematica。
 
-**Q：lip 安装后还需要做什么？**
-A：服务端仍需在世界设置中启用 BP/RP 并重启；客户端导入 addon 后同样需要在世界设置中启用。
+**Q：保存的 `.mcstructure` 和结构方块是什么关系？**
+A：只是同一种文件格式。`.mcstructure` 由结构方块导出/加载，但文件本身只是未压缩的小端 NBT，本插件直接读写它，因此**不受结构方块 64×384×64 的选取/放置范围限制**；唯一的上限是 `schematicSave.maxVolume`。
 
 ## 贡献
 
@@ -279,11 +276,12 @@ GitHub：<https://github.com/copper-lamp/LitematicaBE>
 
 ## 致谢
 
-- [Litematica](https://github.com/maruohon/litematica) — Java 版原理图模组，本项目数据结构兼容目标
-- [LeviLamina](https://github.com/LiteLDev/LeviLamina) — 基岩版模组加载器
-- [LegacyScriptEngine](https://github.com/LiteLDev/LegacyScriptEngine) — LSE 脚本引擎
-- [lip](https://github.com/LiteLDev/lip) — LeviLamina 包管理器
+- [Litematica](https://github.com/maruohon/litematica) — Java 版原理图模组，对 Minecraft 投影生态影响深远
+- [LeviDev](https://github.com/LiteLDev) — 由 LeviMC 开发的 Levilamina 及 LegacyScriptEngine 为本项目功能实现提供了基础
+- [EasyPlace](https://github.com/wyl-gq/EasyPlace) — 借鉴其部分功能实现
+- 以及所有为 LitematicaBE 作出贡献的开发者
 
 ## 许可证
 
-MIT License
+- LitematicaBE 项目使用 AGPL-3.0 许可证。
+- 使用修改版本并分发或用于提供服务时必须继续使用 AGPL-3.0，并提供源代码。

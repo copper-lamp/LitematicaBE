@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LitematicaBE · 结构文件上传</title>
+<style>
+    :root {
+        --bg: #0f1216;
+        --panel: #171c22;
+        --panel2: #1e242c;
+        --line: #2a323c;
+        --txt: #e6edf3;
+        --dim: #8b98a5;
+        --acc: #4cc98a;
+        --acc2: #3a9d6e;
+        --warn: #e5b567;
+        --err: #e06c75;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; padding: 32px 16px 64px;
+        background: radial-gradient(1200px 600px at 50% -200px, #1b2a33 0%, var(--bg) 60%);
+        color: var(--txt);
+        font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+        min-height: 100vh;
+    }
+    .wrap { max-width: 860px; margin: 0 auto; }
+    header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+    h1 { font-size: 20px; margin: 0; letter-spacing: .5px; }
+    .sub { color: var(--dim); font-size: 13px; }
+    .badge {
+        font-size: 12px; padding: 2px 8px; border-radius: 999px;
+        border: 1px solid var(--line); color: var(--dim);
+    }
+    .badge.ok { color: var(--acc); border-color: #2b5a41; background: #13251c; }
+    .badge.bad { color: var(--err); border-color: #5a2b2b; background: #251313; }
+
+    .panel {
+        background: var(--panel); border: 1px solid var(--line);
+        border-radius: 12px; padding: 16px; margin-top: 16px;
+    }
+    .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--dim); font-weight: 600; letter-spacing: .3px; }
+
+    #drop {
+        border: 2px dashed #33404d; border-radius: 12px; padding: 34px 20px;
+        text-align: center; cursor: pointer; transition: .15s;
+        background: linear-gradient(180deg, #161c23, #141a20);
+    }
+    #drop:hover, #drop.on { border-color: var(--acc); background: #14211b; }
+    #drop .big { font-size: 15px; margin-bottom: 6px; }
+    #drop .hint { color: var(--dim); font-size: 12.5px; }
+    #pick { display: none; }
+
+    .row { display: flex; gap: 8px; align-items: center; }
+    input[type=text] {
+        flex: 1; background: #10151a; border: 1px solid var(--line); color: var(--txt);
+        border-radius: 8px; padding: 8px 10px; font: inherit; outline: none;
+    }
+    input[type=text]:focus { border-color: var(--acc2); }
+    button {
+        background: var(--panel2); color: var(--txt); border: 1px solid var(--line);
+        border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer;
+    }
+    button:hover { border-color: var(--acc2); color: var(--acc); }
+    button.primary { background: var(--acc2); border-color: var(--acc2); color: #06130c; font-weight: 600; }
+    button.primary:hover { background: var(--acc); color: #06130c; }
+
+    ul { list-style: none; margin: 0; padding: 0; }
+    li.item { border-top: 1px solid var(--line); padding: 10px 0; }
+    li.item:first-child { border-top: none; }
+    .fname { font-weight: 600; word-break: break-all; }
+    .meta { color: var(--dim); font-size: 12.5px; }
+    .bar { height: 6px; background: #0d1116; border-radius: 999px; overflow: hidden; margin-top: 8px; }
+    .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--acc2), var(--acc)); transition: width .15s; }
+    .st-ok { color: var(--acc); }
+    .st-err { color: var(--err); }
+    .st-warn { color: var(--warn); }
+    .empty { color: var(--dim); font-size: 13px; }
+    code {
+        background: #10151a; border: 1px solid var(--line); border-radius: 6px;
+        padding: 1px 6px; font-size: 12.5px;
+    }
+    .tips { color: var(--dim); font-size: 12.5px; margin-top: 10px; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <h1>LitematicaBE 结构文件上传</h1>
+        <span id="health" class="badge">检测中…</span>
+    </header>
+    <div class="sub">上传的 <code>.litematic</code> / <code>.mcstructure</code> 会直接落进服务器插件的 <code>schematics/</code> 目录，游戏内立刻可加载。</div>
+
+    <div class="panel" id="tokenPanel" style="display:none">
+        <h2>访问令牌</h2>
+        <div class="row">
+            <input id="token" type="text" placeholder="填写 data/web_token.txt 里的令牌，或使用带 ?token= 的地址打开本页">
+            <button id="saveToken">保存</button>
+        </div>
+        <div class="tips">令牌会记在浏览器本地，下次打开不用重填。</div>
+    </div>
+
+    <div class="panel">
+        <div id="drop">
+            <div class="big">把结构文件拖到这里，或点击选择</div>
+            <div class="hint" id="dropHint">支持 .litematic / .mcstructure，单个文件上限请见服务端配置</div>
+            <input id="pick" type="file" multiple>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>上传队列</h2>
+        <ul id="queue"><li class="empty">还没有文件</li></ul>
+    </div>
+
+    <div class="panel">
+        <div class="flex-between">
+            <h2 style="margin:0">服务器上已有的结构文件</h2>
+            <button id="refresh">刷新</button>
+        </div>
+        <ul id="files" style="margin-top:10px"><li class="empty">加载中…</li></ul>
+        <div class="tips">加载方式：游戏内 <code>/litematica load &lt;文件名，不带扩展名&gt;</code>，或 <code>/litematica menu</code> 打开表单挑。</div>
+    </div>
+</div>
+
+<script>
+window.__WEB_BOOT__ = /*__BOOT__*/null;
+
+(function () {
+    'use strict';
+
+    const boot = window.__WEB_BOOT__ || {};
+    const CHUNK = Math.max(64, boot.chunkKB || 512) * 1024;
+    const ALLOW = (boot.allowExt || ['.litematic', '.mcstructure']).map(s => s.toLowerCase());
+    const MAX_MB = boot.maxFileMB || 64;
+
+    const $ = (id) => document.getElementById(id);
+    const tokenInput = $('token');
+    const queueEl = $('queue');
+    const filesEl = $('files');
+
+    let token = (boot.token || '').trim() || localStorage.getItem('lit_token') || '';
+
+    function headers() {
+        const h = { 'Content-Type': 'application/json' };
+        if (token) h['X-Upload-Token'] = token;
+        return h;
+    }
+
+    function post(url, body) {
+        return fetch(url, { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+            .then(r => r.json().then(j => ({ status: r.status, body: j })));
+    }
+
+    function human(n) {
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / 1024 / 1024).toFixed(2) + ' MB';
+    }
+
+    // ── 健康检查 ──
+    function health() {
+        fetch('/api/health', { headers: headers() })
+            .then(r => r.json())
+            .then(j => {
+                const el = $('health');
+                el.className = 'badge ok';
+                el.textContent = '在线 · 分片 ' + (j.chunkKB || 512) + ' KB · 上限 ' + (j.maxFileMB || MAX_MB) + ' MB · 已有 ' + (j.files || 0) + ' 个文件';
+                if (j.allowExt) {
+                    $('dropHint').textContent = '支持 ' + j.allowExt.join(' / ') + '，单个文件上限 ' + (j.maxFileMB || MAX_MB) + ' MB';
+                }
+            })
+            .catch(() => {
+                const el = $('health');
+                el.className = 'badge bad';
+                el.textContent = '无法连接插件 HTTP 服务';
+            });
+    }
+
+    // ── 已有文件 ──
+    function loadFiles() {
+        fetch('/api/list', { headers: headers() })
+            .then(r => r.json())
+            .then(j => {
+                if (!j || !j.ok) {
+                    filesEl.innerHTML = '<li class="empty">' + escapeHtml((j && j.error) || '读取失败') + '</li>';
+                    return;
+                }
+                renderFiles(j.files || []);
+            })
+            .catch(e => { filesEl.innerHTML = '<li class="empty">读取失败：' + escapeHtml(e.message) + '</li>'; });
+    }
+
+    function renderFiles(list) {
+        if (!list.length) {
+            filesEl.innerHTML = '<li class="empty">目录里还没有结构文件</li>';
+            return;
+        }
+        filesEl.innerHTML = list.map(f => {
+            const time = new Date(f.mtime).toLocaleString('zh-CN', { hour12: false });
+            const stem = f.name.replace(/\.[^.]+$/, '');
+            return '<li class="item"><div class="fname">' + escapeHtml(f.name) + '</div>'
+                + '<div class="meta">' + human(f.size) + ' · ' + escapeHtml(f.type) + ' · ' + time
+                + ' · <code>/litematica load ' + escapeHtml(stem) + '</code></div></li>';
+        }).join('');
+    }
+
+    function escapeHtml(s) {
+        return String(s === undefined || s === null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // ── 队列渲染 ──
+    const items = new Map();   // id -> { el, bar, status }
+
+    function addItem(name, size) {
+        if (queueEl.querySelector('.empty')) queueEl.innerHTML = '';
+        const id = 'it' + Math.random().toString(36).slice(2);
+        const li = document.createElement('li');
+        li.className = 'item';
+        li.innerHTML = '<div class="fname">' + escapeHtml(name) + '</div>'
+            + '<div class="meta" data-role="meta">' + human(size) + ' · 等待上传</div>'
+            + '<div class="bar"><i></i></div>';
+        queueEl.appendChild(li);
+        const rec = { el: li, bar: li.querySelector('.bar > i'), meta: li.querySelector('[data-role=meta]'), size };
+        items.set(id, rec);
+        return { id, rec };
+    }
+
+    function setProgress(rec, pct, text, cls) {
+        rec.bar.style.width = Math.max(0, Math.min(100, pct * 100)).toFixed(1) + '%';
+        rec.meta.className = 'meta' + (cls ? ' ' + cls : '');
+        rec.meta.textContent = human(Math.round(rec.size * pct)) + ' / ' + human(rec.size) + ' · ' + text;
+    }
+
+    // ── 分片读取 → base64（分块拼接，避免超长字符串爆栈） ──
+    function toBase64(bytes) {
+        let binary = '';
+        const STEP = 0x8000;
+        for (let i = 0; i < bytes.length; i += STEP) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + STEP));
+        }
+        return btoa(binary);
+    }
+
+    async function uploadOne(file) {
+        const ext = (file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+        const { rec } = addItem(file.name, file.size);
+
+        if (!ALLOW.includes(ext)) {
+            setProgress(rec, 0, '扩展名不支持：只接受 ' + ALLOW.join(' / '), 'st-err');
+            return;
+        }
+        if (file.size > MAX_MB * 1024 * 1024) {
+            setProgress(rec, 0, '超过上限 ' + MAX_MB + ' MB', 'st-err');
+            return;
+        }
+
+        let id, offset;
+        try {
+            const r = await post('/api/upload/init', { name: file.name, size: file.size });
+            if (!r.body || !r.body.ok) {
+                setProgress(rec, 0, (r.body && r.body.error) || ('初始化失败 HTTP ' + r.status), 'st-err');
+                return;
+            }
+            id = r.body.uploadId;
+            offset = r.body.offset || 0;
+        } catch (e) {
+            setProgress(rec, 0, '无法连接服务端：' + e.message, 'st-err');
+            return;
+        }
+
+        let seq = Math.floor(offset / CHUNK);
+        if (offset > 0) setProgress(rec, offset / file.size, '从 ' + human(offset) + ' 处续传');
+
+        while (offset < file.size) {
+            const slice = file.slice(offset, Math.min(offset + CHUNK, file.size));
+            let payload;
+            try {
+                payload = toBase64(new Uint8Array(await slice.arrayBuffer()));
+            } catch (e) {
+                setProgress(rec, offset / file.size, '读取本地文件失败', 'st-err');
+                return;
+            }
+
+            let r;
+            try {
+                r = await post('/api/upload/chunk', { uploadId: id, seq: seq, data: payload });
+            } catch (e) {
+                setProgress(rec, offset / file.size, '上传中断：' + e.message, 'st-err');
+                return;
+            }
+
+            if (r.status === 409 && r.body && typeof r.body.expectSeq === 'number') {
+                // 会话里的序号与本地不一致（多半是断点续传）：重置到服务端认为的位置
+                seq = r.body.expectSeq;
+                offset = typeof r.body.received === 'number' ? r.body.received : offset;
+                continue;
+            }
+            if (!r.body || !r.body.ok) {
+                setProgress(rec, offset / file.size, (r.body && r.body.error) || ('上传失败 HTTP ' + r.status), 'st-err');
+                return;
+            }
+            offset = r.body.received;
+            seq++;
+            setProgress(rec, offset / file.size, '上传中');
+        }
+
+        try {
+            const r = await post('/api/upload/finish', { uploadId: id });
+            if (!r.body || !r.body.ok) {
+                setProgress(rec, 1, (r.body && r.body.error) || ('完成失败 HTTP ' + r.status), 'st-err');
+                return;
+            }
+            setProgress(rec, 1, '完成 → ' + r.body.file, 'st-ok');
+            loadFiles();
+            health();
+        } catch (e) {
+            setProgress(rec, 1, '完成请求失败：' + e.message, 'st-err');
+        }
+    }
+
+    async function uploadAll(files) {
+        for (const f of files) {
+            await uploadOne(f);        // 串行：主线程一次只处理一片，避免把服务端挤住
+        }
+    }
+
+    // ── 交互 ──
+    const drop = $('drop');
+    const pick = $('pick');
+    drop.addEventListener('click', () => pick.click());
+    pick.addEventListener('change', () => {
+        if (pick.files && pick.files.length) uploadAll(Array.from(pick.files));
+        pick.value = '';
+    });
+    ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => {
+        e.preventDefault(); drop.classList.add('on');
+    }));
+    ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, (e) => {
+        e.preventDefault(); drop.classList.remove('on');
+    }));
+    drop.addEventListener('drop', (e) => {
+        const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+        if (files.length) uploadAll(files);
+    });
+    $('refresh').addEventListener('click', loadFiles);
+
+    // token：URL 带 ?token= 优先，其次本地存储
+    const urlToken = new URLSearchParams(location.search).get('token');
+    if (urlToken) {
+        token = urlToken;
+        localStorage.setItem('lit_token', token);
+    }
+    if (!token) {
+        tokenInput.value = '';
+        $('tokenPanel').style.display = '';
+    }
+    $('saveToken').addEventListener('click', () => {
+        token = tokenInput.value.trim();
+        localStorage.setItem('lit_token', token);
+        $('tokenPanel').style.display = token ? 'none' : '';
+        health(); loadFiles();
+    });
+
+    health();
+    loadFiles();
+    setInterval(health, 30000);
+})();
+</script>
+</body>
+</html>

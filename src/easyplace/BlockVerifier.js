@@ -1,5 +1,6 @@
 const { BlockStateConverters } = require('../mappings/BlockStateConverters');
 const { BlockMappingRegistry } = require('../mappings/BlockMappingRegistry');
+const { isSlabName, slabDoubleName } = require('../mappings/SlabNames');
 
 const VerificationLevel = Object.freeze({
     UNKNOWN: 0,
@@ -83,7 +84,14 @@ class BlockVerifier {
 
         // Convert Java name to BE name for comparison
         const mapping = this.blockRegistry.getMapping(projType);
-        const beProjType = beProjTypeHint || (mapping ? this.normalizeBlockName(mapping.b) : projType);
+        let beProjType = beProjTypeHint || (mapping ? this.normalizeBlockName(mapping.b) : projType);
+
+        // 双半砖在基岩是独立方块名（quartz_double_slab / double_stone_slab…），
+        // 按普通半砖名比对会把"放对了"判成"错误方块"。
+        if (isSlabName(projType) && String((projectionBlock.state || {}).type || '') === 'double') {
+            const dbl = slabDoubleName(projType);
+            if (dbl) beProjType = this.normalizeBlockName(dbl);
+        }
 
         if (worldType !== beProjType) {
             return false;
@@ -128,7 +136,7 @@ class BlockVerifier {
             'log': ['pillar_axis'],
             'leaves': ['persistent_bit', 'update_bit'],
             'stairs': ['weirdo_direction', 'upside_down_bit'],
-            'slab': ['top_slot_bit'],
+            'slab': ['vertical_half'],
             'fence': [],
             'fence_gate': ['direction', 'in_wall_bit', 'open_bit'],
             'door': ['direction', 'upper_block_bit', 'door_hinge_bit', 'open_bit'],

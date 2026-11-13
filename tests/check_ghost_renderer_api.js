@@ -73,7 +73,10 @@ const REQUIRED = [
     ['clear 清理 blocked 索引', /for \(const e of s\.blocked\) this\.blockedIndex\.delete/],
 
     // ===== 导出完整性 =====
-    ['模块导出 5 项', /module\.exports = \{ GhostRenderer, transformPosition, shortName, dimidOf, REPLACEABLE \}/],
+    ['模块导出 GhostRenderer/transformPosition/shortName/dimidOf/REPLACEABLE',
+        /module\.exports = \{[\s\S]{0,200}GhostRenderer,\s*transformPosition,\s*shortName,\s*dimidOf,\s*REPLACEABLE/],
+    ['宿主导出 sessionKeyOf / shortHash（供删除投影时标定快照会话）',
+        /module\.exports = \{[\s\S]{0,400}sessionKeyOf,\s*shortHash/],
 ];
 
 let bad = 0;

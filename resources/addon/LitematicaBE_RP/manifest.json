@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "§6LitematicaBE",
-    "description": "LitematicaBE 资源包\n幽灵方块贴图 + 粒子降级层\naddon 版本 1.1.8",
-    "uuid": "49cb94c2-8cec-4b27-8b58-4b3e01f843fc",
+    "description": "LitematicaBE 资源包\n幽灵方块贴图 + 粒子降级层\naddon 版本 1.1.89",
+    "uuid": "eaaf9ec6-50e3-463d-b011-2325d0f083d6",
     "version": [
       1,
       1,
-      16
+      89
     ],
     "min_engine_version": [
       1,
@@ -19,11 +19,11 @@
     {
       "type": "resources",
       "description": "LitematicaBE ghost textures",
-      "uuid": "f0eb604c-1a3d-404a-b07e-1be60c81104b",
+      "uuid": "a2d47ea9-ffe1-4f93-a405-8c89b8291cf4",
       "version": [
-        0,
-        0,
-        1
+        1,
+        1,
+        89
       ]
     }
   ]

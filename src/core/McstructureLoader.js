@@ -1,16 +1,4 @@
 // McstructureLoader — 加载和解析 .mcstructure（Bedrock 结构方块导出文件）
-//
-// ⚠️ 与 .litematic 的关键格式差异（务必记住，勿混淆）：
-//   - 字节序：little-endian（.litematic 是 big-endian）→ 本文件自带独立小端 NBT 解析器，
-//     不复用 LitematicLoader 的大端 _TAG_HANDLERS。
-//   - 压缩：通常【无压缩】（.litematic 是 gzip）。为兼容部分工具，仍检测 gzip magic。
-//   - 方块数据：已经是 BE 名 + BE 状态（.litematic 是 Java 名 + Java 状态，需 javaToBedrock 转换）。
-//     因此 .mcstructure【不需要】走 bidirectionalConverter / BlockStateConverters，
-//     直接让 GhostBlockRegistry.resolve() + buildStates() 消费即可（形状保真度反而更高）。
-//   - block_indices 顺序：ZYX（index = x·SZ·SY + y·SZ + z，z 最快；实测 i=0→(0,0,0)、i=1→(0,0,1)）。
-//     .litematic 是 XYZ。此处按 ZYX 反算坐标。
-//   - structure.palette 可能是 Compound{default:{block_palette,...}}（新版）或 List[0]（旧版）；
-//     block_indices 可能在 structure 层直接，也可能在 palette 条目里 → 两种都兼容。
 
 let zlib = null;
 let fs = null;
@@ -60,6 +48,40 @@ const BE_OLD_TO_JAVA = {
     'minecraft:unlit_redstone_torch': 'minecraft:redstone_torch',
     'minecraft:red_flower': 'minecraft:poppy',
     'minecraft:yellow_flower': 'minecraft:dandelion',
+    // —— 草的三处"旧名"差异（现代两版已经同名，见下方各条注释）——
+    // ① `grass` 是基岩**旧别名**（现代已是 grass_block，wiki：草方块 nameid=grassblock、
+    //    aliasid=grass）。而 Java 1.20.3 之前草植物也叫 `grass`（现在叫 short_grass）。
+    //    所以 javaMap 的 `minecraft:grass` 按 Java 语义指向草植物，基岩这一侧改指向草方块 ——
+    //    不区分的话，老 .mcstructure 里的草方块会被渲染成一把草（成片草地全变草叶子）。
+    'minecraft:grass': 'minecraft:grass_block',
+    // ② `tallgrass` 现在仍是**高草丛的正式名**（wiki：高草丛 nameid=tallgrass），
+    //    而旧版基岩的 `tallgrass` 是"草类通名"，靠 tall_grass_type 区分短草/高草/蕨。
+    //    带状态才按旧语义拆（见 TALLGRASS_OLD），不带状态就原样交给 javaMap。
+    // ③ 草径在 1.17 改名 dirt_path，旧存档里还是 grass_path
+    'minecraft:grass_path': 'minecraft:dirt_path',
+    // —— 粘液块：基岩版 nameid 是 `slime`（无 _block 后缀），Java 版是 `slime_block`。
+    //    不加这条，.mcstructure 里的粘液块 resolve('minecraft:slime') 会 miss javaMap（键是
+    //    minecraft:slime_block）→ 落 lit:g_generic 灰色。这是 BE 名 ≠ Java 名的典型例子，
+    //    （基岩 `slime` 的 getJavaNames 其实能反查回 minecraft:slime_block，但 normalizeBeName
+    //    只维护旧名表，不走 registry，故此处显式补一条）。
+    'minecraft:slime': 'minecraft:slime_block',
+};
+
+/** 旧版基岩 `tallgrass` 的 tall_grass_type → 现代方块名（wiki：矮草丛 aliasid=tallgrass/1） */
+const TALLGRASS_OLD = {
+    0: 'short_grass', default: 'short_grass', grass: 'short_grass', 1: 'short_grass',
+    2: 'tall_grass', tall: 'tall_grass',
+    3: 'fern', fern: 'fern', snow: 'fern',
+};
+
+/** 旧版基岩 `doubleplant` 的 double_plant_type → 现代方块名（wiki：高草丛 aliasid=doubleplant/2） */
+const DOUBLE_PLANT_OLD = {
+    0: 'sunflower', sunflower: 'sunflower',
+    1: 'lilac', syringa: 'lilac',
+    2: 'tall_grass', grass: 'tall_grass',
+    3: 'large_fern', fern: 'large_fern',
+    4: 'rose_bush', rose: 'rose_bush',
+    5: 'peony', paeonia: 'peony',
 };
 
 /** 去掉命名空间前缀（'minecraft:xxx' -> 'xxx'；无前缀则原样） */
@@ -80,11 +102,50 @@ function isAirName(name) {
 /**
  * 渲染兜底名：原始 BE 名 → 能命中 javaMap 的现代名。
  * 返回原名字符串时表示"无需归一化"（调用方据此不设置 renderName）。
+ *
+ * 注意 `beStates` 必须传：旧版基岩把「矮草丛 / 高草丛 / 蕨」塞在同一个 `tallgrass` 里，
+ * 靠 `tall_grass_type` 区分；现代基岩（1.21.30 起 flattening）`tallgrass` 本身就是高草丛。
+ * 只按名字改会把现代高草丛错判成矮草丛。
  */
-function normalizeBeName(name) {
+function normalizeBeName(name, beStates) {
     if (!name) return name;
+
+    if (name === 'minecraft:tallgrass') {
+        const t = pickStateValue(beStates, ['tall_grass_type', 'grass_type', 'block_data', 'data']);
+        if (t !== undefined) {
+            const hit = TALLGRASS_OLD[stateKeyOf(t)];
+            if (hit) return `minecraft:${hit}`;
+        }
+        return name;   // 现代语义：tallgrass 就是高草丛，交给 javaMap
+    }
+
+    if (name === 'minecraft:doubleplant') {
+        const t = pickStateValue(beStates, ['double_plant_type', 'plant_type', 'block_data', 'data']);
+        if (t !== undefined) {
+            const hit = DOUBLE_PLANT_OLD[stateKeyOf(t)];
+            if (hit) return `minecraft:${hit}`;
+        }
+        return name;
+    }
+
     const mapped = BE_OLD_TO_JAVA[name];
     return mapped || name;
+}
+
+/** 从若干候选键里取第一个存在的状态值（旧结构的键名不统一） */
+function pickStateValue(states, keys) {
+    if (!states || typeof states !== 'object') return undefined;
+    for (const k of keys) {
+        if (states[k] !== undefined) return states[k];
+    }
+    return undefined;
+}
+
+/** 状态值归一化：数字/布尔/字符串统一成小写字符串键 */
+function stateKeyOf(v) {
+    if (v === true) return '1';
+    if (v === false) return '0';
+    return String(v).toLowerCase();
 }
 
 /**
@@ -384,8 +445,13 @@ class McstructureLoader {
             if (!entry || !entry.name) continue;
 
             const rawName = entry.name;
-            const beStates = normalizeBeStates(entry.states || {});
-            const renderName = normalizeBeName(rawName);
+            // rawStates 保留文件里的**原始键名**（例如 observer 是 `minecraft:facing_direction`）。
+            // 写回世界（直接放置/轻松放置/打印机）必须用它：BDS 对部分方块只认带命名空间的状态名，
+            // 去掉前缀写回去会被当成未知状态丢弃（观察者方向丢失就是这个原因）。
+            // state / bedrockState 仍是去掉前缀的版本，供 GhostBlockRegistry 的 spec.from 短键使用。
+            const rawStates = entry.states || {};
+            const beStates = normalizeBeStates(rawStates);
+            const renderName = normalizeBeName(rawName, beStates);
 
             // ZYX 坐标反算（index = x·SZ·SY + y·SZ + z）
             const [x, y, z] = idxToPos(i, sx, sy, sz);
@@ -396,7 +462,8 @@ class McstructureLoader {
                     pos: [x, y, z],
                     name: rawName,
                     state: beStates,
-                    bedrockState: beStates
+                    bedrockState: beStates,
+                    rawState: rawStates
                 };
                 if (renderName !== rawName) {
                     block.renderName = renderName;
@@ -430,11 +497,12 @@ class McstructureLoader {
         if (!entry || !entry.name) return null;
 
         const rawName = entry.name;
-        const beStates = normalizeBeStates(entry.states || {});
-        const renderName = normalizeBeName(rawName);
+        const rawStates = entry.states || {};
+        const beStates = normalizeBeStates(rawStates);
+        const renderName = normalizeBeName(rawName, beStates);
 
         if (keepOriginalName) {
-            const block = { pos: [x, y, z], name: rawName, state: beStates, bedrockState: beStates };
+            const block = { pos: [x, y, z], name: rawName, state: beStates, bedrockState: beStates, rawState: rawStates };
             if (renderName !== rawName) block.renderName = renderName;
             return block;
         }
@@ -448,5 +516,8 @@ module.exports = {
     normalizeBeStates,
     isAirName,
     BE_OLD_TO_JAVA,
-    stripNamespace
+    stripNamespace,
+    // 供离线测试做写→读往返校验（.mcstructure 写侧在 McstructureWriter）
+    parseLittleEndianNbt,
+    extractStructure
 };

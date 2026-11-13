@@ -7,7 +7,7 @@ const AIR_LIKE = new Set([
 ]);
 
 /**
- * 透明/非整块：默认**仍算遮挡**（真实渲染下相邻面被 cullface，内部本来看不见）。
+ * 透明/非整块：默认仍算遮挡（真实渲染下相邻面被 cullface，内部本来看不见）。
  * 只有 opts.transparentOccluders = false 时才把它们排除在"遮挡"之外，
  * 用于"宁可多写、不愿少一格"的保守模式。
  */
@@ -19,17 +19,79 @@ const TRANSPARENT = new Set([
     'azalea_leaves', 'flowering_azalea_leaves',
 ]);
 
-/** 形状/非整块方块：不遮挡相邻格（否则相邻楼梯会互相"遮"掉，投影出洞）。
- *  宁可多写、不漏写——这些方块按"不遮挡"处理，让它们周围也保持可见。 */
+/**
+ * 形状/非整块方块：完全不遮挡相邻格。
+ *
+ * 判据是「这个方块自己的几何是不是满格立方体」——不是满格，就挡不住邻居的任何可见面：
+ *   · 红石粉（redstone_wire）是 1/16 高的薄片，贴在下方方块顶面上；下方方块的顶面
+ *     在原版里照样渲染（从侧面/斜上方能看见它的边缘和相邻格），把它当成"遮挡"会让
+ *     相邻格被整格剔除 → 投影上出现本该有方块的空洞；
+ *   · 同理适用于火把、地毯、台阶、楼梯、栅栏、玻璃板、花草、压力板、轨道、床……
+ *
+ * 语义统一为「宁可多写、不漏写」：判断错了顶多多写几格 ghost（可见、可撤销），
+ * 判断漏了就是投影缺一块（玩家会以为投影坏了）。
+ */
 const NON_OCCLUDING_SHAPE = new Set([
+    // ── 红石元件 / 薄片 ──
+    'redstone_wire', 'redstone_dust', 'tripwire', 'tripwire_hook',
+    'repeater', 'unpowered_repeater', 'powered_repeater',
+    'comparator', 'unpowered_comparator', 'powered_comparator',
+    'lever', 'daylight_detector', 'daylight_detector_inverted',
+    'piston_head', 'piston_arm_collision', 'sticky_piston_arm_collision', 'moving_piston',
+    // ── 门/活板门/栅栏/墙/楼梯/台阶/薄板 ──
     'stairs', 'slab', 'double_slab', 'wall', 'fence', 'fence_gate',
-    'door', 'trapdoor', 'button', 'lever', 'torch', 'redstone_torch',
-    'unlit_redstone_torch', 'rail', 'golden_rail', 'activator_rail',
-    'detector_rail', 'ladder', 'glass_pane', 'iron_bars', 'carpet',
-    'pressure_plate', 'wooden_pressure_plate', 'stone_pressure_plate',
-    'sign', 'standing_sign', 'wall_sign', 'banner', 'standing_banner',
-    'wall_banner', 'cake', 'snow', 'layer', 'mushroom', 'sapling',
+    'door', 'trapdoor', 'button', 'torch', 'redstone_torch', 'unlit_redstone_torch',
+    'soul_torch', 'soul_wall_torch', 'wall_torch', 'copper_torch', 'copper_wall_torch',
+    'rail', 'golden_rail', 'activator_rail', 'detector_rail',
+    'ladder', 'glass_pane', 'iron_bars', 'carpet', 'moss_carpet', 'pale_moss_carpet',
+    'pressure_plate', 'wooden_pressure_plate', 'stone_pressure_plate', 'light_weighted_pressure_plate',
+    'heavy_weighted_pressure_plate', 'polished_blackstone_pressure_plate',
+    'sign', 'standing_sign', 'wall_sign', 'hanging_sign', 'wall_hanging_sign',
+    'banner', 'standing_banner', 'wall_banner',
+    // ── 家具 / 器件（几何都不满格）──
+    'cake', 'candle', 'candle_cake', 'black_candle_cake', 'white_candle_cake',
+    'cauldron', 'water_cauldron', 'lava_cauldron', 'powder_snow_cauldron',
+    'composter', 'hopper', 'brewing_stand', 'enchanting_table', 'anvil',
+    'chipped_anvil', 'damaged_anvil', 'flower_pot', 'lectern', 'stonecutter',
+    'grindstone', 'conduit', 'scaffolding', 'chain', 'lantern', 'soul_lantern',
+    'end_rod', 'lightning_rod', 'bell', 'campfire', 'soul_campfire',
+    'bed',
+    // ── 火 / 雪 / 蛛网 / 蛋 ──
+    'fire', 'soul_fire', 'snow', 'snow_layer', 'powder_snow', 'cobweb', 'web',
+    'turtle_egg', 'sniffer_egg', 'frogspawn',
+    // ── 略低于满格（15/16、14/16）：盖不住相邻方块的面 ──
+    'farmland', 'farmland_moist', 'dirt_path', 'grass_path', 'soul_sand',
+    // ── 植物（全部不满格）──
+    'short_grass', 'grass', 'tall_grass', 'short_dry_grass', 'tall_dry_grass',
+    'fern', 'large_fern', 'dead_bush', 'bush', 'firefly_bush', 'leaf_litter',
+    'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet',
+    'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip', 'oxeye_daisy',
+    'cornflower', 'lily_of_the_valley', 'wither_rose', 'torchflower', 'pink_petals',
+    'spore_blossom', 'sweet_berry_bush', 'cactus_flower', 'wildflowers',
+    'sugar_cane', 'kelp', 'kelp_plant', 'seagrass', 'tall_seagrass',
+    'sea_pickle', 'lily_pad', 'vine', 'glow_lichen', 'hanging_roots',
+    'sculk_vein', 'big_dripleaf', 'small_dripleaf', 'azalea', 'flowering_azalea',
+    'bamboo', 'bamboo_sapling', 'cocoa', 'mushroom', 'brown_mushroom', 'red_mushroom',
+    'wheat', 'carrots', 'potatoes', 'beetroots', 'nether_wart',
+    'pumpkin_stem', 'melon_stem', 'torchflower_crop', 'pitcher_crop', 'pitcher_plant',
+    'crimson_roots', 'warped_roots', 'nether_sprouts', 'chorus_flower', 'chorus_plant',
+    'cave_vines', 'cave_vines_plant', 'twisting_vines', 'weeping_vines',
+    'resin_clump',
 ]);
+
+/** 形状后缀：覆盖各材质变体（*_stairs / *_slab / *_fence …） */
+const NON_OCCLUDING_SUFFIX = [
+    '_stairs', '_slab', '_wall', '_fence', '_fence_gate', '_door', '_trapdoor',
+    '_button', '_torch', '_ladder', '_sign', '_banner', '_rail', '_plate',
+    '_pane', '_bars', '_carpet', '_wire', '_dust', '_sapling', '_flower',
+    '_tulip', '_orchid', '_bluet', '_daisy', '_bush', '_fern', '_grass',
+    '_crop', '_stem', '_vine', '_roots', '_sprouts', '_candle', '_chain',
+    '_head', '_skull', '_pot', '_petals', '_blossom', '_lichen', '_vein',
+    '_pickle', '_pad', '_egg', '_propagule', '_bud', '_spore', '_bed',
+];
+
+/** 形状前缀 */
+const NON_OCCLUDING_PREFIX = ['potted_'];
 
 function stripNamespace(name) {
     if (!name || typeof name !== 'string') return '';
@@ -52,15 +114,24 @@ function isTransparentName(name) {
     return n === 'glass' || n.endsWith('_glass') || n.endsWith('_glass_pane');
 }
 
-/** 形状/非整块方块：不参与"遮挡"判定 */
+/**
+ * 形状/非整块方块：不参与"遮挡"判定。
+ *
+ * 注意 double_slab（双半砖）与 *_slab 后缀：双半砖其实是满格，但它只在
+ * `double_slab` 状态名出现，实际方块名仍是 `*_slab`——按"不遮挡"处理只会多写几格，
+ * 不会挖洞，保持与历史行为一致。
+ */
 function isNonOccludingShape(name) {
     const n = stripNamespace(name);
+    if (!n) return false;
     if (NON_OCCLUDING_SHAPE.has(n)) return true;
-    return n.endsWith('_stairs') || n.endsWith('_slab') || n.endsWith('_wall')
-        || n.endsWith('_fence') || n.endsWith('_fence_gate') || n.endsWith('_door')
-        || n.endsWith('_trapdoor') || n.endsWith('_button') || n.endsWith('_torch')
-        || n.endsWith('_ladder') || n.endsWith('_sign') || n.endsWith('_banner')
-        || n.endsWith('_rail') || n.endsWith('_plate') || n.endsWith('_pane');
+    for (const p of NON_OCCLUDING_PREFIX) {
+        if (n.startsWith(p)) return true;
+    }
+    for (const s of NON_OCCLUDING_SUFFIX) {
+        if (n.endsWith(s)) return true;
+    }
+    return false;
 }
 
 /** 兼容 pos 的两种写法：[x,y,z] 或 {x,y,z} */
@@ -157,7 +228,7 @@ class SurfaceExtractor {
             return { blocks: [], stats };
         }
 
-        // 占位：某一格是否"遮挡"（存在 + 非空气 + 按配置计透明）
+        // 占位：某一格是否"遮挡"（存在 + 非空气 + 按配置计透明 + 不是不满格形状）
         const occludes = (x, y, z) => {
             const layerMap = grid.get(y);
             if (!layerMap) return false;
@@ -166,7 +237,8 @@ class SurfaceExtractor {
             const name = nb.name || nb.type || '';
             if (isAirLikeName(name)) return false;
             if (!this.transparentOccluders && isTransparentName(name)) return false;
-            // 形状方块（楼梯/台阶/墙/栅栏等）不遮挡相邻面，否则相邻形状互相剔除、投影出洞
+            // 形状方块（楼梯/台阶/墙/栅栏/红石粉/地毯/花草等不满格方块）不遮挡相邻面，
+            // 否则相邻形状互相剔除、投影出洞
             if (isNonOccludingShape(name)) return false;
             return true;
         };
@@ -222,4 +294,8 @@ class SurfaceExtractor {
     }
 }
 
-module.exports = { SurfaceExtractor, isAirLikeName, isTransparentName, isNonOccludingShape, stripNamespace, posOf };
+module.exports = {
+    SurfaceExtractor, isAirLikeName, isTransparentName, isNonOccludingShape,
+    stripNamespace, posOf,
+    NON_OCCLUDING_SHAPE, NON_OCCLUDING_SUFFIX, NON_OCCLUDING_PREFIX,
+};

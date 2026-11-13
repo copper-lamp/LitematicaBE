@@ -1,18 +1,4 @@
 // MegaProjectionRenderer — 超大型投影分块注入器（ghost 通道）
-//
-// 与常规投影渲染的区别：**不做 LOD 抽样与粒子式渲染**，只负责——
-// 将 .mcmega 分块中的方块按顺序全量喂给 GhostRenderer 的会话队列。
-//
-// 设计要点：
-//   1. 数据在 32³ 分块里（BinaryChunkStorage）。加载期就落盘，省的是"解析期峰值内存"。
-//   2. 渲染期不做 LOD 抽样：残缺的投影无法与"数据丢了"的 bug 区分，全量注入反而更好验收。
-//   3. 每 tick 只读 1 个分块：readFileSync + gunzipSync + 位解码是同步 IO，必须限量，
-//      否则会和 ghost 写入抢 tick 预算（render.tickBudgetMs）。
-//   4. 注入 = 往队列尾部追加（GhostRenderer.appendBlocks），不动已写格、不重置游标，
-//      所以铺设进度能连续推进；铺设速度由 ghostWritesPerTick 决定。
-//   5. 撤销仍走 GhostRenderer.clear（整会话），本模块不碰世界、不碰快照。
-//
-// 本版本**故意不做**（等实测数据再决定）：视口跟随、分块卸载、逐层显示、LOD、重进恢复。
 
 const { CHUNK_SIZE } = require('../core/BinaryChunkStorage');
 const { DebugLogger } = require('../core/DebugLogger');
@@ -28,6 +14,14 @@ function compareChunkKey(a, b) {
     const ax = Number(A[0]), bx = Number(B[0]);
     if (ax !== bx) return ax - bx;
     return Number(A[2]) - Number(B[2]);
+}
+
+/** 短哈希：同一图纸被放置多份时用来区分注入状态（只留 [0-9a-z]） */
+function shortHash(str) {
+    let h = 5381;
+    const s = String(str || '');
+    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
 }
 
 class MegaProjectionRenderer {
@@ -95,6 +89,36 @@ class MegaProjectionRenderer {
     // ==================== 状态 ====================
 
     /**
+     * 注入状态的键：`xuid_schematicId`。
+     *
+     * 同一玩家把**同一张 mega 图纸**放成两份时（很常见的"照抄建筑"），
+     * 单靠 xuid+schematicId 会共用一条注入状态，两份投影会抢同一个分块游标。
+     * 这种情形下给第二份追加一个由 projectionId 派生的后缀，各自独立注入。
+     *
+     * @returns {string|null}
+     */
+    stateIdFor(player, projection) {
+        const xuid = player && player.xuid ? player.xuid : player;
+        const sid = projection && projection.schematicId;
+        if (!xuid || !sid) return null;
+        const base = `${xuid}_${sid}`;
+        const want = (projection && projection.id) || null;
+
+        // 先认 base；再扫一遍 `base#...` 后缀键。
+        // 只认"状态里记的 projectionId 与本份一致"的那个 —— 否则第一份被 stopRender 后
+        // 第二份会从 `base#hash` 漂回 `base`，注入状态"失踪"（切层报 mega-not-ready）。
+        const exact = this.renderStates.get(base);
+        if (exact && (exact.projectionId || null) === want) return base;
+        for (const [key, st] of this.renderStates) {
+            if (key === base) continue;
+            if (String(key).indexOf(base + '#') !== 0) continue;
+            if ((st.projectionId || null) === want) return key;
+        }
+        if (!exact) return base;
+        return `${base}#${shortHash(want || '')}`;
+    }
+
+    /**
      * 建注入状态。此时只读分块索引（一个 JSON），不读任何分块内容。
      * @returns {object|null} 失败返回 null（调用方据此提示玩家）
      */
@@ -106,7 +130,7 @@ class MegaProjectionRenderer {
             return null;
         }
 
-        const stateId = `${player.xuid}_${schematicId}`;
+        const stateId = this.stateIdFor(player, projection) || `${player.xuid}_${schematicId}`;
         const existing = this.renderStates.get(stateId);
         if (existing && existing.isActive) {
             // 上一轮已经注入完，但 ghost 会话可能被重建过（切层 / 重新加载 / 掉线回来）。
@@ -140,6 +164,7 @@ class MegaProjectionRenderer {
 
         const state = {
             stateId,
+            projectionId: (projection && projection.id) || null,
             player,
             schematicId,
             projection,
@@ -194,7 +219,13 @@ class MegaProjectionRenderer {
         const gr = global.ghostRenderer;
         const xuid = state.player && state.player.xuid;
         // 会话尚未建立（刚点击"放置"、startRender 尚未执行）→ 本 tick 不动作，避免数据丢失
-        if (!renderer || !gr || !xuid || !gr.has(xuid)) return;
+        if (!renderer || !gr || !xuid) return;
+        // 多投影：必须确认**这个投影**的会话在，不能只看玩家有没有会话
+        const projectionId = state.projection && state.projection.id;
+        const alive = typeof gr.hasProjection === 'function'
+            ? gr.hasProjection(state.player, projectionId)
+            : gr.has(xuid);
+        if (!alive) return;
 
         for (let i = 0; i < CHUNKS_PER_TICK; i++) {
             if (state.cursor >= state.chunkKeys.length) break;
@@ -235,7 +266,8 @@ class MegaProjectionRenderer {
             if (blocks.length === 0) return;
         }
 
-        const r = global.renderer.appendBlocks(state.player.xuid, blocks);
+        // 按投影定位会话：同一玩家可能同时有多个 MEGA 投影在注入
+        const r = global.renderer.appendBlocks(state.player.xuid, blocks, state.projection && state.projection.id);
         state.injectedChunks++;
         state.injectedBlocks += r.added;
         state.dupBlocks += r.dup;

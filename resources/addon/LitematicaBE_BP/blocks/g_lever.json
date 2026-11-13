@@ -5,10 +5,30 @@
       "identifier": "lit:g_lever",
       "menu_category": {
         "category": "none"
+      },
+      "states": {
+        "lit:lever_face": {
+          "values": [
+            "north",
+            "south",
+            "east",
+            "west",
+            "up_north_south",
+            "up_east_west",
+            "down_north_south",
+            "down_east_west"
+          ]
+        },
+        "lit:open": {
+          "values": [
+            false,
+            true
+          ]
+        }
       }
     },
     "components": {
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.lit_lever",
       "minecraft:material_instances": {
         "*": {
           "texture": "ghost_lever",
@@ -23,7 +43,202 @@
       "minecraft:destructible_by_explosion": false,
       "minecraft:replaceable": {},
       "minecraft:light_dampening": 0,
-      "minecraft:map_color": "#888888"
-    }
+      "minecraft:map_color": "#888888",
+      "minecraft:transformation": {
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('lit:lever_face') == 'down_north_south'",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:lever_face') == 'down_east_west'",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:lever_face') == 'up_north_south'",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              180,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:lever_face') == 'up_east_west'",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              180,
+              90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:lever_face') == 'south'",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:lever_face') == 'north'",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              -90,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:lever_face') == 'east'",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              0,
+              -90
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:lever_face') == 'west'",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              0,
+              90
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    ]
   }
 }

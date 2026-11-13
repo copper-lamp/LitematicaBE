@@ -71,6 +71,13 @@ class BlockMatcher {
             return state[propertyName];
         }
 
+        // 前缀兼容：投影侧可能是 `minecraft:facing_direction`（BDS 原始键），
+        // 世界侧可能是短键（或相反）。两种写法都认，避免"明明方向对却判不一致"。
+        const bare = propertyName.startsWith('minecraft:') ? propertyName.slice('minecraft:'.length) : propertyName;
+        if (state[bare] !== undefined) return state[bare];
+        const prefixed = `minecraft:${propertyName}`;
+        if (state[prefixed] !== undefined) return state[prefixed];
+
         const aliases = this.stateProperties[propertyName] || [];
         for (const alias of aliases) {
             if (state[alias] !== undefined) {

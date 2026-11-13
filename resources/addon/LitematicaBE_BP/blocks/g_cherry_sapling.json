@@ -8,7 +8,7 @@
       }
     },
     "components": {
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.lit_cross",
       "minecraft:material_instances": {
         "*": {
           "texture": "ghost_cherry_sapling",

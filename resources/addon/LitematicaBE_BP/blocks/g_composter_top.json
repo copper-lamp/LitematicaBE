@@ -5,13 +5,39 @@
       "identifier": "lit:g_composter_top",
       "menu_category": {
         "category": "none"
+      },
+      "states": {
+        "lit:level": {
+          "values": {
+            "min": 0,
+            "max": 8
+          }
+        }
       }
     },
     "components": {
       "minecraft:geometry": "geometry.lit_composter",
       "minecraft:material_instances": {
         "*": {
-          "texture": "ghost_generic",
+          "texture": "ghost_composter_side",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "side": {
+          "texture": "ghost_composter_side",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "bottom": {
+          "texture": "ghost_composter_bottom",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "compost": {
+          "texture": "ghost_compost",
           "render_method": "blend",
           "face_dimming": false,
           "ambient_occlusion": false
@@ -42,6 +68,55 @@
         ]
       }
     },
-    "permutations": []
+    "permutations": [
+      {
+        "condition": "q.block_state('lit:level') == 1",
+        "components": {
+          "minecraft:geometry": "geometry.lit_composter_l1"
+        }
+      },
+      {
+        "condition": "q.block_state('lit:level') == 2",
+        "components": {
+          "minecraft:geometry": "geometry.lit_composter_l2"
+        }
+      },
+      {
+        "condition": "q.block_state('lit:level') == 3",
+        "components": {
+          "minecraft:geometry": "geometry.lit_composter_l3"
+        }
+      },
+      {
+        "condition": "q.block_state('lit:level') == 4",
+        "components": {
+          "minecraft:geometry": "geometry.lit_composter_l4"
+        }
+      },
+      {
+        "condition": "q.block_state('lit:level') == 5",
+        "components": {
+          "minecraft:geometry": "geometry.lit_composter_l5"
+        }
+      },
+      {
+        "condition": "q.block_state('lit:level') == 6",
+        "components": {
+          "minecraft:geometry": "geometry.lit_composter_l6"
+        }
+      },
+      {
+        "condition": "q.block_state('lit:level') == 7",
+        "components": {
+          "minecraft:geometry": "geometry.lit_composter_l7"
+        }
+      },
+      {
+        "condition": "q.block_state('lit:level') == 8",
+        "components": {
+          "minecraft:geometry": "geometry.lit_composter_l8"
+        }
+      }
+    ]
   }
 }

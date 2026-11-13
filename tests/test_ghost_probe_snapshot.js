@@ -252,7 +252,7 @@ console.log('=== 探针 + 快照联调 ===');
     const probe2 = new GhostProbe(registry, expect, addonCheckOn, snap2);
     const p2 = fakePlayer();
     const ok = probe2.undo(p2);
-    check('崩溃后 undo 能接管孤儿会话并还原', () => {
+    check('崩溃后 undo 能接管无主会话并还原', () => {
         assert.strictEqual(ok, true);
         assert.strictEqual(getRaw(0, 64, -4, 0).type, 'minecraft:stone');
         assert.strictEqual(getRaw(1, 65, -4, 0).type, 'minecraft:air');

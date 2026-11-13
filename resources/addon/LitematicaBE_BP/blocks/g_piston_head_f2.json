@@ -1,0 +1,89 @@
+{
+  "format_version": "1.21.70",
+  "minecraft:block": {
+    "description": {
+      "identifier": "lit:g_piston_head_f2",
+      "menu_category": {
+        "category": "none"
+      }
+    },
+    "components": {
+      "minecraft:geometry": "geometry.lit_piston_head_f2",
+      "minecraft:material_instances": {
+        "arm_end": {
+          "texture": "ghost_piston_arm_end",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "plate_top": {
+          "texture": "ghost_piston_top_normal",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "plate_back": {
+          "texture": "ghost_piston_top_normal",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "side_length": {
+          "texture": "ghost_piston_side_spec_length",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "side_cross": {
+          "texture": "ghost_piston_side_spec_cross",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "arm_stub_length": {
+          "texture": "ghost_piston_arm_stub_length",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "arm_stub_cross": {
+          "texture": "ghost_piston_arm_stub_cross",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "arm_rod_length": {
+          "texture": "ghost_piston_arm_rod_length",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "arm_rod_cross": {
+          "texture": "ghost_piston_arm_rod_cross",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "plate_side_length": {
+          "texture": "ghost_piston_top_side_length",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "plate_side_cross": {
+          "texture": "ghost_piston_top_side_cross",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        }
+      },
+      "minecraft:collision_box": false,
+      "minecraft:selection_box": false,
+      "minecraft:destructible_by_mining": false,
+      "minecraft:destructible_by_explosion": false,
+      "minecraft:replaceable": {},
+      "minecraft:light_dampening": 0,
+      "minecraft:map_color": "#888888"
+    }
+  }
+}

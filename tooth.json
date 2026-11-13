@@ -2,10 +2,10 @@
   "format_version": 3,
   "format_uuid": "289f771f-2c9a-4d73-9f3f-8492495a924d",
   "tooth": "github.com/copper-lamp/LitematicaBE",
-  "version": "3.0.3-test.1",
+  "version": "3.1.0",
   "info": {
     "name": "LitematicaBE",
-    "description": "LSE投影插件：支持 .litematic格式的原理图，幽灵方块投影、逐层建造与轻松放置",
+    "description": "LLBDS 服务端投影插件，基岩版服务器一站式投影集成的最佳方案",
     "tags": [
       "platform:levilamina",
       "type:mod",

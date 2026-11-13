@@ -225,6 +225,7 @@ class DataManager {
             
             if (data.players && Array.isArray(data.players)) {
                 for (const player of data.players) {
+                    this.migratePlayerData(player);
                     this.playerData.set(player.xuid, player);
                 }
             }
@@ -264,7 +265,8 @@ class DataManager {
             const defaultData = this.createDefaultPlayerData(xuid);
             this.playerData.set(xuid, defaultData);
         }
-        return this.playerData.get(xuid);
+        // 老存档补字段（多投影：loadedProjections / projectionLayers / projectionLayerModes）
+        return this.migratePlayerData(this.playerData.get(xuid));
     }
 
     /**
@@ -278,15 +280,79 @@ class DataManager {
     }
 
     /**
+     * 补齐/迁移玩家数据里与"多投影"相关的字段（就地修改）。
+     *
+     * 3.0.x 的存档只记 `currentProjectionId`（当时只能同时看一个投影）。
+     * 读入时把它当成"唯一已加载的投影 + 木剑控制的那一个"，
+     * 否则老玩家升级后 `loadedProjections` 为空，进服恢复会走不到任何投影。
+     *
+     * @param {object} data
+     * @returns {object} 同一个对象
+     */
+    migratePlayerData(data) {
+        if (!data || typeof data !== 'object') return data;
+        if (!Array.isArray(data.loadedProjections)) data.loadedProjections = [];
+        // 去重 + 只留字符串（历史上有过手改坏的数据）
+        data.loadedProjections = data.loadedProjections
+            .filter((id) => typeof id === 'string' && id)
+            .filter((id, i, arr) => arr.indexOf(id) === i);
+
+        if (data.currentProjectionId === undefined) data.currentProjectionId = null;
+        if (data.currentProjectionId && !data.loadedProjections.includes(data.currentProjectionId)) {
+            data.loadedProjections.push(data.currentProjectionId);
+        }
+        if (!data.currentProjectionId && data.loadedProjections.length) {
+            data.currentProjectionId = data.loadedProjections[data.loadedProjections.length - 1];
+        }
+
+        if (!data.projectionLayers || typeof data.projectionLayers !== 'object') {
+            data.projectionLayers = {};
+        }
+        if (!data.projectionLayerModes || typeof data.projectionLayerModes !== 'object') {
+            data.projectionLayerModes = {};
+        }
+        // 旧字段（主控层）落到投影级记录里，供按投影恢复
+        const pid = data.currentProjectionId;
+        if (pid) {
+            if (!Number.isFinite(data.projectionLayers[pid])) {
+                data.projectionLayers[pid] = Number.isFinite(data.currentRenderLayer) ? data.currentRenderLayer : -1;
+            }
+            if (typeof data.projectionLayerModes[pid] !== 'boolean') {
+                data.projectionLayerModes[pid] = !!data.renderLayerMode;
+            }
+        }
+        return data;
+    }
+
+    /**
+     * 该玩家当前**同时显示**的投影 id 列表（多投影）。
+     * 顺序即加载顺序；最后一项不一定是木剑控制的那一份（看 currentProjectionId）。
+     */
+    getPlayerLoadedProjections(xuid) {
+        const data = this.migratePlayerData(this.getPlayerData(xuid));
+        return Array.isArray(data.loadedProjections) ? data.loadedProjections.slice() : [];
+    }
+
+    /** 覆盖写入"已加载投影列表"（渲染器切主控/卸载时调） */
+    setPlayerLoadedProjections(xuid, ids) {
+        const list = Array.isArray(ids) ? ids.filter((id) => typeof id === 'string' && id) : [];
+        return this.updatePlayerData(xuid, {
+            loadedProjections: list.filter((id, i, arr) => arr.indexOf(id) === i),
+        });
+    }
+
+    /**
      * 创建默认玩家数据
      */
     createDefaultPlayerData(xuid) {
         return {
             xuid: xuid,
             toolMode: 'none',           // none/place/rotate/build
-            currentProjectionId: null,
+            currentProjectionId: null,  // 木剑当前控制的投影
             buildLayer: 0,
-            loadedProjections: [],      // 已加载的投影ID列表
+            loadedProjections: [],      // 同时显示的投影ID列表（多投影）
+            projectionLayers: {},       // projectionId -> 该投影当前层
+            projectionLayerModes: {},   // projectionId -> 是否逐层显示
             settings: {
                 autoLoadInRange: true,
                 showActionBar: true,
@@ -333,6 +399,42 @@ class DataManager {
             data.loadedProjections.splice(index, 1);
             this.savePlayerData();
         }
+    }
+
+    /**
+     * 删除一个投影时，把它从**所有**玩家的"已加载列表"里摘掉
+     * （在线玩家的会话由渲染器撤，离线玩家的记录只能在这里清）。
+     * @returns {number} 受影响的玩家数
+     */
+    removeProjectionFromAllPlayers(projectionId) {
+        if (!projectionId) return 0;
+        let touched = 0;
+        for (const data of this.playerData.values()) {
+            this.migratePlayerData(data);
+            let changed = false;
+            const i = data.loadedProjections.indexOf(projectionId);
+            if (i >= 0) {
+                data.loadedProjections.splice(i, 1);
+                changed = true;
+            }
+            if (data.projectionLayers && projectionId in data.projectionLayers) {
+                delete data.projectionLayers[projectionId];
+                changed = true;
+            }
+            if (data.projectionLayerModes && projectionId in data.projectionLayerModes) {
+                delete data.projectionLayerModes[projectionId];
+                changed = true;
+            }
+            if (data.currentProjectionId === projectionId) {
+                data.currentProjectionId = data.loadedProjections.length
+                    ? data.loadedProjections[data.loadedProjections.length - 1]
+                    : null;
+                changed = true;
+            }
+            if (changed) touched++;
+        }
+        if (touched) this.savePlayerData();
+        return touched;
     }
 
     // ==================== 工具方法 ====================

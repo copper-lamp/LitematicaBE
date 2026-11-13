@@ -17,9 +17,23 @@ const path = require('path');
 /** 与 GhostGuard.isAirLike 的兜底口径一致（注入的谓词不可用时才走这里） */
 const AIR_LIKE = new Set(['air', 'cave_air', 'void_air', 'structure_void']);
 
+/** 二高植物（double_plant 族）的 BE 短名：上格必须先有同种下格支撑，否则 BDS 立即破坏 */
+const DOUBLE_PLANT_BE = new Set([
+    'rose_bush', 'sunflower', 'lilac', 'peony', 'large_fern', 'tall_grass',
+]);
+
+/** 颜色写在方块状态、物品用 Damage 表达颜色的方块（纠错返还时要折一下，否则串色） */
+const COLOR_STATE_BLOCKS = new Set(['bed', 'banner', 'wool', 'shulker_box']);
+
+/** Minecraft 16 色的 Damage 顺序（白 0 … 黑 15） */
+const COLOR_TO_DAMAGE = {
+    white: 0, orange: 1, magenta: 2, light_blue: 3, yellow: 4, lime: 5, pink: 6,
+    gray: 7, light_gray: 8, cyan: 9, purple: 10, blue: 11, brown: 12, green: 13, red: 14, black: 15,
+};
+
 /** 打印机默认参数（config.easyPlace.printer.* 覆盖） */
 const PRINTER_DEFAULTS = {
-    radius: 5,
+    radius: 6,
     maxPerCycle: 12,
     budgetMs: 6,
     placeDelayMs: 0,
@@ -63,6 +77,7 @@ class EasyPlaceManager {
         this.printerStats = {
             cycles: 0, checked: 0, placed: 0, free: 0, replaceable: 0,
             blockedTarget: 0, unloaded: 0, banned: 0, missing: 0, failed: 0, layerFiltered: 0,
+            pendingDouble: 0,
         };
         this.ensureDebugLogDir();
     }
@@ -129,6 +144,33 @@ class EasyPlaceManager {
     disable(player) {
         this.playerStates.delete(player.xuid);
         player.tell('§c轻松放置已禁用');
+    }
+
+    /**
+     * 玩家退出：清掉所有按 xuid 攒的状态，并在没人用打印机时停掉 tick 循环。
+     *
+     * 不清理的后果：离线玩家的 fastPlaceStates 留着 → `tickFastPlace` 每 200ms 仍然遍历
+     * 并在 `mc.getOnlinePlayers()` 里找不到他而空转；`noProjectionNotified` 会把
+     * "开着打印机却没投影"的提示永久吃掉，玩家重新进服后再也看不到这条提示。
+     */
+    onPlayerLeave(player) {
+        const xuid = player && player.xuid;
+        if (!xuid) return;
+        this.playerStates.delete(xuid);
+        this.fastPlaceStates.delete(xuid);
+        this.placedLocations.delete(xuid);
+        this.noProjectionNotified.delete(xuid);
+        // 提示/冷却的 key 都形如 `${xuid}:方块`（也有 `fail:${xuid}:方块` 这种带前缀的），
+        // 只清这个玩家的项，别把别人的一起去掉
+        const head = `${xuid}:`;
+        const mid = `:${xuid}:`;
+        for (const k of Array.from(this.missingNotified)) {
+            if (k.startsWith(head) || k.includes(mid)) this.missingNotified.delete(k);
+        }
+        for (const k of Array.from(this.consumeBlockedUntil.keys())) {
+            if (k.startsWith(head) || k.includes(mid)) this.consumeBlockedUntil.delete(k);
+        }
+        if (this.fastPlaceStates.size === 0 && this.tickInterval) this.stopTickLoop();
     }
 
     toggle(player) {
@@ -353,10 +395,25 @@ class EasyPlaceManager {
         return Number.isFinite(v2) ? v2 : -1;
     }
 
-    /** 缺材料：每个方块名只提示一次 + 只记一次失败日志（否则每 200ms × 每格刷盘） */
+    /**
+     * 缺料时是否要拦掉这次右键。
+     * 只有"手持方块"才拦：玩家在投影范围内喝药水 / 吃食物 / 用工具时，投影不该吞掉右键。
+     * LSE 的 Item 有 `isBlock`；宿主缺这个字段（测试桩 / 旧版）时回退旧行为（拦）。
+     */
+    _shouldBlockUse(item) {
+        if (!item) return false;
+        if (typeof item.isBlock === 'boolean') return item.isBlock;
+        return true;
+    }
+
+    /**
+     * 缺材料：每个（玩家, 方块名）只提示一次 + 只记一次失败日志（否则每 200ms × 每格刷盘）。
+     * key 必须带 xuid：全局去重会让"A 玩家缺石头"把"B 玩家缺石头"的提示一起吃掉。
+     */
     _notifyMissing(player, beName, javaName, javaStates, beStates) {
-        if (this.missingNotified.has(beName)) return;
-        this.missingNotified.add(beName);
+        const key = `${player.xuid}:${beName}`;
+        if (this.missingNotified.has(key)) return;
+        this.missingNotified.add(key);
         try {
             player.tell(`§e投影打印机缺少材料：§f${beName}§7（背包与潜影盒里都没有，其它方块照常放）`);
         } catch (e) { /* 玩家可能已离线 */ }
@@ -404,6 +461,28 @@ class EasyPlaceManager {
         };
     }
 
+    /**
+     * 二高植物上格的"下方支撑"检查：y-1 世界方块必须是同种植物**下格**。
+     * BDS 放置上格（upper_block_bit=1）时，若 y-1 不是同种下格，会立即把上格
+     * 破坏成凋落物 → 打印机每轮重试 → 死循环 + 无限凋落物。
+     * @returns {boolean} true = y-1 已是同种下格，可以安全放上格
+     */
+    _doublePlantBaseSettled(cand, target, dimid) {
+        let below = null;
+        try {
+            below = mc.getBlock(cand.w.x, cand.w.y - 1, cand.w.z, dimid);
+        } catch (e) {
+            return false;
+        }
+        if (!below) return false;
+        const bt = shortName(below.type || below.name || '');
+        if (bt !== shortName(target.name)) return false;
+        const bs = this._extractBlockStates(below) || {};
+        // 下格必须是 upper_block_bit=0（或缺省=0）；1/true 说明 y-1 反而是上格，不算支撑
+        const upper = bs.upper_block_bit;
+        return !(upper === 1 || upper === true);
+    }
+
     /** 放一格并处理物品消耗 / 日志记账 */
     _placeOneFromProjection(player, cand, dimid, isCreative) {
         const javaName = cand.block.name;
@@ -415,12 +494,24 @@ class EasyPlaceManager {
         const target = this._resolveTargetBlock(javaName, javaStates);
         if (!target) return 'skipped';
 
+        // 二高植物上格（upper_block_bit=1）必须有同种植物下格支撑，否则 BDS 会把刚放的
+        // 上格破坏成凋落物 → 打印机每轮重试 → 死循环 + 无限凋落物。
+        // 下格不依赖上格、必然先被放好；上格本轮跳过，下一轮下格就位后再放。
+        // 投影数据缺下格（y-1 不是同种下格）时永远 pending，这是物理上放不出来的正确行为。
+        if (DOUBLE_PLANT_BE.has(shortName(target.name)) && target.states.upper_block_bit === 1) {
+            if (!this._doublePlantBaseSettled(cand, target, dimid)) {
+                return 'pending-double';
+            }
+        }
+
         let success = false;
         if (isCreative) {
             success = this.fastPlaceBlockAt(cand.w.x, cand.w.y, cand.w.z, dimid, target.name, target.states);
         } else {
-            // 上次扣物品失败（背包被其他插件锁定 / 仅剩最后一个却无法清除）→ 进入冷却期，不再空放
-            const blockedUntil = this.consumeBlockedUntil.get(target.name);
+            // 上次扣物品失败（背包被其他插件锁定 / 仅剩最后一个却无法清除）→ 进入冷却期，不再空放。
+            // 冷却必须按玩家隔离，否则 A 扣不掉会让 B 也放不了同一种方块。
+            const blockedKey = `${player.xuid}:${target.name}`;
+            const blockedUntil = this.consumeBlockedUntil.get(blockedKey);
             if (blockedUntil && Date.now() < blockedUntil) return 'banned';
 
             const inventory = player.getInventory();
@@ -445,8 +536,8 @@ class EasyPlaceManager {
                 // 否则背包剩 1 个时会出现"物品不减少、方块一直放"的无限复制。
                 const consumed = this.consumeItem(player, target.name, foundSlot, target.states);
                 if (!consumed) {
-                    const first = !this.consumeBlockedUntil.has(target.name);
-                    this.consumeBlockedUntil.set(target.name, Date.now() + 5000);
+                    const first = !this.consumeBlockedUntil.has(blockedKey);
+                    this.consumeBlockedUntil.set(blockedKey, Date.now() + 5000);
                     if (first) {
                         try {
                             player.tell(`§c打印机扣不掉 §f${target.name}§c：已暂停自动放置这个方块（检查背包是否被其它插件锁定）`);
@@ -467,9 +558,10 @@ class EasyPlaceManager {
             return 'placed';
         }
 
-        // setBlock 失败：同一方块仅记录一次，避免每轮重复写入日志
-        if (this.logFailures && !this.missingNotified.has(`fail:${target.name}`)) {
-            this.missingNotified.add(`fail:${target.name}`);
+        // setBlock 失败：同一（玩家, 方块）仅记录一次，避免每轮重复写入日志
+        const failKey = `fail:${player.xuid}:${target.name}`;
+        if (this.logFailures && !this.missingNotified.has(failKey)) {
+            this.missingNotified.add(failKey);
             this.placementLogger.logFailure(
                 player.name, javaName, target.name, javaStates, target.states, '', 'setblock失败'
             );
@@ -499,7 +591,6 @@ class EasyPlaceManager {
         const projection = activeProj.projection;
         const layer = this._currentLayer(player, activeProj);
         const playerPos = player.pos || {};
-        const projPos = projection.position || { x: 0, y: 0, z: 0 };
         const dimid = Number.isFinite(playerPos.dimid) ? playerPos.dimid : (parseInt(playerPos.dimid) || 0);
 
         const centerX = Number(playerPos.x) || 0;
@@ -510,19 +601,25 @@ class EasyPlaceManager {
         this.placedLocations.delete(player.xuid);
         this.printerStats.cycles++;
 
-        // ── 候选集：MEGA 走磁盘分块，普通投影走 16³ 内存索引 ──
+        // 玩家在"投影内相对坐标"里的位置。镜像/旋转/原点必须一起算（与 transformPosition 互逆）：
+        // 手算 `center - projPos` 在旋转 90°/镜像后会把中心算到另一条轴上，粗筛就会误杀所有格。
+        const relC = this.positionConverter.worldToProjection(
+            { x: centerX, y: centerY, z: centerZ }, projection
+        );
+
+        // ── 候选集：MEGA 走磁盘分块，普通投影走 16³ 内存索引（都按相对坐标定位分块）──
         let blocksToCheck = [];
         const isMega = isMegaProjection(projection);
         try {
             if (isMega && projection.schematicId && this.megaManager) {
                 blocksToCheck = this.megaManager.getBlocksNear(
                     projection.schematicId,
-                    centerX - projPos.x, centerY - projPos.y, centerZ - projPos.z,
+                    relC.x, relC.y, relC.z,
                     cfg.radius + 1
                 ) || [];
             } else {
                 blocksToCheck = SpatialIndexUtils.getBlocksInRadius(
-                    projection, centerX, centerY, centerZ, cfg.radius
+                    projection, relC.x, relC.y, relC.z, cfg.radius
                 ) || [];
             }
         } catch (e) {
@@ -531,16 +628,16 @@ class EasyPlaceManager {
         }
 
         const radiusSquared = cfg.radius * cfg.radius;
-        // 玩家在"投影内相对坐标"里的位置。先用相对坐标做一次粗筛（见下面的切比雪夫判据），
+        // 先用相对坐标做切比雪夫粗筛（旋转/镜像只翻转或交换坐标轴，切比雪夫距离不变），
         // 只有粗筛通过的格才做 transformPosition —— 否则 3 万方块的投影每 200ms
         // 就要构造 3 万个世界坐标对象。
-        const relCX = centerX - (Number(projPos.x) || 0);
-        const relCY = centerY - (Number(projPos.y) || 0);
-        const relCZ = centerZ - (Number(projPos.z) || 0);
+        const relCX = relC.x;
+        const relCY = relC.y;
+        const relCZ = relC.z;
         const st = {
             checked: blocksToCheck.length, layer: 0, radius: 0, dup: 0,
             free: 0, replaceable: 0, blocked: 0, unloaded: 0,
-            placed: 0, missing: 0, banned: 0, failed: 0,
+            placed: 0, missing: 0, banned: 0, failed: 0, pendingDouble: 0,
         };
         const candidates = [];
 
@@ -601,6 +698,7 @@ class EasyPlaceManager {
             else if (r === 'missing') st.missing++;
             else if (r === 'banned') st.banned++;
             else if (r === 'failed') st.failed++;
+            else if (r === 'pending-double') st.pendingDouble++;
 
             if (cfg.placeDelayMs > 0 && placed > 0) break;   // 启用放置间隔时每轮仅放一格，避免主线程繁忙等待
         }
@@ -612,14 +710,16 @@ class EasyPlaceManager {
         ps.blockedTarget += st.blocked; ps.unloaded += st.unloaded;
         ps.placed += st.placed; ps.missing += st.missing;
         ps.banned += st.banned; ps.failed += st.failed;
+        ps.pendingDouble = (ps.pendingDouble || 0) + st.pendingDouble;
 
         if (st.placed || st.checked) {
             this.logDebug('FASTPLACE_SUMMARY', { layer, isMega, radius: cfg.radius, ...st });
         }
     }
 
-    getBlocksInRadius(projection, centerX, centerY, centerZ, radius) {
-        return SpatialIndexUtils.getBlocksInRadius(projection, centerX, centerY, centerZ, radius);
+    /** 兼容包装：**入参是投影内相对坐标**（见 SpatialIndexUtils.getBlocksInRadius 注释） */
+    getBlocksInRadius(projection, relCenterX, relCenterY, relCenterZ, radius) {
+        return SpatialIndexUtils.getBlocksInRadius(projection, relCenterX, relCenterY, relCenterZ, radius);
     }
 
     wasPlacedThisTick(playerXuid, locationKey) {
@@ -648,7 +748,6 @@ class EasyPlaceManager {
         }
 
         const projection = activeProj.projection;
-        const projPos = projection.position;
         const projDim = projection.dimensions;
         const dimid = player.pos?.dimid ?? 0;
 
@@ -678,9 +777,15 @@ class EasyPlaceManager {
             }
         }
 
-        const relX = placeX - projPos.x;
-        const relY = placeY - projPos.y;
-        const relZ = placeZ - projPos.z;
+        // 世界 → 投影内相对坐标必须走 PositionConverter（旋转/镜像/原点统一反解）。
+        // 历史写法 `placeX - projPos.x` 在投影旋转/镜像后取到的是错位的投影格。
+        const rel = this.positionConverter.worldToProjection(
+            { x: placeX, y: placeY, z: placeZ },
+            projection
+        );
+        const relX = rel.x;
+        const relY = rel.y;
+        const relZ = rel.z;
 
         if (relX < 0 || relX >= projDim.x ||
             relY < 0 || relY >= projDim.y ||
@@ -708,7 +813,9 @@ class EasyPlaceManager {
         }
 
         let neededBlockType = projBlock.name;
-        let neededBlockState = projBlock.state || {};
+        // rawState = BDS 原始状态键（.mcstructure 的 state 去掉了 `minecraft:` 前缀，
+        // 写回世界必须用原始键，否则带前缀状态名会被 BDS 丢弃 —— 观察者方向丢失即此）
+        let neededBlockState = projBlock.rawState || projBlock.state || {};
 
         if (neededBlockType === 'minecraft:air') {
             return true;
@@ -754,7 +861,7 @@ class EasyPlaceManager {
             return true;
         }
 
-        const foundSlot = this.inventoryHelper.findBlockInInventory(
+        let foundSlot = this.inventoryHelper.findBlockInInventory(
             player.getInventory(),
             neededBlockType,
             -1,
@@ -776,16 +883,23 @@ class EasyPlaceManager {
                 } else {
                     logger.info(`[EasyPlace] 缺少: ${neededBlockType}`);
                 }
-                return false;
+                // 只有手持物是方块时才拦截。历史行为一律 `return false`，
+                // 导致玩家在投影里喝药水 / 吃食物 / 用桶都会被吞掉这次右键。
+                return this._shouldBlockUse(item) ? false : true;
             }
+
+            // 潜影盒取料：findBlockInShulkerBoxes 已经把物品抽到背包槽并返回该槽位，
+            // 必须回填给 foundSlot，否则后面的 consumeItem 只能靠"恰好是选中槽"扣到。
+            foundSlot = foundInShulker;
         }
 
         const success = this.placeBlockAt(placeX, placeY, placeZ, placeDim, neededBlockType, neededBlockState);
         if (success) {
             // 手动轻松放置也要真扣物品：扣不掉必须让玩家知道，否则就是在复制材料
             const consumed = this.consumeItem(player, neededBlockType, foundSlot, neededBlockState);
-            if (!consumed && !this.missingNotified.has(`consume:${neededBlockType}`)) {
-                this.missingNotified.add(`consume:${neededBlockType}`);
+            const consumeKey = `consume:${player.xuid}:${neededBlockType}`;
+            if (!consumed && !this.missingNotified.has(consumeKey)) {
+                this.missingNotified.add(consumeKey);
                 try {
                     player.tell(`§c轻松放置扣不掉 §f${neededBlockType}§c：请检查背包（可能是其它插件锁定或只剩最后 1 个）`);
                 } catch (e) { /* 玩家可能已离线 */ }
@@ -814,7 +928,6 @@ class EasyPlaceManager {
         }
 
         const projection = activeProj.projection;
-        const projPos = projection.position;
         const projDim = projection.dimensions;
 
         const blockX = block.pos.x;
@@ -822,31 +935,32 @@ class EasyPlaceManager {
         const blockZ = block.pos.z;
         const blockDim = block.pos.dimid ?? 0;
 
-        // 检查是否在投影范围内
-        if (blockX < projPos.x || blockX >= projPos.x + projDim.x) return;
-        if (blockY < projPos.y || blockY >= projPos.y + projDim.y) return;
-        if (blockZ < projPos.z || blockZ >= projPos.z + projDim.z) return;
+        // 世界 → 投影内相对坐标：旋转/镜像必须反解（不能手减 projPos），
+        // 否则木剑旋转 90° 后纠错会落到镜像位置、甚至取不到投影块。
+        const rel = this.positionConverter.worldToProjection(
+            { x: blockX, y: blockY, z: blockZ },
+            projection
+        );
+        if (rel.x < 0 || rel.x >= projDim.x ||
+            rel.y < 0 || rel.y >= projDim.y ||
+            rel.z < 0 || rel.z >= projDim.z) {
+            return;
+        }
 
         // 检查层级限制（层号唯一来源，见 _currentLayer）
         const currentLayer = this._currentLayer(player, activeProj);
-        if (currentLayer !== -1) {
-            const relativeY = blockY - projPos.y;
-            if (relativeY !== currentLayer) return;
+        if (currentLayer !== -1 && rel.y !== currentLayer) {
+            return;
         }
-
-        // 使用索引查找投影方块
-        const projRelativeX = blockX - projPos.x;
-        const projRelativeY = blockY - projPos.y;
-        const projRelativeZ = blockZ - projPos.z;
 
         let projBlock = null;
 
         if (isMegaProjection(projection) && projection.schematicId && this.megaManager) {
             // Mega 模式：从磁盘查询方块（使用相对投影坐标）
-            projBlock = this.megaManager.getBlockAt(projection.schematicId, projRelativeX, projRelativeY, projRelativeZ);
+            projBlock = this.megaManager.getBlockAt(projection.schematicId, rel.x, rel.y, rel.z);
         } else {
             projBlock = projection.blockIndex
-                ? projection.blockIndex.get(`${projRelativeX},${projRelativeY},${projRelativeZ}`)
+                ? projection.blockIndex.get(`${rel.x},${rel.y},${rel.z}`)
                 : null;
         }
 
@@ -856,8 +970,8 @@ class EasyPlaceManager {
         if (!neededBlockType || neededBlockType === 'minecraft:air') return;
         if (BlockConversions.isBanned(neededBlockType, blockDim)) return;
 
-        // 转换方块
-        const neededBlockState = projBlock.state || {};
+        // 转换方块（rawState = BDS 原始状态键，见上方说明）
+        const neededBlockState = projBlock.rawState || projBlock.state || {};
         const converted = BlockConversions.convertToValid(neededBlockType, neededBlockState);
         const finalType = converted.name;
         const finalStates = BlockConversions.filterDirectionStates(converted.states);
@@ -870,9 +984,161 @@ class EasyPlaceManager {
 
         if (isCorrect) return; // 方块正确，不需要修正
 
-        // 方块不正确，需要修正
-        this.placeBlockAt(blockX, blockY, blockZ, blockDim, finalType, finalStates);
-        // 静默修正，不发送客户端提示
+        // 用世界里的真实方块再兜一次：`afterPlaceBlock` 对同一格可能重复触发
+        // （快速连点 / 其它插件重放事件），若这一格已经是正确方块就没必要再覆盖、再扣一次料。
+        try {
+            const worldNow = mc.getBlock(blockX, blockY, blockZ, blockDim);
+            if (worldNow) {
+                const nowType = worldNow.type || worldNow.name || '';
+                if (nowType && this.blockMatcher.match(nowType, finalType, this._extractBlockStates(worldNow), finalStates)) {
+                    return;
+                }
+            }
+        } catch (e) { /* 读不到世界方块就继续按事件参数处理 */ }
+
+        // ── 纠错固定"扣料 + 返还"，不做开关 ──
+        // 这两条是纠错的底层正确性约束，不是体验选项：
+        //   不扣料 = 玩家放块泥土就能免费换投影方块（材料复制）；不返还 = 玩家净损失 2 个物品。
+        // 创造模式物品无限，既不扣也不退，直接覆盖。
+        const isCreative = player.gameMode === 1;
+        if (isCreative) {
+            this.placeBlockAt(blockX, blockY, blockZ, blockDim, finalType, finalStates);
+            return;
+        }
+
+        const cooldownKey = `correction:${player.xuid}:${finalType}`;
+        const cooldownUntil = this.consumeBlockedUntil.get(cooldownKey);
+        if (cooldownUntil && Date.now() < cooldownUntil) return;
+
+        // 找料：背包 → 潜影盒（与轻松放置同一套口径）。
+        // 背包接口在玩家离线 / 其它插件锁定槽位时可能抛错，这里兜住并当作"没材料"处理。
+        let slot = -1;
+        try {
+            slot = this.inventoryHelper.findBlockInInventory(
+                player.getInventory(), finalType, -1, finalStates
+            );
+            if (slot === -1) {
+                slot = this.inventoryHelper.findBlockInShulkerBoxes(
+                    player, player.getInventory(), finalType, finalStates
+                );
+            }
+        } catch (e) {
+            slot = -1;
+        }
+        if (slot === -1) {
+            // 没材料就不纠错（保留玩家自己放的方块），只提示一次
+            this._notifyCorrection(
+                player,
+                `correction-missing:${finalType}`,
+                `§e投影纠错需要材料 §f${finalType}§e：背包与潜影盒里都没有，已保留你放的方块`
+            );
+            return;
+        }
+
+        if (!this.placeBlockAt(blockX, blockY, blockZ, blockDim, finalType, finalStates)) return;
+
+        const consumed = this.consumeItem(player, finalType, slot, finalStates);
+        if (!consumed) {
+            // 扣不掉就别再纠错，否则等于免费出方块（与打印机的反复制口径一致）。
+            // 也**不返还**：没付材料就退方块 = 净赚，宁可让玩家看到提示后手动处理。
+            this.consumeBlockedUntil.set(cooldownKey, Date.now() + 5000);
+            this._notifyCorrection(
+                player,
+                `correction-consume:${finalType}`,
+                `§c投影纠错扣不掉 §f${finalType}§c：已暂停 5 秒内的自动纠错`
+            );
+            return;
+        }
+
+        // 替换完成、材料已扣：把玩家放错的那块还给他。
+        // 净变化 = 失去 1 个正确材料、得到 1 个错误方块（世界那格变成投影要求的样子）。
+        // 固定执行，不开配置：不退而只扣就是让玩家白亏一个方块。
+        this._refundWrongBlock(player, block, actualBlockType);
+    }
+
+    /**
+     * 把玩家刚放错、已被替换掉的那块方块还原成物品塞回背包。
+     *
+     * 方块名 ≠ 物品名（`standing_sign` / `lit_furnace` / `wall_sign` 都不是物品），
+     * 所以按「方块名 → 可放置物品名 → Java 名」依次试，第一个能 newItem 出来的就是物品形态。
+     */
+    _refundWrongBlock(player, block, beBlockType) {
+        if (!beBlockType) return false;
+        const states = this._extractBlockStates(block);
+
+        const item = this._makeRefundItem(beBlockType, states);
+        if (!item) {
+            this._notifyCorrection(
+                player,
+                `correction-refund-nf:${beBlockType}`,
+                `§e投影纠错：§f${beBlockType}§e 找不到对应的物品形态，已跳过返还`
+            );
+            return false;
+        }
+
+        try {
+            const ok = player.giveItem(item);
+            if (ok !== false) return true;
+        } catch (e) { /* 背包接口异常按失败处理 */ }
+
+        this._notifyCorrection(
+            player,
+            `correction-refund-full:${beBlockType}`,
+            `§c投影纠错：背包已满，§f${beBlockType}§c 没能返还（清理背包后再放一次即可）`
+        );
+        return false;
+    }
+
+    /** 方块名 → 可给玩家的物品对象；失败返回 null */
+    _makeRefundItem(beBlockType, states) {
+        const names = [];
+        const push = (n) => {
+            if (n && !names.includes(n)) names.push(n);
+        };
+        push(beBlockType);
+        try { push(BlockConversions.getPlaceableItem(beBlockType)); } catch (e) { /* 映射表缺项 */ }
+        try {
+            const javas = this.registry.getJavaNames(beBlockType) || [];
+            for (const j of javas.slice(0, 3)) push(j);
+        } catch (e) { /* 反查失败就只用前两个候选 */ }
+
+        for (const name of names) {
+            let item = null;
+            try {
+                item = mc.newItem(name, 1);
+            } catch (e) {
+                item = null;
+            }
+            if (!item) continue;
+            this._applyColorDamage(item, beBlockType, states);
+            return item;
+        }
+        return null;
+    }
+
+    /**
+     * 床 / 旗帜 / 羊毛这类「颜色写在方块状态里、物品用 Damage 表示颜色」的方块，
+     * 直接 newItem 会拿到默认白色。把状态里的 color 折成 Damage，返还才不会串色。
+     */
+    _applyColorDamage(item, beBlockType, states) {
+        if (!states || !states.color) return;
+        const key = String(beBlockType || '').toLowerCase().replace(/^minecraft:/, '');
+        if (!COLOR_STATE_BLOCKS.has(key)) return;
+        const dmg = COLOR_TO_DAMAGE[String(states.color).toLowerCase()];
+        if (dmg === undefined) return;
+        try {
+            item.damage = dmg;
+        } catch (e) { /* 宿主没有可写 Damage 时保持默认色 */ }
+    }
+
+    /** 纠错相关提示节流（复用 missingNotified，按 (玩家, key) 去重） */
+    _notifyCorrection(player, key, message) {
+        const k = `${player.xuid}:${key}`;
+        if (this.missingNotified.has(k)) return;
+        this.missingNotified.add(k);
+        try {
+            player.tell(message);
+        } catch (e) { /* 玩家可能已离线 */ }
     }
 
     /**

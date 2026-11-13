@@ -24,7 +24,7 @@ function t(name, fn) {
 
 // 用真实索引（resources/data/ghost_index.json），与运行时同批
 const registry = new GhostBlockRegistry(path.join(PLUGIN, 'resources', 'data', 'ghost_index.json'));
-assert.ok(registry.ready, 'ghost_index 应就绪（资源未重建？先 npm run build 或 node tools/ghost_map_apply.js --build）');
+assert.ok(registry.ready, 'ghost_index 应就绪（资源未重建？先 npm run build）');
 
 console.log('\n=== ghost states 链路 ===');
 
@@ -34,6 +34,7 @@ t('registry 就绪且 oak_stairs 映射到 lit:g_oak_stairs', () => {
 
 t('buildStates：weirdo_direction=2 -> lit:dir=2（严格只出声明键）', () => {
     const st = registry.buildStates('minecraft:oak_stairs', { weirdo_direction: 2 });
+    // 楼梯的上/下已由 identifier 承载（lit:g_oak_stairs / _up），不再声明 lit:upside
     assert.deepStrictEqual(st, { 'lit:dir': 2 });
 });
 
@@ -45,6 +46,11 @@ t('buildStates：缺 weirdo_direction -> 补默认 0', () => {
 t('buildStates：越界 clamp（weirdo_direction=9 -> 3）', () => {
     const st = registry.buildStates('minecraft:oak_stairs', { weirdo_direction: 9 });
     assert.deepStrictEqual(st, { 'lit:dir': 3 });
+});
+
+t('倒置楼梯走 identifier 分派（不再靠 state 切几何）', () => {
+    assert.strictEqual(registry.resolveWithState('minecraft:oak_stairs', { upside_down_bit: 0 }), 'lit:g_oak_stairs');
+    assert.strictEqual(registry.resolveWithState('minecraft:oak_stairs', { upside_down_bit: 1 }), 'lit:g_oak_stairs_up');
 });
 
 t('buildStates：非 stairs（oak_planks 无 state 载体）-> null', () => {

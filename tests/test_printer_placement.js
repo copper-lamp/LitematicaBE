@@ -385,5 +385,68 @@ check('11. MEGA 投影：候选集走 megaManager（相对坐标）', () => {
     assert.strictEqual(SETS.length, 1);
 });
 
+check('12. 默认半径 6：6 格内可放、7 格外不碰', () => {
+    // 世界坐标 (6,64,0) 距玩家 6 格 → 新默认 6 必须覆盖；旧默认 5 时漏掉
+    const h6 = makeHarness({ printer: { radius: 6 } });
+    h6.projection.blocks = [blk(6, 0, 0), blk(7, 0, 0)];
+    h6.mgr.processFastPlace(h6.player);
+    assert.deepStrictEqual(SETS.map((s) => s.x).sort((a, b) => a - b), [6],
+        '只有 6 格内那一格该被放，7 格外的不许碰');
+
+    const h5 = makeHarness({ printer: { radius: 5 } });
+    h5.projection.blocks = [blk(6, 0, 0)];
+    h5.mgr.processFastPlace(h5.player);
+    assert.strictEqual(SETS.length, 0, '半径 5 时 6 格处不该被放（确认半径真的生效）');
+});
+
+check('13. 旋转 90° 下候选集按相对坐标定位分块（不会取错分块导致漏格）', () => {
+    const h = makeHarness({
+        proj: {
+            id: 'proj-rot', name: '旋转投影',
+            position: { x: 0, y: 64, z: 0 },
+            dimensions: { x: 64, y: 64, z: 64 },
+            rotation: 90, mirrorX: false, mirrorZ: false,
+            blocks: [], blockChunks: new Map(), isMega: false,
+        },
+    });
+    // 相对 (60,0,0) 旋转 90° 后落在世界 (0,64,3)：transformPosition([60,0,0]) = { x:0, z:64-60-1=3 }
+    h.projection.blockChunks.set('3,0,0', [blk(60, 0, 0)]);
+    h.player.pos = { x: 0, y: 64, z: 3, dimid: 0 };
+
+    h.mgr.processFastPlace(h.player);
+
+    assert.deepStrictEqual([SETS.length, SETS[0] && SETS[0].x, SETS[0] && SETS[0].z], [1, 0, 3],
+        '必须从相对分块 3,0,0 取到方块并放到世界 (0,64,3)；手减 position 会去查分块 0,0,0 然后一格不放');
+});
+
+check('14. 玩家退出：清掉打印机状态并停掉 tick 循环', () => {
+    const h = makeHarness();
+    h.mgr.setFastPlace(h.player, true);
+    assert.strictEqual(h.mgr.isFastPlaceEnabled(h.player), true);
+    assert.ok(h.mgr.tickInterval, '开启后应有 tick 循环');
+
+    h.mgr.onPlayerLeave(h.player);
+
+    assert.strictEqual(h.mgr.isFastPlaceEnabled(h.player), false, '退出后不应再为离线玩家打印');
+    assert.strictEqual(h.mgr.tickInterval, null, '没人用打印机时 tick 循环必须停掉');
+    assert.strictEqual(h.mgr.noProjectionNotified.has(h.player.xuid), false, '提示标记必须清掉，否则重新进服看不到"没有投影"');
+});
+
+check('15. 缺料提示按玩家隔离：A 缺石头不该吃掉 B 的提示', () => {
+    const h = makeSurvivalHarness({});
+    h.projection.blocks = [blk(1, 0, 0)];
+
+    const p2 = makePlayer({ xuid: 'P2', name: 'Alex', gameMode: 0 });
+    const inv2 = makeInv({});
+    p2.getInventory = () => inv2;
+
+    h.mgr.processFastPlace(h.player);
+    h.mgr.processFastPlace(p2);
+
+    const miss = (p) => p.told.filter((m) => /缺少材料/.test(m)).length;
+    assert.strictEqual(miss(h.player), 1, 'A 缺料要提示一次');
+    assert.strictEqual(miss(p2), 1, 'B 缺同一种料也必须提示（全局去重会把它吃掉）');
+});
+
 console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);
 process.exit(fail ? 1 : 0);

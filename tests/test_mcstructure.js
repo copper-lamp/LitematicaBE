@@ -128,6 +128,65 @@ ok('normalizeBeName: 现代名保留原名', () => {
     assert.strictEqual(normalizeBeName('minecraft:oak_stairs'), 'minecraft:oak_stairs');
     assert.strictEqual(normalizeBeName('minecraft:unpowered_repeater'), 'minecraft:unpowered_repeater');
 });
+ok('normalizeBeName: 草的旧名 —— 现代两版同名，旧名按状态/别名还原', () => {
+    // 现代（1.21.30+）：草方块 = grass_block、矮草丛 = short_grass、高草丛 = tall_grass（两版一致）。
+    // `grass` / `tallgrass` / `doubleplant` 只是**旧基岩名**（wiki：草方块 aliasid=grass、
+    // 矮草丛 aliasid=tallgrass/1、高草丛 aliasid=doubleplant/2）。
+    assert.strictEqual(normalizeBeName('minecraft:grass'), 'minecraft:grass_block');
+    assert.strictEqual(normalizeBeName('minecraft:grass_block'), 'minecraft:grass_block');
+    assert.strictEqual(normalizeBeName('minecraft:grass_path'), 'minecraft:dirt_path');
+    // 现代名原样保留
+    assert.strictEqual(normalizeBeName('minecraft:short_grass'), 'minecraft:short_grass');
+    assert.strictEqual(normalizeBeName('minecraft:tall_grass'), 'minecraft:tall_grass');
+    // 现代 tallgrass：没有 tall_grass_type 就是高草丛本身，不改名
+    assert.strictEqual(normalizeBeName('minecraft:tallgrass'), 'minecraft:tallgrass');
+});
+
+ok('normalizeBeName: 旧版 tallgrass 按 tall_grass_type 拆成短草/高草/蕨', () => {
+    assert.strictEqual(normalizeBeName('minecraft:tallgrass', { tall_grass_type: 'default' }), 'minecraft:short_grass');
+    assert.strictEqual(normalizeBeName('minecraft:tallgrass', { tall_grass_type: 2 }), 'minecraft:tall_grass');
+    assert.strictEqual(normalizeBeName('minecraft:tallgrass', { tall_grass_type: 'fern' }), 'minecraft:fern');
+    assert.strictEqual(normalizeBeName('minecraft:tallgrass', { block_data: 3 }), 'minecraft:fern');
+});
+
+ok('normalizeBeName: 旧版 doubleplant 按 double_plant_type 拆成高草/大型蕨/向日葵', () => {
+    assert.strictEqual(normalizeBeName('minecraft:doubleplant', { double_plant_type: 'grass' }), 'minecraft:tall_grass');
+    assert.strictEqual(normalizeBeName('minecraft:doubleplant', { double_plant_type: 'fern' }), 'minecraft:large_fern');
+    assert.strictEqual(normalizeBeName('minecraft:doubleplant', { double_plant_type: 'sunflower' }), 'minecraft:sunflower');
+});
+
+ok('两条来源各自正确：Java 老名 grass = 草植物，基岩旧别名 grass = 草方块', () => {
+    const { GhostBlockRegistry } = require(path.join(PLUGIN, 'src', 'ghost', 'GhostBlockRegistry.js'));
+    const reg = new GhostBlockRegistry(path.join(PLUGIN, 'resources', 'data', 'ghost_index.json'));
+    // .litematic 路径：Java 名原样查表 → 草植物（Java 1.20.3 前草植物就叫 grass）
+    assert.strictEqual(reg.resolve('minecraft:grass'), 'lit:g_short_grass');
+    // .mcstructure 路径：先 normalizeBeName 再查表 → 草方块
+    assert.strictEqual(reg.resolve(normalizeBeName('minecraft:grass')), 'lit:g_grass_block');
+    // 旧基岩的 tallgrass 一名字三用：短草 / 高草 / 蕨
+    assert.strictEqual(reg.resolve(normalizeBeName('minecraft:tallgrass', { tall_grass_type: 2 })), 'lit:g_tall_grass_bottom');
+    assert.strictEqual(reg.resolve(normalizeBeName('minecraft:tallgrass', { tall_grass_type: 'fern' })), 'lit:g_fern');
+});
+
+ok('normalizeBeName: 粘液块 BE 名 slime → slime_block（渲染兜底，避免落 generic 灰）', () => {
+    // 基岩版粘液块 nameid 是 `slime`，Java 版是 `slime_block`。BE_OLD_TO_JAVA 显式补了这条，
+    // 否则 .mcstructure 里 632 个粘液块 resolve('minecraft:slime') 会 miss javaMap → 灰色。
+    assert.strictEqual(normalizeBeName('minecraft:slime'), 'minecraft:slime_block');
+    // 现代名（slime_block）原样保留
+    assert.strictEqual(normalizeBeName('minecraft:slime_block'), 'minecraft:slime_block');
+});
+
+ok('resolve 反查：BE 名 ≠ Java 名的方块仍能命中 ghost（slime / fence_gate）', () => {
+    const { GhostBlockRegistry } = require(path.join(PLUGIN, 'src', 'ghost', 'GhostBlockRegistry.js'));
+    const reg = new GhostBlockRegistry(path.join(PLUGIN, 'resources', 'data', 'ghost_index.json'));
+    // .mcstructure 的 block.name 是 BE 名，若 renderName 未设，resolve 走 bedrockToJava 反查
+    assert.strictEqual(reg.resolve('minecraft:slime'), 'lit:g_slime_block');
+    // fence_gate → oak_fence_gate（多个候选，取第一个命中 javaMap 的）
+    assert.ok(reg.resolve('minecraft:fence_gate') !== reg.genericId, 'fence_gate 不应落 generic');
+    // 短名（无 namespace）也能反查
+    assert.strictEqual(reg.resolve('slime'), 'lit:g_slime_block');
+    // 未知名仍安全回落 generic
+    assert.strictEqual(reg.resolve('minecraft:not_a_real_block_xyz'), reg.genericId);
+});
 ok('normalizeBeStates: 键去命名空间', () => {
     const s = normalizeBeStates({ 'minecraft:cardinal_direction': 'south', weirdo_direction: 0 });
     assert.strictEqual(s.cardinal_direction, 'south');

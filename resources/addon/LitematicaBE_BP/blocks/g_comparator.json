@@ -5,14 +5,52 @@
       "identifier": "lit:g_comparator",
       "menu_category": {
         "category": "none"
+      },
+      "states": {
+        "lit:dir": {
+          "values": {
+            "min": 0,
+            "max": 3
+          }
+        },
+        "lit:mode": {
+          "values": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        "lit:powered": {
+          "values": {
+            "min": 0,
+            "max": 1
+          }
+        }
       }
     },
     "components": {
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.lit_comparator",
       "minecraft:material_instances": {
         "*": {
-          "texture": "ghost_comparator",
-          "render_method": "blend",
+          "texture": "ghost_comp_slab",
+          "render_method": "alpha_test",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "top": {
+          "texture": "ghost_comparator_off",
+          "render_method": "alpha_test",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "torch": {
+          "texture": "ghost_rtorch_off",
+          "render_method": "alpha_test",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "lamp": {
+          "texture": "ghost_rtorch_off",
+          "render_method": "alpha_test",
           "face_dimming": false,
           "ambient_occlusion": false
         }
@@ -23,7 +61,810 @@
       "minecraft:destructible_by_explosion": false,
       "minecraft:replaceable": {},
       "minecraft:light_dampening": 0,
-      "minecraft:map_color": "#888888"
-    }
+      "minecraft:map_color": "#888888",
+      "minecraft:transformation": {
+        "rotation": [
+          0,
+          180,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('lit:dir') == 0 && q.block_state('lit:mode') == 0 && q.block_state('lit:powered') == 0",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              180,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 0 && q.block_state('lit:mode') == 0 && q.block_state('lit:powered') == 1",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_on",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              180,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 0 && q.block_state('lit:mode') == 1 && q.block_state('lit:powered') == 0",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_sub",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              180,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 0 && q.block_state('lit:mode') == 1 && q.block_state('lit:powered') == 1",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_sub_on",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              180,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 1 && q.block_state('lit:mode') == 0 && q.block_state('lit:powered') == 0",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              270,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 1 && q.block_state('lit:mode') == 0 && q.block_state('lit:powered') == 1",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_on",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              270,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 1 && q.block_state('lit:mode') == 1 && q.block_state('lit:powered') == 0",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_sub",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              270,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 1 && q.block_state('lit:mode') == 1 && q.block_state('lit:powered') == 1",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_sub_on",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              270,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 2 && q.block_state('lit:mode') == 0 && q.block_state('lit:powered') == 0",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 2 && q.block_state('lit:mode') == 0 && q.block_state('lit:powered') == 1",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_on",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 2 && q.block_state('lit:mode') == 1 && q.block_state('lit:powered') == 0",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_sub",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 2 && q.block_state('lit:mode') == 1 && q.block_state('lit:powered') == 1",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_sub_on",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 3 && q.block_state('lit:mode') == 0 && q.block_state('lit:powered') == 0",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 3 && q.block_state('lit:mode') == 0 && q.block_state('lit:powered') == 1",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_on",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 3 && q.block_state('lit:mode') == 1 && q.block_state('lit:powered') == 0",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_sub",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_off",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 3 && q.block_state('lit:mode') == 1 && q.block_state('lit:powered') == 1",
+        "components": {
+          "minecraft:geometry": "geometry.lit_comparator_sub_on",
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "ghost_comp_slab",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "top": {
+              "texture": "ghost_comparator_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "torch": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            },
+            "lamp": {
+              "texture": "ghost_rtorch_on",
+              "render_method": "alpha_test",
+              "face_dimming": false,
+              "ambient_occlusion": false
+            }
+          }
+        }
+      }
+    ]
   }
 }

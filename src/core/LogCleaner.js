@@ -4,6 +4,36 @@
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * 把 config 里的清理模式统一编译成 RegExp 数组。
+ * config.json 里 patterns 是字符串（"render"、"litematica:.*particle"），
+ * 而内部 cleanRenderLogs 用的是 pattern.test(line)，字符串直接塞进去必崩，
+ * 所以由 configure 统一编译；非法正则与空串丢弃，全部无效时返回 null 保留原配置。
+ *
+ * @param {Array<string|RegExp>} raw
+ * @returns {RegExp[]|null}
+ */
+function normalizePatterns(raw) {
+    if (!Array.isArray(raw)) return null;
+    const out = [];
+    for (const item of raw) {
+        if (item instanceof RegExp) { out.push(item); continue; }
+        if (typeof item !== 'string') continue;
+        const s = item.trim();
+        if (!s) continue;
+        try {
+            const re = new RegExp(s, 'i');
+            // 能匹配空串的模式（"[]"、"a*"、"(?:)" …）等于把每一行都判成渲染噪音，
+            // 一旦写进 config 就是"清空日志"，直接丢弃。
+            if (re.test('')) continue;
+            out.push(re);
+        } catch (e) {
+            // 非法正则：跳过这一条，不影响其余模式
+        }
+    }
+    return out.length ? out : null;
+}
+
 class LogCleaner {
     constructor() {
         this.config = {
@@ -23,6 +53,10 @@ class LogCleaner {
 
         this.isRunning = false;
         this.lastScanTime = 0;
+        // 启动期信息日志开关（config 的 misc.verboseStartupLog）。
+        // 默认静默：启动/停止/配置更新这几条每次启动都一样，属于控制台噪音；
+        // warn/error 与"清理了多少行"这类结果日志不受影响。
+        this.verboseStartup = false;
         this.stats = {
             totalScans: 0,
             totalLinesRemoved: 0,
@@ -35,18 +69,32 @@ class LogCleaner {
     }
 
     /**
+     * 启动期信息日志开关（由 index.js 按 config 的 misc.verboseStartupLog 注入）
+     * @param {Boolean} v
+     */
+    setVerboseStartup(v) {
+        this.verboseStartup = v === true;
+    }
+
+    /**
      * 配置日志清理器
      * @param {Object} newConfig 配置选项
      */
     configure(newConfig) {
         if (newConfig.logDir) this.config.logDir = newConfig.logDir;
         if (newConfig.scanInterval) this.config.scanInterval = newConfig.scanInterval;
-        if (newConfig.patterns) this.config.patterns = newConfig.patterns;
+        // patterns 允许传字符串数组（config.json 的写法）：这里统一编译成 RegExp
+        if (newConfig.patterns) {
+            const compiled = normalizePatterns(newConfig.patterns);
+            if (compiled) this.config.patterns = compiled;
+        }
         if (newConfig.backupEnabled !== undefined) this.config.backupEnabled = newConfig.backupEnabled;
         if (newConfig.backupDir) this.config.backupDir = newConfig.backupDir;
         if (newConfig.maxBackupFiles) this.config.maxBackupFiles = newConfig.maxBackupFiles;
 
-        logger.info(`[LogCleaner] 配置已更新: 扫描间隔=${this.config.scanInterval}ms`);
+        if (this.verboseStartup) {
+            logger.info(`[LogCleaner] 配置已更新: 扫描间隔=${this.config.scanInterval}ms`);
+        }
     }
 
     /**
@@ -61,7 +109,9 @@ class LogCleaner {
         const sched = (typeof global !== 'undefined') ? global.renderScheduler : null;
         if (sched && sched.has && sched.has('log-cleaner')) {
             sched.enable('log-cleaner', true);
-            logger.info(`[LogCleaner] 自动清理由统一调度器驱动，扫描间隔: ${this.config.scanInterval}ms`);
+            if (this.verboseStartup) {
+                logger.info(`[LogCleaner] 自动清理由统一调度器驱动，扫描间隔: ${this.config.scanInterval}ms`);
+            }
             return;
         }
 
@@ -69,7 +119,9 @@ class LogCleaner {
             this.cleanRenderLogs();
         }, this.config.scanInterval);
 
-        logger.info(`[LogCleaner] 自动清理已启动，扫描间隔: ${this.config.scanInterval}ms`);
+        if (this.verboseStartup) {
+            logger.info(`[LogCleaner] 自动清理已启动，扫描间隔: ${this.config.scanInterval}ms`);
+        }
     }
 
     /**
@@ -83,7 +135,9 @@ class LogCleaner {
             clearInterval(this._timer);
             this._timer = null;
         }
-        logger.info('[LogCleaner] 自动清理已停止');
+        if (this.verboseStartup) {
+            logger.info('[LogCleaner] 自动清理已停止');
+        }
     }
 
     /**

@@ -8,11 +8,11 @@
       }
     },
     "components": {
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.lit_fire",
       "minecraft:material_instances": {
         "*": {
           "texture": "ghost_soul_fire_0",
-          "render_method": "blend",
+          "render_method": "alpha_test",
           "face_dimming": false,
           "ambient_occlusion": false
         }

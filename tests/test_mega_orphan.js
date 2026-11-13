@@ -388,7 +388,7 @@ check('startRender 前自动清掉本人的孤儿快照（否则新会话会把 
     assert.strictEqual(ok, true, '新投影应正常开始');
     assert.strictEqual(W.get(wkey(1, 2, 3, 0)) && W.get(wkey(1, 2, 3, 0)).type, 'minecraft:air',
         '孤儿格的 ghost 必须先被还原');
-    assert.strictEqual(snap.has('proj-P1-0-1793443424310'), false, '孤儿会话应已销毁');
+    assert.strictEqual(snap.has('proj-P1-0-1793443424310'), false, '无主会话应已销毁');
     assert.strictEqual(expect.count(), 0, '孤儿期望应已清空');
 });
 

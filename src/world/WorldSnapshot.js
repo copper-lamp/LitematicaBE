@@ -349,7 +349,7 @@ class WorldSnapshot {
     }
 
     /**
-     * 启动时处理孤儿会话（上次异常退出留下的快照）
+     * 启动时处理无主会话（上次异常退出留下的快照）
      * @param {{shouldRestore?: function(number,number,number,number):boolean, limit?: number,
      *          restoreMega?: boolean, skip?: function(object):boolean}} [opts]
      *        restoreMega: true 时，MEGA 会话（meta.mega）**无条件还原**——它的注入状态只活在
@@ -392,8 +392,13 @@ class WorldSnapshot {
                 } catch (e) { /* 忽略 */ }
             }
         }
+        // 唯一的一条汇总（调用方不得再打一份）：残留格数只有这里知道，缺了它运维看不出"还没收拾干净"
         if (total.sessions) {
-            this._info(`孤儿会话：${total.sessions} 个 / 还原 ${total.restored} 格 / 保留待撤销 ${total.held} 格 / 保留现状 ${total.kept} / 跳过 ${total.skipped} / 失败 ${total.failed}`);
+            const rest = total.remaining ? ` / 残留 ${total.remaining}` : '';
+            this._info(`无主会话：${total.sessions} 个 / 还原 ${total.restored} 格 / 保留待撤销 ${total.held} 格 / 保留现状 ${total.kept} / 跳过 ${total.skipped} / 失败 ${total.failed}${rest}`);
+        }
+        if (total.remaining > 0) {
+            this._warn(`仍有 ${total.remaining} 格未还原（区块未加载居多），已保留待下次重试`);
         }
         return total;
     }

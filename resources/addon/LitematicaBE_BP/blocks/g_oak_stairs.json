@@ -20,7 +20,7 @@
       "minecraft:material_instances": {
         "*": {
           "texture": "ghost_oak_planks",
-          "render_method": "blend",
+          "render_method": "alpha_test",
           "face_dimming": false,
           "ambient_occlusion": false
         }
@@ -35,7 +35,7 @@
       "minecraft:transformation": {
         "rotation": [
           0,
-          0,
+          180,
           0
         ],
         "scale": [
@@ -52,29 +52,7 @@
     },
     "permutations": [
       {
-        "condition": "query.block_state('lit:dir') == 0",
-        "components": {
-          "minecraft:transformation": {
-            "rotation": [
-              0,
-              90,
-              0
-            ],
-            "scale": [
-              1,
-              1,
-              1
-            ],
-            "translation": [
-              0,
-              0,
-              0
-            ]
-          }
-        }
-      },
-      {
-        "condition": "query.block_state('lit:dir') == 1",
+        "condition": "q.block_state('lit:dir') == 0",
         "components": {
           "minecraft:transformation": {
             "rotation": [
@@ -96,7 +74,29 @@
         }
       },
       {
-        "condition": "query.block_state('lit:dir') == 2",
+        "condition": "q.block_state('lit:dir') == 1",
+        "components": {
+          "minecraft:transformation": {
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('lit:dir') == 2",
         "components": {
           "minecraft:transformation": {
             "rotation": [
@@ -118,12 +118,12 @@
         }
       },
       {
-        "condition": "query.block_state('lit:dir') == 3",
+        "condition": "q.block_state('lit:dir') == 3",
         "components": {
           "minecraft:transformation": {
             "rotation": [
               0,
-              0,
+              90,
               0
             ],
             "scale": [

@@ -1,4 +1,4 @@
-// BinaryChunkStorage v2.1 — .mcmega 二进制分块存储
+// BinaryChunkStorage v2.0 — .mcmega 二进制分块存储
 // 采用与 .litematic 相同的压缩策略：调色板 + 位打包 + GZip 压缩
 // 分块大小: 32×32×32 (32768 个位置)
 // 使用 Node.js 内置 zlib 模块，确保压缩真正生效
@@ -152,7 +152,7 @@ class BinaryChunkStorage {
         const buffer = Buffer.alloc(totalBytes);
         const mask = (1 << bitsPerEntry) - 1;
 
-        // 先构建位置→paletteId的映射
+        // 先构建 位置 到 paletteId 的映射
         const posMap = new Uint32Array(CHUNK_TOTAL);
         for (const block of blocks) {
             const rx = ((block.pos[0] % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
@@ -358,6 +358,10 @@ class BinaryChunkStorage {
 
         if (magic !== MCMEGA_MAGIC) {
             throw new Error(`Invalid .mcmega magic: 0x${magic.toString(16)}`);
+        }
+
+        if (version !== MCMEGA_VERSION) {
+            throw new Error(`Unsupported .mcmega version: ${version} (expected ${MCMEGA_VERSION})`);
         }
 
         let offset = HEADER_SIZE;
