@@ -63,7 +63,7 @@ function check(name, fn) {
 
     const D = 0, X = 10, Y = 64, Z = 10;
 
-    // 1. 铺 ghost（模拟 GhostProbe.lay 的那一步）
+    // 1. 铺 ghost（等价于渲染器写一格 ghost 后登记期望）
     setRaw(X, Y, Z, D, 'lit:g_stone');
     store.set(D, X, Y, Z, 'lit:g_stone');
     check('铺 ghost 后期望集合有 1 条', () => assert.strictEqual(store.count(), 1));

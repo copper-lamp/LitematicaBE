@@ -191,7 +191,7 @@ See `config.json` for the update check configuration.
 When not using lip, download `LitematicaBE-<version>.zip` from the release:
 
 1. Extract `plugins/LitematicaBE/` into the BDS `plugins/` directory;
-2. Place `LitematicaBE-BP/` and `LitematicaBE-RP/` into the BDS `behavior_packs/` and `resource_packs/` respectively;
+2. Place `LitematicaBE-server-BP/` and `LitematicaBE-server-RP/` into the BDS `behavior_packs/` and `resource_packs/` respectively;
 3. Enable the packs in the world as described in Quick Start step 4, then restart the server.
 
 ## Repository layout

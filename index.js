@@ -49,7 +49,6 @@ const { UpdateChecker, formatLogLine } = require('./src/net/UpdateChecker');
 // Ghost 子系统
 const { GhostBlockRegistry } = require('./src/ghost/GhostBlockRegistry');
 const { GhostGuard } = require('./src/ghost/GhostGuard');
-const { GhostProbe } = require('./src/ghost/GhostProbe');
 const { GhostExpectStore } = require('./src/ghost/GhostExpectStore');
 const { AddonVersionCheck } = require('./src/ghost/AddonVersionCheck');
 const { GhostSelfCheck } = require('./src/ghost/GhostSelfCheck');
@@ -131,14 +130,11 @@ const addonCheck = new AddonVersionCheck({ logger });
 
 // 写世界前的原方块快照（data/sessions/）。启动时先收拾上次异常退出留下的会话，
 // 再补 ghost —— 顺序不能反：先还原成"原来的世界"，再按期望集合重放 ghost。
-// 注意创建顺序：GhostProbe 要用它做"先备再写"，所以必须在 ghostProbe 之前建。
+// 注意创建顺序：GhostRenderer / ProjectionRenderer 都要用它做"先备再写"，必须早于渲染管线建。
 const worldSnapshot = new WorldSnapshot({
     logger,
     isGhost: (t) => ghostRegistry.isGhost(t),
 }).load();
-
-// 探针铺墙前逐格记录原方块，undo 通过快照还原
-const ghostProbe = new GhostProbe(ghostRegistry, ghostExpect, addonCheck, worldSnapshot);
 
 // ═══════════════════ 渲染管线（ghost 方块取代粒子） ═══════════════════
 // 3.0.0 起投影不再 spawn 粒子，而是在世界里写 lit:g_* 真实方块
@@ -202,7 +198,6 @@ global.blockVerifier = blockVerifier;
 global.materialCounter = materialCounter;
 global.ghostRegistry = ghostRegistry;
 global.ghostGuard = ghostGuard;
-global.ghostProbe = ghostProbe;
 global.ghostExpect = ghostExpect;
 global.addonCheck = addonCheck;
 global.worldSnapshot = worldSnapshot;
@@ -1034,10 +1029,10 @@ function buildConfigCommand() {
 }
 
 /**
- * ghost 验证探针的独立命令入口。
+ * ghost 运维兜底命令的独立入口：clean（按无主快照/期望清）与 sweep（按坐标读世界清）。
  */
 function buildGhostCommand() {
-    const cmdGhost = mc.newCommand("litematica:ghost", "Ghost block probe verification", PermType.Any, 0x80);
+    const cmdGhost = mc.newCommand("litematica:ghost", "Ghost cleanup: clean | sweep", PermType.Any, 0x80);
     // 运维兜底 clean / sweep
     cmdGhost.setEnum("GhostAction", ["clean", "sweep"]);
     cmdGhost.mandatory("action", ParamType.Enum, "GhostAction", 1);

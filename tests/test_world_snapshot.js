@@ -287,12 +287,12 @@ check('begin 已存在会话 → 复用不覆盖', () => {
 // ── 14. findSessions：崩溃后按前缀找回会话 ──
 {
     const s = new WorldSnapshot({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'wsnap12-')) });
-    s.begin('probe-253540-0-111', D).blocks.set(posKey(1, 2, 3), { x: 1, y: 2, z: 3, type: 'minecraft:stone', data: 0, nbt: null });
-    s.begin('probe-999-0-222', D).blocks.set(posKey(4, 5, 6), { x: 4, y: 5, z: 6, type: 'minecraft:stone', data: 0, nbt: null });
+    s.begin('proj-253540-0-111', D).blocks.set(posKey(1, 2, 3), { x: 1, y: 2, z: 3, type: 'minecraft:stone', data: 0, nbt: null });
+    s.begin('proj-999-0-222', D).blocks.set(posKey(4, 5, 6), { x: 4, y: 5, z: 6, type: 'minecraft:stone', data: 0, nbt: null });
     check('按前缀只找回自己的会话', () => {
-        const mine = s.findSessions('probe-253540');
+        const mine = s.findSessions('proj-253540');
         assert.strictEqual(mine.length, 1);
-        assert.strictEqual(mine[0].sessionId, 'probe-253540-0-111');
+        assert.strictEqual(mine[0].sessionId, 'proj-253540-0-111');
     });
 }
 

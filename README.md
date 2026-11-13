@@ -191,7 +191,7 @@ lip install github.com/copper-lamp/LitematicaBE@3.1.0
 不使用 lip 时，可下载 Release 中的 `LitematicaBE-<版本>.zip`：
 
 1. 将 `plugins/LitematicaBE/` 解压到 BDS 的 `plugins/` 目录；
-2. 将 `LitematicaBE-BP/`、`LitematicaBE-RP/` 分别放到 BDS 的 `behavior_packs/` 与 `resource_packs/`；
+2. 将 `LitematicaBE-server-BP/`、`LitematicaBE-server-RP/` 分别放到 BDS 的 `behavior_packs/` 与 `resource_packs/`；
 3. 按「快速开始」第 4 步在世界中启用扩展包，然后重启服务器。
 
 ## 目录结构

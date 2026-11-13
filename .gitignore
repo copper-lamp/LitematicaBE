@@ -38,8 +38,15 @@ desktop.ini
 /docs/
 /work/
 /addon/
-# tools/ 下除发布构建工具外全部忽略（后期新增开发脚本自动忽略）
+# tools/ 下除发布/校验工具外全部忽略（后期新增开发脚本自动忽略）
+# 注意：这里是**白名单**，新增任何被 npm script / CI / 源码引用的 tools 文件都必须加例外；
+# 漏加时本地照跑、CI 干净检出 MODULE_NOT_FOUND —— `node tools/check-tracked.mjs` 会拦住。
 /tools/*
 !/tools/build-release.mjs
 !/tools/check-version.mjs
+!/tools/check-tracked.mjs
 !/tools/zip.mjs
+!/tools/sync-version.mjs
+# lib/ 是上面几个构建工具的共用依赖（build-release.mjs 用它做贴图半透明自检），必须入库
+!/tools/lib/
+!/tools/lib/png.js

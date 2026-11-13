@@ -6,6 +6,7 @@
   "license": "AGPL-3.0",
   "scripts": {
     "build": "node tools/build-release.mjs",
+    "check:tracked": "node tools/check-tracked.mjs",
     "check:version": "node tools/check-version.mjs",
     "version:sync": "node tools/sync-version.mjs",
     "test": "node tests/run_all.js"
