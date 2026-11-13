@@ -32,7 +32,7 @@ LitematicaBE 是 Minecraft 基岩版（BDS）的投影（Litematica）插件，�
 | `resources/pack_icon.png` | 图标；经 `tooth.json` 的 `avatar_url` 指向仓库 raw 地址 |
 | `tools/` | 构建/校验工具：`zip.mjs`（零依赖可复现 zip）、`check-version.mjs`（版本校验）、`check-tracked.mjs`（干净检出完整性，防 gitignore 漂移）、`build-release.mjs`、`sync-version.mjs`（版本统一复写）、`lib/png.js`（贴图解码，构建与测试共用）。**`.gitignore` 是白名单制（`/tools/*` + 逐条 `!`），新增被任何入口引用的文件必须加例外**，否则本地照跑、CI 干净检出 `MODULE_NOT_FOUND`（2026-11-14 事故：`lib/png.js` 与 `sync-version.mjs` 都漏了）。工作区里另有**未入库**的本地工具（`model-viewer/`、`gen_block_geo.js`、`flattening_map.json`、`variant_flattening_map.json` 等），它们被白名单排除，**不要被 npm script / CI / `src/` 引用** |
 | `tests/` | **离线回归测试（已入库）**：37 个 `test_*.js` + 2 个体检器（`check_*`）+ `run_all.js`；`npm test` 串跑 39 个脚本（547 项断言），任一失败非零退出，CI 在 build 前执行 |
-| `.github/workflows/` | `ci.yml`（push/PR 校验 + 测试 + 构建）、`release.yml`（tag → Release） |
+| `.github/workflows/` | `ci.yml`（push/PR 校验 + 测试 + 构建）、`release.yml`（**手动触发**：Actions → Release → Run workflow 并填 `tag`；push tag 不再自动发版） |
 | `build/` | **生成物**，已被 gitignore，勿手改 |
 
 `test_nbt.js` 是本地调试脚本，不属于发布内容。
@@ -62,8 +62,13 @@ node --check index.js     # 语法检查（CI 只对 index.js 与 src/ 下全部
 1. 插件版本只改一处：`index.js` 的 `PLUGIN_VERSION`，然后 `npm run version:sync`（`tools/sync-version.mjs`）回写 `package.json` / `manifest.json` / `tooth.json`；`PLUGIN_VERSION_TUPLE` 与 `ll.registerPlugin` 的三元组自动派生。`npm run check:version` 会强制全部四处字符串 + 第 5 处三元组 + addon 五处 + `CHANGELOG.md` 里必须有对应的 `## [<ver>]` 段落。完整流程见 `VERSIONING.md`
 2. 在 `CHANGELOG.md` 添加 `## [<ver>] - <日期>` 段落（Release notes 由此抽取）
 3. 本地验证：`node tools/check-version.mjs v<ver>` → `npm run build`
-4. 提交 → `git push origin main` → `git tag v<ver>` → `git push origin v<ver>`
-5. `release.yml` 自动构建并上传资产；tag 含 `-` 时自动标记 prerelease
+4. 提交 → `git push origin main` → `git tag v<ver>` → `git push origin v<ver>`。**tag 只是版本标记，不再触发任何工作流**
+5. **手动发布**：GitHub → Actions → `Release` → Run workflow，填 `tag`（如 `v3.1.0`）。四个开关：
+   - `publish=false`：只构建并留 artifact（`LitematicaBE-<tag>`），资产自己下载上传——最"全手动"的一档，工作流不碰 Release
+   - `sync_notes=false`：不覆盖你手写的标题与说明，只覆盖同名资产（`--clobber`）
+   - `verify=relaxed`：跳过 tag↔代码版本、gitignore 漂移、CHANGELOG 段落三道校验；`npm run build` 内部的清单四处版本 + addon 五处**仍会执行**（那是产物本身的一致性，跳过会打出装不上的包）
+   - `prerelease`：手动标记预发布；tag 自带 `-` 后缀（`v3.2.0-beta.1`）自动按预发布处理
+   发布步骤幂等：Release 已存在就 `gh release upload --clobber`（是否 `edit` 由 `sync_notes` 决定），不存在才 `create`
 
 ## 不可违反的约定
 
