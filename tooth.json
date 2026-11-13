@@ -28,22 +28,22 @@
         {
           "type": "zip",
           "urls": [
-            "https://{{tooth}}/releases/download/v{{version}}/LitematicaBE-server-{{version}}.zip"
+            "https://{{tooth}}/releases/download/v{{version}}/LitematicaBE-{{version}}.zip"
           ],
           "placements": [
             {
               "type": "dir",
-              "src": "plugin/",
+              "src": "plugins/LitematicaBE/",
               "dest": "plugins/LitematicaBE/"
             },
             {
               "type": "dir",
-              "src": "packs/LitematicaBE_BP/",
+              "src": "LitematicaBE-server-BP/",
               "dest": "behavior_packs/LitematicaBE_BP/"
             },
             {
               "type": "dir",
-              "src": "packs/LitematicaBE_RP/",
+              "src": "LitematicaBE-server-RP/",
               "dest": "resource_packs/LitematicaBE_RP/"
             }
           ]
@@ -56,32 +56,6 @@
         "plugins/LitematicaBE/exports/",
         "plugins/LitematicaBE/logs/"
       ],
-      "remove_files": []
-    },
-    {
-      "label": "client",
-      "platform": "win-x64",
-      "assets": [
-        {
-          "type": "zip",
-          "urls": [
-            "https://{{tooth}}/releases/download/v{{version}}/LitematicaBE-client-{{version}}.zip"
-          ],
-          "placements": [
-            {
-              "type": "dir",
-              "src": "resource_packs/LitematicaBE_RP/",
-              "dest": "resource_packs/LitematicaBE_RP/"
-            },
-            {
-              "type": "dir",
-              "src": "behavior_packs/LitematicaBE_BP/",
-              "dest": "behavior_packs/LitematicaBE_BP/"
-            }
-          ]
-        }
-      ],
-      "preserve_files": [],
       "remove_files": []
     }
   ]

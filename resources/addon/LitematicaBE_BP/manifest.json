@@ -2,7 +2,7 @@
   "format_version": 2,
   "header": {
     "name": "§6LitematicaBE Ghost Blocks",
-    "description": "幽灵方块行为包（LitematicaBE 投影渲染载体）\n仅服务端 + 客户端同时安装时生效",
+    "description": "LitematicaBE 投影渲染载体行为包\n基岩版服务器一站式投影集成最佳方案",
     "uuid": "70c71811-78e1-4b8f-803f-1f060db51f5d",
     "version": [
       1,

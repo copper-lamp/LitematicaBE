@@ -27,7 +27,7 @@
   </p>
 </div>
 
-LitematicaBE 是一个面向基岩版（BDS + LeviLamina）服务端的投影插件：同时支持读取 .litematica 及 .mcstructure 双格式。采用 geometry 原生自定义方块写入投影，支持超大文件、逐层查看、投影打印机、litematica格式导出等实用功能。致力于为基岩版服务器提供一站式投影服务
+LitematicaBE 是一个面向基岩版（BDS + LeviLamina）服务端的投影集成插件：跨版本兼容能力，适用大部分服务端。同时支持读取 .litematica 及 .mcstructure 双格式。采用 geometry 原生自定义方块写入投影，支持超大文件、逐层查看、投影打印机、一键放置、投影及结构文件导出等实用功能。致力于为基岩版服务器提供一站式投影服务。
 
 ## 快速开始
 
@@ -128,7 +128,6 @@ lip install github.com/copper-lamp/LitematicaBE@3.1.0
 # 工具命令
 /litematica:logclean status|clean|config   # 日志清理
 /litematica:config reload|reset|get <key>  # 配置管理
-/litematica:ghost lay|undo|info|restore    # ghost 测试
 /litematica:web status|start|stop|restart  # 网页上传站
 /litematica:web token|url                  # 查看/重生成上传令牌、访问地址
 ```
@@ -153,19 +152,6 @@ lip install github.com/copper-lamp/LitematicaBE@3.1.0
 
 上传站配置参数见 `config.json`
 
-### 版本更新检查
-
-服务端启动、插件被激活时，向 GitHub Release 问一次最新版本，结果只往控制台打一行日志：
-
-1. 有新版：`[LitematicaBE]发现新版本vX.Y.Z，前往https://github.com/copper-lamp/LitematicaBE以了解更多`；
-2. 已是最新：`[LitematicaBE]当前已是最新版本`；
-3. 取数顺序：GitHub API → 官方网页（API 不可用时读 `releases/latest` 的 302）→ `updateCheck.mirror`（若配置，支持 `{repo}` 占位，例如 `"mirror": "https://gh-proxy.com/https://api.github.com/repos/{repo}/releases/latest"`）；
-4. 只查这一次，不复查、不重试；断网、被墙、限流只打一条 `[LitematicaBE]版本检查失败：…`，插件其它功能完全不受影响；
-5. 只读元数据：**不下载、不写入、不自动更新**；
-6. 关闭：`"updateCheck": { "enabled": false }` —— 完全不联网，连任务都不注册。
-
-更新检查配置参数见 `config.json`
-
 ### 逐层建造
 
 1. 投影操作面板中开启**逐层显示**。
@@ -187,12 +173,18 @@ lip install github.com/copper-lamp/LitematicaBE@3.1.0
 ### 保存原理图
 
 1. 打开菜单点击**保存投影**，点击「开始选区」，用木剑右键选取两个对角点；
-2. 选区完成后先在表单顶部的「导出格式」里选：`.litematic`（Java 版 Litematica）/ `.mcstructure`（基岩版结构方块文件）/ 两者都导出；
-3. 再输入名称与描述即可保存。`.mcstructure` **不压缩**（约 8 字节/格），因此受 `schematicSave.maxVolume` 限制（默认 100 万格 ≈ 100×100×100）；超限的选区会在读取任何方块之前就被拒绝。
+2. 选区完成后先在表单顶部的「导出格式」里选：`.litematic`（Java 版投影文件）/ `.mcstructure`（基岩版结构文件）/ 两者都导出；
+3. 再输入名称与描述（可选）即可保存。
 
 ### 验证
 
 放置投影后在投影操作面板点击**验证投影**，系统会报告匹配 / 差异 / 缺失 / 错误方块。
+
+### 版本更新检查
+
+服务端启动、插件被激活时，向 GitHub Release 联网检查版本更新。
+
+更新检查配置见 `config.json`
 
 ## 手动安装
 
@@ -206,28 +198,29 @@ lip install github.com/copper-lamp/LitematicaBE@3.1.0
 
 ```text
 LitematicaBE/
-├── index.js                        # 插件入口：命令注册、事件、各子系统装配
-├── manifest.json                   # LSE 插件清单（可被直接复制进 plugins/）
-├── tooth.json                      # lip 包清单（v3，含服务端默认变体与 client 变体）
-├── config.json                     # 用户配置（允许 // 注释与尾随逗号）
+├── index.js                        # 插件入口
+├── manifest.json                   # LSE 插件清单
+├── tooth.json                      # lip 包清单（v3）
+├── config.json                     # 用户配置
 ├── package.json                    # 运行时依赖（仅 xlsx）
 ├── src/
-│   ├── core/                       # NBT、.litematic 解析、流式加载、Mega 分块存储、配置、日志、选区
-│   ├── render/                     # 渲染调度：ProjectionRenderer、RenderScheduler、LODRenderer、MegaProjectionRenderer
+│   ├── core/                       # 功能核心
+│   ├── render/                     # 渲染调度
 │   ├── ghost/                      # ghost 方块注册/守护/校验，addon 版本一致性检查
 │   ├── easyplace/                  # 轻松放置：射线、库存、放置校验
 │   ├── mappings/                   # Java ↔ 基岩方块/状态映射
+│   ├── net/                        # 更新检查
 │   ├── ui/                         # 表单 UI
 │   ├── utils/                      # 材质统计等工具
 │   ├── data/                       # 存档、世界快照
 │   ├── world/                      # 世界相关模块
-│   └── web/                        # 内置 HTTP 上传站：WebUploadServer、upload.html、uploadGuard
+│   └── web/                        # 内置 HTTP 上传站
 ├── resources/
 │   ├── pack_icon.png               # 项目图标
-│   ├── addon/                      # BP / RP 源文件（LitematicaBE_BP、_RP，已入库）
+│   ├── addon/                      # BP / RP 源文件（LitematicaBE_BP、_RP）
 │   └── data/                       # 运行时索引：ghost_index.json、addon_expected.json
-├── tools/                          # 构建工具：zip.mjs、check-version.mjs、build-release.mjs（仅这三个入库）
-├── tests/                          # 离线回归测试（35 个 test_*.js + 2 个体检器 + run_all.js；npm test 串跑）
+├── tools/                          # 构建工具
+├── tests/                          # 离线回归测试
 └── .github/workflows/              # ci.yml（push/PR 校验 + 测试 + 构建）、release.yml（tag → Release）
 ```
 
@@ -245,12 +238,12 @@ npm run build
 
 | 文件 | 用途 |
 | ---- | ---- |
-| `LitematicaBE-<版本>.zip` | 手动安装包 |
+| `LitematicaBE-<版本>.zip` | 手动安装包（包含插件本体与资源包） |
 | `SHA256SUMS.txt` | 校验和 |
 
 ## 常见问题
 
-**Q：为什么部分功能存在问题？**
+**Q：为什么我发现部分功能存在问题？**
 A：第三代 LitematicaBE 正在重构更新中，部分功能尚未经大范围严格测试，若发现问题请向开发者反馈处理。
 
 **Q：投影显示为未知或错误材质？**
@@ -263,10 +256,7 @@ A：插件与服务端 addon（BP/RP） 必须为同批版本。重新执行 `/l
 A：受限于基岩版，帧率取决于玩家客户端渲染能力，服务端插件无法直接解决该问题。数十万级超大投影建议先拆分或用逐层显示。（后期将推出相应优化）
 
 **Q：保存的原理图能在 Java 版打开吗？**
-A：选 `.litematic` 时可以，格式兼容 Java 版 Litematica。
-
-**Q：保存的 `.mcstructure` 和结构方块是什么关系？**
-A：只是同一种文件格式。`.mcstructure` 由结构方块导出/加载，但文件本身只是未压缩的小端 NBT，本插件直接读写它，因此**不受结构方块 64×384×64 的选取/放置范围限制**；唯一的上限是 `schematicSave.maxVolume`。
+A： 以 `.litematic` 格式导出能接兼容 Java 版 Litematica 并直接使用。
 
 ## 贡献
 
@@ -284,4 +274,4 @@ GitHub：<https://github.com/copper-lamp/LitematicaBE>
 ## 许可证
 
 - LitematicaBE 项目使用 AGPL-3.0 许可证。
-- 使用修改版本并分发或用于提供服务时必须继续使用 AGPL-3.0，并提供源代码。
+- 使用修改版本并分发或用于提供服务时必须继续使用 AGPL-3.0，并公开源代码。

@@ -50,7 +50,7 @@ jobs:
             *-*) flags="--prerelease" ;;
           esac
           shopt -s nullglob
-          files=(build/*.zip build/*.mcaddon build/SHA256SUMS.txt)
+          files=(build/*.zip build/SHA256SUMS.txt)
           gh release create "$GITHUB_REF_NAME" \
             --title "LitematicaBE $GITHUB_REF_NAME" \
             --notes-file release-notes.md \

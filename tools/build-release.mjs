@@ -209,33 +209,11 @@ function verifyAddon() {
 fs.rmSync(BUILD, { recursive: true, force: true });
 fs.mkdirSync(BUILD, { recursive: true });
 
-const serverZip = path.join(BUILD, `LitematicaBE-server-${version}.zip`);
-writeZip(serverZip, [
-    ...pluginEntries('plugin/'),
-    ...packEntries('packs/LitematicaBE_BP/', 'LitematicaBE_BP'),
-    ...packEntries('packs/LitematicaBE_RP/', 'LitematicaBE_RP'),
-]);
-
-const clientZip = path.join(BUILD, `LitematicaBE-client-${version}.zip`);
-writeZip(clientZip, [
-    ...packEntries('resource_packs/LitematicaBE_RP/', 'LitematicaBE_RP'),
-    ...packEntries('behavior_packs/LitematicaBE_BP/', 'LitematicaBE_BP'),
-]);
-
-// mcaddon 直接由入库的 BP/RP 打包，避免与 zip 产物出现版本漂移
-const mcaddonTarget = path.join(BUILD, `LitematicaBE-client-${version}.mcaddon`);
-const mcaddonRoot = `LitematicaBE-${expected.addonVersion.join('.')}/`;
-writeZip(mcaddonTarget, [
-    ...packEntries(`${mcaddonRoot}BP/`, 'LitematicaBE_BP'),
-    ...packEntries(`${mcaddonRoot}RP/`, 'LitematicaBE_RP'),
-]);
-
 const legacyZip = path.join(BUILD, `LitematicaBE-${version}.zip`);
 writeZip(legacyZip, [
     ...pluginEntries('plugins/LitematicaBE/'),
     ...packEntries('LitematicaBE-server-BP/', 'LitematicaBE_BP'),
     ...packEntries('LitematicaBE-server-RP/', 'LitematicaBE_RP'),
-    { name: `LitematicaBE-client-${version}.mcaddon`, path: mcaddonTarget },
 ]);
 
 const sums = fs.readdirSync(BUILD)
@@ -247,7 +225,7 @@ const sums = fs.readdirSync(BUILD)
     });
 fs.writeFileSync(path.join(BUILD, 'SHA256SUMS.txt'), `${sums.join('\n')}\n`);
 
-for (const name of [serverZip, clientZip, legacyZip, mcaddonTarget].map((p) => path.basename(p))) {
+for (const name of [legacyZip].map((p) => path.basename(p))) {
     const size = fs.statSync(path.join(BUILD, name)).size;
     console.log(`[build] ${name}  ${(size / 1024 / 1024).toFixed(2)} MB`);
 }

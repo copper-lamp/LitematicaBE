@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-11-14
+
+### Added
+
+- **内置文件上传站** - 加入内置 http 服务器，调用 ll 网络接口，插件启动时自动拉起上传站；允许任何持有 TOKEN 密钥玩家访问服务器并上传投影 / 结构文件至插件；热上传即时生效，无需重启服务端。
+- **`.mcstructure` 读写双向支持** — 加载走 `McstructureLoader`（独立小端 NBT 解析，与 `.litematic` 按扩展名分流）；保存新增 `LittleEndianNBTWriter` / `McstructureWriter` / `LSENbtTree`，选区保存表单加「导出格式」下拉（`.litematic` / `.mcstructure` / 两者），基岩版结构文件大小超出`maxVolume`（默认 100 万格）则在读取前截停。
+- **同一玩家多投影并存** — ghost 会话身份升维为 `xuid::projectionId`，每份投影各有独立的会话、快照与撤销账本；新增 `setPrimaryProjection()` 只切木剑控制目标而不重铺不撤会话、`/litematica select`、菜单「选择木剑控制的投影 / 卸载某个投影」，`loadedProjections` 与逐投影层号持久化，旧存档自动迁移。MEGA 同一图纸放两份时按 `stateIdFor` 隔离注入状态。
+- **`/litematica:ghost sweep` 兜底清理** — 快照与期望都丢失时按坐标扫描世界，把 `lit:g_*` 写回空气：默认以自身为中心 5×5 区块、纵向 ±32 层，支持 `sweep N`、`box x1 y1 z1 x2 y2 z2` 与 `dry` 演练；只碰 ghost、跳过活跃会话的格、区块未加载则不盲写。
+- **启动时检查新版本发布** — `src/net/UpdateChecker.js`，取数顺序为官方 API `releases/latest` → 官方网页 302 `location` → 自定义 `updateCheck.mirror`；`enabled=false` 时不注册调度任务、不联网。异步回调内只写纯数据（无 EngineScope），日志由一次性 `update-check` 任务在主线程打印。
+- **新增 ghost 模型（addon更新）**
+  - **活塞伸出态**：按原版 `pistonArm` 尺寸重建 `lit_piston_extended` / `lit_piston_head`，普通与黏性拆成独立 identifier；新增 `PistonStateInfer`，在 `.mcstructure` 本体不带 `extended_bit` 时按前方是否为活塞头推断。
+  - **半砖 / 阳光传感器**：`lit_slab` / `lit_slab_top` / `lit_daylight_detector`，103 个半砖 × bottom/top/double 三件套，按面拆材质；状态全丢（MEGA 分块重载）时回落下半砖。
+  - **楼梯 / 活板门 / 门**：形态改由 identifier 承载（新增 348 个 BP 定义），倒置楼梯、开合活板门、上半门各有独立模型与贴图。
+  - **草与交叉板**：`geometry.lit_cross` 覆盖全部 66 个 `cross_texture` 方块 + 乘法染色贴图，草方块按面分材质，旧基岩别名（`grass` / `tallgrass` / `doubleplant`）按状态还原。
+
+### Changed
+
+- **配置与日志可运维化** — `config.json` 的 `logCleaner` 段真正生效（`scanInterval` / `patterns` / `backupEnabled` / `maxBackupFiles` 直通，能匹配空串的正则直接丢弃）；命令注册与 LogCleaner 启动期 INFO 默认静默，由 `misc.verboseCommandLog` / `misc.verboseStartupLog` 控制，`warn` / `error` 不受影响；保存选区的逐格日志改由 `schematicSave.verboseScan` 控制。
+- **坐标与数值输入统一收口** — 新增 `src/utils/coordText.js`，放置/保存表单的坐标输入框前置为前三个控件，与 label 数量彻底解耦；`/lit placeat` 支持 `~ ~5 ~-3` 相对坐标。
+- **版本一致性收口** — `ll.registerPlugin` 的版本三元组改为从 `PLUGIN_VERSION` 派生（LSE 会把三元组回写进 `manifest.json`），`check-version.mjs` 一次性校验插件四处版本、三元组、CHANGELOG 段落与 addon 五处版本 + 描述文本 + uuid。
+- **形态选择定论** — 在 permutation 使用 `minecraft:geometry` 在 BDS 上不生效，形态一律由 identifier 承载，permutation 保留 `minecraft:transformation` 做旋转。
+
+### Fixed
+
+- **保存 / 加载**：`includes('air')` 把整类 `*_stairs` 当空气丢掉；同名 `.litematic` / `.mcstructure` 永远只加载前者；`.litematic` 状态键带 `minecraft:` 前缀导致观察者朝向漏进 Java 调色板。
+- **放置**：半砖永远放下半砖（`type` → `vertical_half` 归一化 + 双半砖三种命名排法）、倒置楼梯不带 `upside_down_bit` 被判定状态错误、方向族（dispenser / dropper / hopper / crafter / furnace…）水平朝向整体反 180°、`.mcstructure` 直接放置后观察者朝向丢失（改用 `rawState` 保留原始键名）。
+- **渲染**：不完整方块（红石粉、火把、地毯、压力板、花草…）不再参与六面遮挡导致投影出洞；观察者 ghost 去掉重合顶面，消除 z-fighting 引起的顶面贴图抖动。
+- **删除投影不动世界** — `purgeProjection()` 三层兜底（活跃会话 → 孤儿快照按投影哈希/包围盒认亲 → 期望账本兜底），并先停 MEGA 注入；清不干净就不删记录，提示"靠近投影再删"。
+
+
 ## [3.0.2] - 2026-11-1
 
 ### Fixed
