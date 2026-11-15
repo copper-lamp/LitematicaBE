@@ -29,6 +29,7 @@
 
 LitematicaBE 是一个面向基岩版（BDS + LeviLamina）服务端的投影集成插件：跨版本兼容能力，适用大部分服务端。同时支持读取 .litematica 及 .mcstructure 双格式。采用 geometry 原生自定义方块写入投影，支持超大文件、逐层查看、投影打印机、一键放置、投影及结构文件导出等实用功能。致力于为基岩版服务器提供一站式投影服务。
 
+![show](https://pic1.imgdb.cn/i/034xrBcd6DYfysHJjWCIMi.png)
 ## 快速开始
 
 > [!IMPORTANT]
