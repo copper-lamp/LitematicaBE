@@ -2,7 +2,7 @@
     "entry": "index.js",
     "name": "LitematicaBE",
     "type": "lse-nodejs",
-    "version": "3.1.0",
+    "version": "3.1.1",
     "author": "LitematicaBE",
     "description": "The Optimal Solution for All-in-One Projection Integration on Minecraft Bedrock Servers",
     "extraInfo": {},

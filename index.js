@@ -61,7 +61,7 @@ const { WorldSnapshot } = require('./src/world/WorldSnapshot');
 // 版本号唯一来源。manifest / package.json / tooth.json 由 `npm run check:version` 对齐到同一个字符串，
 // 这里再派生出 LSE 注册用的数字三元组。
 // 永远从 PLUGIN_VERSION 派生
-const PLUGIN_VERSION = '3.1.0';
+const PLUGIN_VERSION = '3.1.1';
 // 先切掉 `-prerelease`，再取前三段数字：`3.1.0` → [3, 1, 0]
 const PLUGIN_VERSION_TUPLE = PLUGIN_VERSION.split('-')[0]
     .split('.')
