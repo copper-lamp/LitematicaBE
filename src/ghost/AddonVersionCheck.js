@@ -410,7 +410,7 @@ class AddonVersionCheck {
             this._info(`跳过 ${this.skipped.length} 个无法解析的 manifest（${names.join(', ')}${more}；与本包校验无关）`);
         }
         if (report.state === 'ok') {
-            this._info(`addon 版本一致：${vstr(idx.version)}（索引 ${report.expected ? '与构建期望同批' : '无期望文件'}；服务端 BP ${report.deployed.bp ? '已部署' : '未校验'}）`);
+            this._info(`addon 版本一致：${vstr(idx.version)}`);
             return;
         }
         if (report.state === 'unavailable') {

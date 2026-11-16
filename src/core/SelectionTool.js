@@ -1,6 +1,9 @@
 // SelectionTool - 选区工具
 // 处理玩家使用木剑选取两个坐标点的逻辑
 
+// 玩家提示已接入国际化（LSE `i18n`，见 src/i18n/I18n.js）；未加载时回落 key 原文
+const { tell } = require('../i18n/I18n');
+
 /**
  * 取玩家所在维度 ID。
  * LSE 的 Player 对象没有 dim / dimid 属性（只有 pos 是 FloatPos，带 dim 文字名与 dimid 数字），
@@ -29,8 +32,8 @@ class SelectionTool {
             state: 'waiting_pos1',
             dimension: dimidOf(player)
         });
-        player.tell('§a请使用 §e木剑右键 §a选择第 §e1 §a个坐标点');
-        player.tell('§7提示: 手持木剑，右键点击方块即可选择');
+        tell(player, 'selection.point1');
+        tell(player, 'selection.hint');
     }
 
     /**
@@ -38,7 +41,7 @@ class SelectionTool {
      */
     cancelSelection(player) {
         this.selections.delete(player.xuid);
-        player.tell('§c选区已取消');
+        tell(player, 'selection.cancelled');
     }
 
     /**
@@ -66,7 +69,7 @@ class SelectionTool {
 
         if (!sel) return true;
         if (sel.dimension !== dimidOf(player)) {
-            player.tell('§c错误: 两个选区点必须在同一维度');
+            tell(player, 'selection.sameDimension');
             return false;
         }
 
@@ -85,21 +88,25 @@ class SelectionTool {
         if (sel.state === 'waiting_pos1') {
             sel.pos1 = pos;
             sel.state = 'waiting_pos2';
-            player.tell(`§a第 1 个坐标点已选择: §e(${pos.x}, ${pos.y}, ${pos.z})`);
-            player.tell('§a请使用 §e木剑右键 §a选择第 §e2 §a个坐标点');
+            tell(player, 'selection.pos1Selected', pos.x, pos.y, pos.z);
+            tell(player, 'selection.point2');
             return false;
         } else if (sel.state === 'waiting_pos2') {
             sel.pos2 = pos;
             sel.state = 'completed';
-            player.tell(`§a第 2 个坐标点已选择: §e(${pos.x}, ${pos.y}, ${pos.z})`);
+            tell(player, 'selection.pos2Selected', pos.x, pos.y, pos.z);
 
             // 计算选区范围
             const region = this.calculateRegion(sel.pos1, sel.pos2);
             const volume = (region.maxX - region.minX + 1) * (region.maxY - region.minY + 1) * (region.maxZ - region.minZ + 1);
 
-            player.tell(`§a选区完成!`);
-            player.tell(`§7范围: §f(${region.minX}, ${region.minY}, ${region.minZ}) §7到 §f(${region.maxX}, ${region.maxY}, ${region.maxZ})`);
-            player.tell(`§7尺寸: §f${region.maxX - region.minX + 1}×${region.maxY - region.minY + 1}×${region.maxZ - region.minZ + 1} §7= §f${volume} §7个方块`);
+            tell(player, 'selection.done');
+            tell(player, 'selection.range', region.minX, region.minY, region.minZ, region.maxX, region.maxY, region.maxZ);
+            tell(player, 'selection.size',
+                region.maxX - region.minX + 1,
+                region.maxY - region.minY + 1,
+                region.maxZ - region.minZ + 1,
+                volume);
 
             // 触发选区完成回调
             this.onSelectionComplete(player, region);

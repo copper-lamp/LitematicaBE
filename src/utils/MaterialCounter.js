@@ -4,6 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 const { bidirectionalConverter } = require('../mappings/BidirectionalBlockConverter');
+// 国际化：tell 翻译后发聊天栏
+const { tell } = require('../i18n/I18n');
 
 class MaterialCounter {
     constructor() {
@@ -191,13 +193,13 @@ class MaterialCounter {
         // 检查冷却时间
         const cooldown = this.checkCooldown(player);
         if (!cooldown.canUse) {
-            player.tell(`§c请等待 ${cooldown.remainingSeconds} 秒后再次生成材料清单`);
+            tell(player, 'mat.cooldown', cooldown.remainingSeconds);
             return null;
         }
 
         // 确保依赖已安装
         if (!this.ensureDependency('xlsx')) {
-            player.tell('§c错误：无法安装Excel依赖，请检查网络连接');
+            tell(player, 'mat.errXlsx');
             return null;
         }
 
@@ -207,7 +209,7 @@ class MaterialCounter {
         const materials = this.countMaterials(projection);
         
         if (materials.size === 0) {
-            player.tell('§c投影中没有方块数据');
+            tell(player, 'mat.errNoBlocks');
             return null;
         }
 
@@ -268,16 +270,16 @@ class MaterialCounter {
             // 获取相对路径用于显示
             const relativePath = filePath.replace(/^\.\//, '');
             
-            player.tell(`§a材料清单已生成！`);
-            player.tell(`§a共统计 ${materialArray.length} 种方块`);
-            player.tell(`§7文件位置: ${relativePath}`);
+            tell(player, 'mat.done');
+            tell(player, 'mat.count', materialArray.length);
+            tell(player, 'mat.filePath', relativePath);
             
             logger.info(`[MaterialCounter] 材料清单已生成: ${filePath}`);
             
             return filePath;
         } catch (e) {
             logger.error(`[MaterialCounter] 生成Excel失败: ${e.message}`);
-            player.tell('§c生成材料清单失败，请查看控制台日志');
+            tell(player, 'mat.failed');
             return null;
         }
     }

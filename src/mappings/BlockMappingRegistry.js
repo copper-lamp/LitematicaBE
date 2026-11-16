@@ -890,8 +890,8 @@ const javaToBedrock = {
 
     // === REDSTONE ===
     "minecraft:redstone_wire":{b:"redstone_wire",c:CAT.REDSTONE,v:VER.BETA},
-    "minecraft:redstone_torch":{b:"redstone_torch",c:CAT.REDSTONE,v:VER.BETA},
-    "minecraft:redstone_wall_torch":{b:"redstone_torch",c:CAT.REDSTONE,v:VER.BETA},
+    "minecraft:redstone_torch":{b:"redstone_torch",c:CAT.REDSTONE,v:VER.BETA,f:1},
+    "minecraft:redstone_wall_torch":{b:"redstone_torch",c:CAT.REDSTONE,v:VER.BETA,f:1},
     "minecraft:repeater":{b:"unpowered_repeater",c:CAT.REDSTONE,v:VER.BETA,f:1},
     "minecraft:comparator":{b:"unpowered_comparator",c:CAT.REDSTONE,v:VER.V1_5,f:1},
     "minecraft:observer":{b:"observer",c:CAT.REDSTONE,v:VER.V1_11,f:1},
@@ -1121,10 +1121,13 @@ const javaToBedrock = {
     "minecraft:black_shulker_box":{b:"black_shulker_box",c:CAT.FUNCTIONAL,v:VER.V1_11},
 
     // === DECORATIVE ===
-    "minecraft:torch":{b:"torch",c:CAT.DECORATIVE,v:VER.CLASSIC},
-    "minecraft:soul_torch":{b:"soul_torch",c:CAT.DECORATIVE,v:VER.V1_16},
-    "minecraft:wall_torch":{b:"torch",c:CAT.DECORATIVE,v:VER.CLASSIC},
-    "minecraft:soul_wall_torch":{b:"soul_torch",c:CAT.DECORATIVE,v:VER.V1_16},
+    // 火把类必须有 f:1：Java `facing` 要转成 BE `torch_facing_direction`。
+    // 缺这个标志时打印机会把 `{facing:"south"}` 原样 setBlock，BDS 不认这个键 →
+    // 放下的是竖立火把，贴在墙上立刻被破坏 → 打印机每轮重放，无限循环。
+    "minecraft:torch":{b:"torch",c:CAT.DECORATIVE,v:VER.CLASSIC,f:1},
+    "minecraft:soul_torch":{b:"soul_torch",c:CAT.DECORATIVE,v:VER.V1_16,f:1},
+    "minecraft:wall_torch":{b:"torch",c:CAT.DECORATIVE,v:VER.CLASSIC,f:1},
+    "minecraft:soul_wall_torch":{b:"soul_torch",c:CAT.DECORATIVE,v:VER.V1_16,f:1},
     "minecraft:lantern":{b:"lantern",c:CAT.DECORATIVE,v:VER.V1_14},
     "minecraft:soul_lantern":{b:"soul_lantern",c:CAT.DECORATIVE,v:VER.V1_16},
     "minecraft:end_rod":{b:"end_rod",c:CAT.DECORATIVE,v:VER.V1_9,f:1},

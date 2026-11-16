@@ -5,6 +5,8 @@
 // LOD 过滤在渲染时动态执行
 
 const { BinaryChunkStorage, CHUNK_SIZE } = require('./BinaryChunkStorage');
+// 国际化：tell 翻译后发聊天栏
+const { tell } = require('../i18n/I18n');
 
 const LRU_CACHE_SIZE = 200;
 const BATCH_INSERT_SIZE = 5000;
@@ -152,7 +154,7 @@ class MegaSchematicManager {
                 // 如果分块处理超过30秒，每30秒显示一次进度
                 if (player && (now - writeStartTime) > 30000 && (now - lastProgressTime) >= 30000) {
                     const pct = Math.floor(writtenChunks / chunkBuffers.size * 100);
-                    player.tell(`§7  正在写入分块... ${writtenChunks}/${chunkBuffers.size} (${pct}%)`);
+                    tell(player, 'mega.writing', writtenChunks, chunkBuffers.size, pct);
                     lastProgressTime = now;
                 }
 
@@ -200,7 +202,7 @@ class MegaSchematicManager {
             loadingTask.error = e.message;
             logger.error(`[MegaSchematic] Load failed: ${e.message}`);
             if (player) {
-                player.tell(`§c✗ 加载失败: ${e.message}`);
+                tell(player, 'mega.loadFailed', e.message);
             }
             throw e;
         }

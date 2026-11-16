@@ -6,6 +6,9 @@
 const MAX_SCAN_UP = 24;      // 从头顶往上最多找 24 格
 const CLEARANCE = 4;         // 至少离玩家 4 格高，别挡视野
 
+// 国际化：玩家可见消息走 tell/t（翻译），steps 记录保留中文原文（zh）供测试与日志
+const { tell, t, zh } = require('../i18n/I18n');
+
 function dimidOf(player) {
     const d = player && player.pos && player.pos.dimid;
     return typeof d === 'number' ? d : 0;
@@ -78,71 +81,81 @@ class GhostSelfCheck {
         const ctx = { ghostId: null, spot: null, prev: null, sessionId: null };
         let ok = true;
 
-        const step = (name, passed, detail) => {
-            steps.push({ name, ok: !!passed, detail: detail || '' });
-            this._say(player, `${passed ? '§a✅' : '§c❌'} ${name}${detail ? ` §7${detail}` : ''}`);
+        // step(nameKey, passed, detailKey?, ...detailArgs)
+        // 玩家可见行按玩家语言翻译；steps 记录保留中文原文（测试与日志依赖中文名/详情）。
+        const step = (nameKey, passed, detailKey, ...detailArgs) => {
+            const zhName = zh(nameKey);
+            const zhDetail = detailKey ? zh(detailKey, ...detailArgs) : '';
+            steps.push({ name: zhName, ok: !!passed, detail: zhDetail });
+            const dn = t(player, nameKey);
+            const dd = detailKey ? t(player, detailKey, ...detailArgs) : '';
+            this._say(player, `${passed ? '§a✅' : '§c❌'} ${dn}${dd ? ` §7${dd}` : ''}`);
             if (!passed) ok = false;
             return !!passed;
         };
 
-        this._say(player, '§6=== LitematicaBE selfcheck（写世界链路自检）===');
+        tell(player, 'selfcheck.header');
 
         try {
             // ── 1. 注册表 ──
             const reg = this.registry;
             if (!reg) {
-                step('注册表就绪', false, '未注入 GhostBlockRegistry');
+                step('selfcheck.step.reg', false, 'selfcheck.detail.regNoInject');
                 return this._done(player, steps, ok, ctx);
             }
             const rs = reg.stats ? reg.stats() : {};
             if (!reg.ready) {
-                step('注册表就绪', false, `${rs.loadError || 'ghost_index 未就绪'}；确认 data/ghost_index.json 存在`);
+                step('selfcheck.step.reg', false, 'selfcheck.detail.regNotReady', rs.loadError || 'ghost_index 未就绪');
                 return this._done(player, steps, ok, ctx);
             }
             if (!reg.ids || !reg.ids.length) {
-                step('注册表就绪', false, 'ghost_index 里没有任何方块定义');
+                step('selfcheck.step.reg', false, 'selfcheck.detail.regEmpty');
                 return this._done(player, steps, ok, ctx);
             }
-            step('注册表就绪', true, `${reg.ids.length} 种定义 / addon ${(rs.addonVersion || []).join('.') || '?'}`);
+            step('selfcheck.step.reg', true, 'selfcheck.detail.regOk', reg.ids.length, (rs.addonVersion || []).join('.') || '?');
 
             // ── 2. 写闸门 ──
             if (this.addonCheck && !this.addonCheck.isEnabled()) {
                 const rep = this.addonCheck.summary ? this.addonCheck.summary() : {};
                 const first = rep.issues ? rep.issues.find(i => i.level === 'error') : null;
-                step('addon 版本校验', false, first ? `${first.code}: ${first.message}` : '版本不一致，ghost 写入已禁用');
-                this._say(player, '§7修复：npm run build → 客户端重装 build/ 的 .mcaddon → 覆盖服务端 BP/RP → 重启');
+                step('selfcheck.step.addon', false, 'selfcheck.detail.addonMismatch', first ? `${first.code}: ${first.message}` : '版本不一致，ghost 写入已禁用');
+                tell(player, 'selfcheck.fix');
                 return this._done(player, steps, ok, ctx);
             }
-            step('addon 版本校验', true, this.addonCheck ? '一致，写入可用' : '未注入校验（跳过）');
+            if (this.addonCheck) {
+                step('selfcheck.step.addon', true, 'selfcheck.detail.addonOk');
+            } else {
+                step('selfcheck.step.addon', true, 'selfcheck.detail.addonSkip');
+            }
 
             // ── 3. 快照可用 ──
             if (!this.snapshot) {
-                step('快照可用', false, '未注入 WorldSnapshot，无法保证可撤销');
+                step('selfcheck.step.snap', false, 'selfcheck.detail.snapNoInject');
                 return this._done(player, steps, ok, ctx);
             }
-            step('快照可用', true, `目录 ${this.snapshot.stats().dir}`);
+            step('selfcheck.step.snap', true, 'selfcheck.detail.snapDir', this.snapshot.stats().dir);
 
             // ── 4. 选点 ──
             const spot = this._pickSpot(player);
             if (!spot) {
-                step('选取测试点', false, `玩家上方 ${CLEARANCE}–${MAX_SCAN_UP} 格内找不到"上下都是空气"的位置（或区块未加载）`);
+                step('selfcheck.step.spot', false, 'selfcheck.detail.spotFail', CLEARANCE, MAX_SCAN_UP);
                 return this._done(player, steps, ok, ctx);
             }
             if (mc.getBlock(spot.x, spot.y, spot.z, spot.dimid) === null) {
-                step('选取测试点', false, '目标格区块未加载');
+                step('selfcheck.step.spot', false, 'selfcheck.detail.spotChunk');
                 return this._done(player, steps, ok, ctx);
             }
             ctx.spot = spot;
-            step('选取测试点', true, `(${spot.x}, ${spot.y}, ${spot.z}) dim ${spot.dimid}`);
+            step('selfcheck.step.spot', true, 'selfcheck.detail.spotOk', spot.x, spot.y, spot.z, spot.dimid);
 
             // ── 5. 读原状 ──
             const prevBlock = mc.getBlock(spot.x, spot.y, spot.z, spot.dimid);
             ctx.prev = { type: prevBlock.type, tileData: prevBlock.tileData || 0 };
             if (!isAirType(ctx.prev.type)) {
-                step('读取原方块', false, `目标格是 ${ctx.prev.type}，不是空气（拒绝在非空气格上测试）`);
+                step('selfcheck.step.read', false, 'selfcheck.detail.readNotAir', ctx.prev.type);
                 return this._done(player, steps, ok, ctx);
             }
-            step('读取原方块', true, `${ctx.prev.type} (data ${ctx.prev.tileData})`);
+            step('selfcheck.step.read', true, 'selfcheck.detail.readOk', ctx.prev.type, ctx.prev.tileData);
 
             // ── 6. 快照登记 ──
             const sessionId = `selfcheck-${String((player && player.xuid) || 'unknown').replace(/[^0-9a-zA-Z]/g, '').slice(0, 12) || 'unknown'}-${Date.now()}`;
@@ -152,15 +165,15 @@ class GhostSelfCheck {
                 this.snapshot.record(sessionId, spot.x, spot.y, spot.z, ctx.prev);
                 this.snapshot.persist(sessionId);
             } catch (e) {
-                step('快照登记', false, e && e.message ? e.message : String(e));
+                step('selfcheck.step.record', false, 'selfcheck.detail.recordFail', e && e.message ? e.message : String(e));
                 return this._done(player, steps, ok, ctx);
             }
             const snapRec = this.snapshot.get(sessionId, spot.x, spot.y, spot.z);
             if (!snapRec || snapRec.type !== ctx.prev.type) {
-                step('快照登记', false, '写进快照的原方块与读到的原方块不一致');
+                step('selfcheck.step.record', false, 'selfcheck.detail.recordMismatch');
                 return this._done(player, steps, ok, ctx);
             }
-            step('快照登记', true, `已记录 ${snapRec.type} 并落盘`);
+            step('selfcheck.step.record', true, 'selfcheck.detail.recordOk', snapRec.type);
 
             // ── 7. 写幽灵 ──
             const ids = (this.registry.ids || []).filter(id => id !== this.registry.genericId);
@@ -173,18 +186,18 @@ class GhostSelfCheck {
                 wrote = false;
             }
             if (!wrote) {
-                step('写入幽灵方块', false, `mc.setBlock 返回 false（区块未加载？先靠近目标位置再试）`);
+                step('selfcheck.step.write', false, 'selfcheck.detail.writeFalse');
                 return this._done(player, steps, ok, ctx);
             }
-            step('写入幽灵方块', true, gid);
+            step('selfcheck.step.write', true, 'selfcheck.detail.writeOk', gid);
 
             // ── 8. 读回 ──
             const back = mc.getBlock(spot.x, spot.y, spot.z, spot.dimid);
             if (!back || back.type !== gid) {
-                step('读回验证', false, `读到 ${back ? back.type : 'null'}，期望 ${gid}（addon 是否双端安装？）`);
+                step('selfcheck.step.back', false, 'selfcheck.detail.backFail', back ? back.type : 'null', gid);
                 return this._done(player, steps, ok, ctx);
             }
-            step('读回验证', true, `世界返回 ${back.type}`);
+            step('selfcheck.step.back', true, 'selfcheck.detail.backOk', back.type);
 
             // ── 9. 撤销 ──
             let rev = null;
@@ -192,34 +205,34 @@ class GhostSelfCheck {
                 rev = this.snapshot.close(sessionId);
                 ctx.sessionId = null;       // close 已处理，finally 不必再关
             } catch (e) {
-                step('还原原方块', false, e && e.message ? e.message : String(e));
+                step('selfcheck.step.restore', false, 'selfcheck.detail.restoreFail', e && e.message ? e.message : String(e));
                 return this._done(player, steps, ok, ctx);
             }
             if (!rev || rev.remaining > 0) {
-                step('还原原方块', false, `仍有 ${rev ? rev.remaining : '?'} 格未还原（区块未加载）`);
+                step('selfcheck.step.restore', false, 'selfcheck.detail.restoreRemain', rev ? rev.remaining : '?');
                 return this._done(player, steps, ok, ctx);
             }
-            step('还原原方块', true, `还原 ${rev.restored} 格 / 保留 ${rev.kept} / 跳过 ${rev.skipped}`);
+            step('selfcheck.step.restore', true, 'selfcheck.detail.restoreOk', rev.restored, rev.kept, rev.skipped);
 
             // ── 10. 再读回 ──
             const after = mc.getBlock(spot.x, spot.y, spot.z, spot.dimid);
             const sameType = after && after.type === ctx.prev.type;
             const sameData = !after || (Number(after.tileData) || 0) === (ctx.prev.tileData || 0);
             if (!sameType || !sameData) {
-                step('还原校验', false, `读到 ${after ? after.type : 'null'} / data ${after ? after.tileData : '?'}，期望 ${ctx.prev.type} / ${ctx.prev.tileData}`);
+                step('selfcheck.step.vrestore', false, 'selfcheck.detail.vrestoreFail', after ? after.type : 'null', after ? after.tileData : '?', ctx.prev.type, ctx.prev.tileData);
                 return this._done(player, steps, ok, ctx);
             }
-            step('还原校验', true, `世界回到 ${after.type}`);
+            step('selfcheck.step.vrestore', true, 'selfcheck.detail.vrestoreOk', after.type);
 
             // ── 11. 残留检查 ──
             const left = this.snapshot.findSessions(`selfcheck-`) || [];
             if (left.length) {
-                step('清理残留', false, `还有 ${left.length} 个 selfcheck 快照没删`);
+                step('selfcheck.step.residue', false, 'selfcheck.detail.residueLeft', left.length);
                 return this._done(player, steps, ok, ctx);
             }
-            step('清理残留', true, 'data/sessions/ 未留下 selfcheck 文件');
+            step('selfcheck.step.residue', true, 'selfcheck.detail.residueOk');
         } catch (e) {
-            step('selfcheck 异常', false, e && e.message ? e.message : String(e));
+            step('selfcheck.step.except', false, 'selfcheck.detail.except', e && e.message ? e.message : String(e));
         }
 
         return this._done(player, steps, ok, ctx);
@@ -236,23 +249,23 @@ class GhostSelfCheck {
                 const r = this.snapshot.close(c.sessionId);
                 cleanup = r;
                 if (r.remaining > 0) {
-                    this._say(player, `§e⚠ 清理未完成：还有 ${r.remaining} 格没还原（区块未加载），已留在快照里，重启或靠近后会再试`);
-                    steps.push({ name: '兜底清理', ok: false, detail: `剩余 ${r.remaining} 格` });
+                    tell(player, 'selfcheck.cleanupRemain', r.remaining);
+                    steps.push({ name: zh('selfcheck.step.cleanup'), ok: false, detail: `${r.remaining} 格` });
                     ok = false;
                 } else {
-                    this._say(`§7兜底清理：还原 ${r.restored} 格 / 保留现状 ${r.kept}（没留下半截幽灵）`);
+                    tell(player, 'selfcheck.cleanupOk', r.restored, r.kept);
                 }
             } catch (e) {
-                this._say(player, `§c兜底清理失败：${e && e.message ? e.message : e}`);
-                steps.push({ name: '兜底清理', ok: false, detail: String(e && e.message ? e.message : e) });
+                tell(player, 'selfcheck.cleanupFail', e && e.message ? e.message : e);
+                steps.push({ name: zh('selfcheck.step.cleanup'), ok: false, detail: String(e && e.message ? e.message : e) });
                 ok = false;
             }
         }
 
         const passed = steps.filter(s => s.ok).length;
         const failed = steps.length - passed;
-        this._say(player, `${ok ? '§a' : '§c'}=== selfcheck ${ok ? '全部通过' : '未通过'}：${passed} 项通过 / ${failed} 项失败 ===`);
-        if (!ok) this._say(player, '§7把上面第一条 ❌ 连同这一行一起发我，就能定位是哪一层的问题');
+        tell(player, 'selfcheck.result', ok ? '§a' : '§c', ok ? '全部通过' : '未通过', passed, failed);
+        if (!ok) tell(player, 'selfcheck.resultHint');
         this._log(`${ok ? 'PASS' : 'FAIL'} ${passed}/${steps.length}${ok ? '' : ' :: ' + ((steps.find(s => !s.ok) || {}).name || '')}`);
         return { ok, passed, failed, steps, spot: c.spot || null, ghostId: c.ghostId || null, cleanup };
     }

@@ -28,7 +28,8 @@ class WebUploadServer {
 
         this.svr = null;
         this.sessions = new Map();     // uploadId -> 会话元数据（不含字节）
-        this.rate = new Map();         // ip -> { count, resetAt }
+        this.rate = new Map();         // ip -> { count, resetAt }（上传 init 专用限流）
+        this.globalRate = new Map();   // ip -> { count, resetAt }（全局限流，覆盖所有受保护路由）
         this.token = '';
         this.startedAt = 0;
         this.stats = { inits: 0, chunks: 0, bytes: 0, files: 0, rejected: 0, lastFile: null };
@@ -96,6 +97,12 @@ class WebUploadServer {
             allowExt: this._get('allowExt', ['.litematic', '.mcstructure']),
             overwrite: this._get('overwrite', false) === true,
             perMinute: Math.max(1, Number(this._get('maxUploadsPerMinute', 10)) || 10),
+            // 只读模式：禁止上传/删除，仅保留列出与下载（配合 allowIps 最稳）
+            readOnly: this._get('readOnly', false) === true,
+            // 全局限流：每 IP 每分钟所有受保护 API 请求数（覆盖下载/删除/列表等，不限流时易被滥用）
+            maxRequestsPerMinute: Math.max(1, Number(this._get('maxRequestsPerMinute', 60)) || 60),
+            // 下载体积上限（MB）：超过则拒绝 base64 直传，提示走服务器文件；0 = 不限制
+            downloadMaxMB: Math.max(0, Number(this._get('downloadMaxMB', 8)) || 0),
             targetDir: String(this._get('targetDir', SCHEMATIC_DIR)),
             publicUrl: String(this._get('publicUrl', '') || ''),
         };
@@ -270,6 +277,9 @@ class WebUploadServer {
             tokenRequired: c.tokenRequired,
             token: c.tokenRequired ? this.token : '(未启用)',
             tokenFile: this._tokenPath(),
+            readOnly: c.readOnly,
+            maxRequestsPerMinute: c.maxRequestsPerMinute,
+            downloadMaxMB: c.downloadMaxMB,
             sessions: this.sessions.size,
             stats: { ...this.stats },
         };
@@ -312,7 +322,10 @@ class WebUploadServer {
     }
 
     _notFound(req, res) {
-        this.logger.warn(`[Web] 未匹配的路径 ${(req && req.method) || '?'} ${(req && req.path) || '?'}`);
+        // 404 是 Web 正常行为（浏览器 /favicon.ico、公网扫描器探测等），
+        // 不占 WARN 级别刷控制台；想看谁在探测时翻 data/web_debug.log。
+        // 记录来源 IP：扫描源溯源要靠它（NodeHttpServer 已在 req.remoteAddr 上给出）。
+        this._debug(`未匹配的路径 ${(req && req.method) || '?'} ${(req && req.path) || '?'} 来自 ${(req && req.remoteAddr) || '?'}`);
         this._json(res, 404, { ok: false, error: 'not found' });
     }
 
@@ -362,9 +375,15 @@ class WebUploadServer {
 
     /**
      * 诊断日志：写 plugins/LitematicaBE/data/web_debug.log。
+     * 受 config `misc.debugLog` 开关控制（默认 false = 静默，不写文件）。
      * 只在出问题时追加，绕开 BDS 控制台/日志缓冲，方便定位 handler 内部异常。
      */
     _debug(msg) {
+        // 开关：misc.debugLog（默认关闭）。关闭时这些诊断日志完全静默，不写文件。
+        try {
+            if (!this.cfg || typeof this.cfg.get !== 'function') return;
+            if (this.cfg.get('misc.debugLog', false) !== true) return;
+        } catch (e) { return; }
         try {
             const p = path.join(path.resolve(this.dataDir), 'web_debug.log');
             fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -460,6 +479,48 @@ class WebUploadServer {
         this._json(res, code, { ok: false, error: msg });
     }
 
+    /**
+     * 统一闸门：令牌认证 + IP 白名单 + 全局限流。
+     * 所有受保护路由（list/download/delete/init/chunk/finish/abort）必须先过这里。
+     * 返回 false 表示已写入响应，调用方直接 return。
+     * 注意：即使 tokenRequired=false，IP 白名单仍然生效（缺口修复：白名单不再只作用于 init）。
+     */
+    _gate(req, res) {
+        if (!this._authorized(req)) { this._reject(res, 401, '令牌无效'); return false; }
+        if (!guard.ipAllowed(this._conf().allowIps, req && req.remoteAddr)) {
+            this._reject(res, 403, '来源地址不在白名单');
+            return false;
+        }
+        if (!this._globalRateOk(String((req && req.remoteAddr) || ''))) {
+            this._reject(res, 429, '请求过于频繁，请稍后再试');
+            return false;
+        }
+        return true;
+    }
+
+    /** 只读模式拦截：上传/删除等写操作一律 403。 */
+    _readOnlyReject(res) {
+        if (this._conf().readOnly) {
+            this._reject(res, 403, '上传站处于只读模式');
+            return true;
+        }
+        return false;
+    }
+
+    /** 每 IP 每分钟的全局请求数限制（覆盖所有受保护路由）。 */
+    _globalRateOk(ip) {
+        const perMinute = this._conf().maxRequestsPerMinute;
+        const now = Date.now();
+        const rec = this.globalRate.get(ip);
+        if (!rec || now >= rec.resetAt) {
+            this.globalRate.set(ip, { count: 1, resetAt: now + 60000 });
+            return true;
+        }
+        if (rec.count >= perMinute) return false;
+        rec.count++;
+        return true;
+    }
+
     // ─────────────── 页面 / 查询 ───────────────
 
     _index(req, res) {
@@ -484,10 +545,15 @@ class WebUploadServer {
 
     _health(req, res) {
         const c = this._conf();
-        this._json(res, 200, {
+        const base = {
             ok: true,
             plugin: 'LitematicaBE',
             running: this.isRunning(),
+        };
+        // 未带令牌只给最小信息（前端会回退默认展示），避免把 allowExt/上限/文件数泄漏给扫描者
+        if (!this._authorized(req)) return this._json(res, 200, base);
+        this._json(res, 200, {
+            ...base,
             chunkKB: c.chunkKB,
             maxFileMB: c.maxFileMB,
             allowExt: c.allowExt,
@@ -517,19 +583,24 @@ class WebUploadServer {
     }
 
     _list(req, res) {
-        if (!this._authorized(req)) return this._reject(res, 401, '令牌无效');
+        if (!this._gate(req, res)) return;
         this._json(res, 200, { ok: true, dir: this._conf().targetDir, files: this._listFiles() });
     }
 
     _download(req, res) {
-        if (!this._authorized(req)) return this._reject(res, 401, '令牌无效');
+        if (!this._gate(req, res)) return;
         const raw = pickMatch(req, 1) || '';
         const checked = guard.checkUploadName(raw, this._conf().allowExt);
         if (!checked.ok) return this._reject(res, 400, checked.error);
         const file = path.join(this._targetDir(), checked.safeName);
         if (!fs.existsSync(file)) return this._reject(res, 404, '文件不存在');
+        const c = this._conf();
         const st = fs.statSync(file);
-        if (st.size > this._conf().maxBytes) return this._reject(res, 413, '文件过大，请直接取服务器上的文件');
+        // 下载体积上限（base64 直传有内存/带宽放大风险）：超过则拒绝，提示走服务器文件
+        if (c.downloadMaxMB > 0 && st.size > c.downloadMaxMB * 1024 * 1024) {
+            return this._reject(res, 413, `文件超过 ${c.downloadMaxMB} MB，请直接取服务器上的文件`);
+        }
+        if (st.size > c.maxBytes) return this._reject(res, 413, '文件过大，请直接取服务器上的文件');
         try {
             const buf = fs.readFileSync(file);
             this._json(res, 200, { ok: true, name: path.basename(file), size: buf.length, data: buf.toString('base64') });
@@ -539,7 +610,8 @@ class WebUploadServer {
     }
 
     _deleteFile(req, res) {
-        if (!this._authorized(req)) return this._reject(res, 401, '令牌无效');
+        if (!this._gate(req, res)) return;
+        if (this._readOnlyReject(res)) return;
         const raw = pickMatch(req, 1) || '';
         const checked = guard.checkUploadName(raw, this._conf().allowExt);
         if (!checked.ok) return this._reject(res, 400, checked.error);
@@ -558,8 +630,8 @@ class WebUploadServer {
 
     _init(req, res) {
         const c = this._conf();
-        if (!this._authorized(req)) return this._reject(res, 401, '令牌无效');
-        if (!guard.ipAllowed(c.allowIps, req.remoteAddr)) return this._reject(res, 403, '来源地址不在白名单');
+        if (!this._gate(req, res)) return;
+        if (this._readOnlyReject(res)) return;
         if (!this._rateOk(String(req.remoteAddr || ''))) return this._reject(res, 429, '上传过于频繁，请稍后再试');
 
         const body = this._jsonBody(req);
@@ -621,7 +693,8 @@ class WebUploadServer {
 
     _chunk(req, res) {
         const c = this._conf();
-        if (!this._authorized(req)) return this._reject(res, 401, '令牌无效');
+        if (!this._gate(req, res)) return;
+        if (this._readOnlyReject(res)) return;
 
         const body = this._jsonBody(req);
         if (!body) return this._reject(res, 400, '请求体不是合法 JSON');
@@ -662,7 +735,8 @@ class WebUploadServer {
 
     _finish(req, res) {
         const c = this._conf();
-        if (!this._authorized(req)) return this._reject(res, 401, '令牌无效');
+        if (!this._gate(req, res)) return;
+        if (this._readOnlyReject(res)) return;
 
         const body = this._jsonBody(req);
         if (!body) return this._reject(res, 400, '请求体不是合法 JSON');
@@ -717,7 +791,8 @@ class WebUploadServer {
     }
 
     _abortReq(req, res) {
-        if (!this._authorized(req)) return this._reject(res, 401, '令牌无效');
+        if (!this._gate(req, res)) return;
+        if (this._readOnlyReject(res)) return;
         const body = this._jsonBody(req);
         const id = body ? String(body.uploadId || '') : '';
         if (id && this.sessions.has(id)) this._abortSession(id);

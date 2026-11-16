@@ -79,6 +79,10 @@ function mkCfg(overrides = {}) {
         'web.allowExt': ['.litematic', '.mcstructure'],
         'web.overwrite': false,
         'web.maxUploadsPerMinute': 100,
+        'web.readOnly': false,
+        'web.maxRequestsPerMinute': 1000,
+        'web.downloadMaxMB': 8,
+        'misc.debugLog': false,
         'web.publicUrl': '',
     }, overrides);
     return { store, get(k, d) { return k in store ? store[k] : d; } };
@@ -304,6 +308,98 @@ check('IP 白名单不匹配 403', () => {
         body: JSON.stringify({ name: 'a.litematic', size: 10 }),
     }));
     assert.strictEqual(res.status, 403);
+});
+
+check('IP 白名单对 list/download/delete 全局生效（不再只拦 init）', () => {
+    const s = mkServer('ipglobal', { 'web.allowIps': ['192.168.'] });
+    const hdr = { 'X-Upload-Token': s.svr.token };
+    // 放一个文件（直接写盘，绕过上传，专测读取/删除侧的白名单）
+    fs.writeFileSync(path.join(s.targetDir, '白名单.litematic'), fakeLitematic(256));
+    const mkOut = (path2) => mkReq({
+        method: 'GET', path: path2, headers: hdr, remoteAddr: '10.0.0.5',
+        matches: [path2, '白名单.litematic'],
+    });
+    // 白名单外 IP：list / download / delete 全部 403
+    assert.strictEqual(s.call('GET', '/api/list$', mkReq({ method: 'GET', headers: hdr, remoteAddr: '10.0.0.5' })).status, 403);
+    assert.strictEqual(s.call('GET', '/api/download/(.+)', mkOut('/api/download/白名单.litematic')).status, 403);
+    assert.strictEqual(s.call('DELETE', '/api/file/(.+)', mkReq({
+        method: 'DELETE', path: '/api/file/白名单.litematic', headers: hdr, remoteAddr: '10.0.0.5',
+        matches: ['/api/file/白名单.litematic', '白名单.litematic'],
+    })).status, 403);
+    // 白名单内 IP：正常访问
+    assert.strictEqual(s.call('GET', '/api/list$', mkReq({ method: 'GET', headers: hdr, remoteAddr: '192.168.1.9' })).status, 200);
+});
+
+check('全局限流：超过 maxRequestsPerMinute 后 429（覆盖非上传接口）', () => {
+    const s = mkServer('grate', { 'web.maxRequestsPerMinute': 3 });
+    const hdr = { 'X-Upload-Token': s.svr.token };
+    const rs = [1, 2, 3, 4].map(() => s.call('GET', '/api/list$', mkReq({ method: 'GET', headers: hdr })));
+    assert.strictEqual(rs[0].status, 200);
+    assert.strictEqual(rs[1].status, 200);
+    assert.strictEqual(rs[2].status, 200);
+    assert.strictEqual(rs[3].status, 429);
+});
+
+check('readOnly：上传/删除 403，list/download 仍可用，文件不被删', () => {
+    const s = mkServer('ro', { 'web.readOnly': true });
+    const hdr = { 'X-Upload-Token': s.svr.token };
+    const init = s.call('POST', '/api/upload/init$', mkReq({
+        body: JSON.stringify({ name: 'a.litematic', size: 10 }), headers: hdr,
+    }));
+    assert.strictEqual(init.status, 403);
+    fs.writeFileSync(path.join(s.targetDir, 'ro.litematic'), fakeLitematic(256));
+    assert.strictEqual(s.call('GET', '/api/list$', mkReq({ method: 'GET', headers: hdr })).status, 200);
+    assert.strictEqual(s.call('GET', '/api/download/(.+)', mkReq({
+        method: 'GET', path: '/api/download/ro.litematic', headers: hdr,
+        matches: ['/api/download/ro.litematic', 'ro.litematic'],
+    })).status, 200);
+    assert.strictEqual(s.call('DELETE', '/api/file/(.+)', mkReq({
+        method: 'DELETE', path: '/api/file/ro.litematic', headers: hdr,
+        matches: ['/api/file/ro.litematic', 'ro.litematic'],
+    })).status, 403);
+    assert.ok(fs.existsSync(path.join(s.targetDir, 'ro.litematic')), '只读时文件必须还在');
+});
+
+check('下载：小文件正常返回 base64，超过 downloadMaxMB 413', () => {
+    const s = mkServer('dl', { 'web.downloadMaxMB': 8 });
+    uploadFull(s, 'ok.litematic', fakeLitematic(256));
+    const good = s.call('GET', '/api/download/(.+)', mkReq({
+        method: 'GET', path: '/api/download/ok.litematic', headers: { 'X-Upload-Token': s.svr.token },
+        matches: ['/api/download/ok.litematic', 'ok.litematic'],
+    }));
+    assert.strictEqual(good.status, 200);
+    assert.strictEqual(JSON.parse(good.body).size, 256);
+    // 收紧上限后应 413（并提示走服务器文件）
+    const s2 = mkServer('dl2', { 'web.downloadMaxMB': 0.0001 });
+    uploadFull(s2, 'big.litematic', fakeLitematic(1024));
+    const capped = s2.call('GET', '/api/download/(.+)', mkReq({
+        method: 'GET', path: '/api/download/big.litematic', headers: { 'X-Upload-Token': s2.svr.token },
+        matches: ['/api/download/big.litematic', 'big.litematic'],
+    }));
+    assert.strictEqual(capped.status, 413);
+    assert.ok(JSON.parse(capped.body).error.includes('服务器'), '413 提示应引导取服务器文件');
+});
+
+check('health 未带令牌只返回最小信息，带令牌才给完整字段', () => {
+    const s = mkServer('hp');
+    const anon = JSON.parse(s.call('GET', '/api/health$', mkReq({ method: 'GET', path: '/api/health' })).body);
+    assert.strictEqual(anon.ok, true);
+    assert.strictEqual(anon.files, undefined, '未授权不应暴露文件数');
+    assert.strictEqual(anon.allowExt, undefined, '未授权不应暴露扩展名白名单');
+    const authed = JSON.parse(s.call('GET', '/api/health$', mkReq({
+        method: 'GET', path: '/api/health', headers: { 'X-Upload-Token': s.svr.token },
+    })).body);
+    assert.ok(Array.isArray(authed.allowExt));
+    assert.strictEqual(typeof authed.files, 'number');
+});
+
+check('404 兜底把来源 IP 写进 web_debug.log（开启 debugLog 时）', () => {
+    const s = mkServer('nf', { 'misc.debugLog': true });
+    const res = s.call('GET', '/(.+)', mkReq({ method: 'GET', path: '/openapi.json', remoteAddr: '203.0.113.7' }));
+    assert.strictEqual(res.status, 404);
+    const log = fs.readFileSync(path.join(s.dataDir, 'web_debug.log'), 'utf8');
+    assert.ok(log.includes('未匹配的路径'), 'debug 日志应有记录');
+    assert.ok(log.includes('203.0.113.7'), 'debug 日志应记录来源 IP');
 });
 
 check('限流：超过每分钟次数后 429', () => {

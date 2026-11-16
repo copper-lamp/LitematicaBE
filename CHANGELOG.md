@@ -2,6 +2,64 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.1] - 2026-11-16
+
+### Added
+
+- **插件新增 i18n 模块（聊天栏 + 全部 UI 表单）** — 新增 `src/i18n/` 国际化模块：`I18n.js`（唯一入口，零日志）+ `lang/zh_CN.json`、`lang/en_US.json`（各 369 键，键集与占位符结构一一对应）。
+
+  调用结构：`t(player,key,...args)` 返回按玩家语言的翻译串（UI 表单用），`tell(player,key,...args)` 翻译并发送聊天消息，`tr(key,...)` 默认语言（zh_CN），`zh(key,...)` 强制中文
+  原文（测试断言/日志步骤）。查找优先级：本地语言表（按 `pl.langCode` 归一选择）→ LSE 全局 `i18n.trl` 兜底 → 本地 zh 原文（永不显示键名）。
+  
+  覆盖模块：`UIManager`（全部表单标题/内容/按钮/下拉/输入 + 聊天提示）、`ProjectionRenderer`、`MegaProjectionRenderer`、`GhostRenderer`、`GhostSelfCheck`、`EasyPlaceManager`、`BlockVerifier`、`MaterialCounter`、`MegaSchematicManager`、`SelectionTool`。`logger.*` 控制台日志按约定不国际化。
+  
+  语言切换：按每个玩家 `pl.langCode` 实时取译（`en_us/en_GB/en_AU/en_CA/en_NZ/en→en_US`、`zh_cn/zh→zh_CN`、`zh_HK→zh_TW`），玩家改语言后重开表单/触发消息即生效。
+  键命名 `ns.sub.name`、占位符 `{}`/`{0}` 与 `§` 色码保留在值里、中英双文件同步、新表单判取消、§7 键一致性校验。
+
+### Fixed
+
+- **上传站地址展示不跟随 `web.publicUrl`** — `/litematica:web url` 的「访问地址」直接硬拼 `http://${host}:${port}/`，完全绕过了 `summary().url`，导致配置了 `web.publicUrl`（反向代理对外地址）后该命令仍显示 `http://0.0.0.0:8080/`；`status` / `start` / `token` 三处的带令牌访问地址同样硬拼 `host:port`，走反向代理时会把连不通的 `0.0.0.0:8080` 地址发给玩家。
+  修复：四处地址展示统一改用 `summary().url`（=`publicUrl || http://host:port/`）：
+  | 位置 | 命令 | 修改 |
+  |---|---|---|
+  | `index.js` `buildWebCommand` `url` case | `/litematica:web url` | `http://${s.host}:${s.port}/` → `${s.url}` |
+  | `index.js` `sendWebStatus` | `/litematica:web status`（「访问」行） | `http://${s.host}:${s.port}/?token=` → `${s.url}?token=` |
+  | `index.js` `buildWebCommand` `start` case | `/litematica:web start`（「带令牌地址」） | `http://${s.host}:${s.port}/?token=` → `${s.url}?token=` |
+  | `index.js` `buildWebCommand` `token` case | `/litematica:web token`（「访问」行） | `http://${wc.host}:${wc.port}/?token=` → `${s.url}?token=` |
+  说明：`/litematica:web status` 的「监听」行**仍显示** `host:port`（如 `0.0.0.0:8080`）——那是实际的 socket 监听地址，本就不该由 `publicUrl` 改变；只有「公共地址 / 访问地址」跟随 `web.publicUrl`。未配置 `publicUrl` 时回退逻辑不变（`http://host:port/`）。
+
+  验证：`/litematica:config get web.publicUrl` 与 `/litematica:web url` 显示一致；`publicUrl` 生效后全部地址展示均为对外地址。纯展示逻辑，不影响监听，无需重启上传站。
+
+- **部分日志静默** — `registerCommands()` 的命令注册汇总日志（`[LitematicaBE] 命令注册(load/serverStarted): N 条可用 [...]`）原本无条件打印，每次启动（加载期 + `onServerStarted` 兜底重试）都会刷一条，属启动噪音。
+
+  修复：该汇总改为与 `setupCommand` 内的单条注册日志共用同一门控——`misc.verboseCommandLog` / `misc.verboseStartupLog` 任一为 `true` 才输出，默认（两者皆 `false`）静默。排查命令注册问题时把 `misc.verboseCommandLog` 改 `true`，即可恢复这条汇总与逐条注册结果；`warn`/`error`（注册失败）始终保留。
+
+- **上传站 404 日志降级与 favicon 静默** — 兜底路由 `_notFound`（`src/web/WebUploadServer.js`）把「未匹配的路径」从 `logger.warn` 降为 `_debug`（仅写 `data/web_debug.log`，不再刷控制台 WARN）；前端 `src/web/upload.html` 增加 `<link rel="icon" href="data:,">`，浏览器打开上传页不再自动请求 `/favicon.ico`。
+
+  两者消除公网暴露后常见的日志噪音：浏览器自动请求的 `/favicon.ico`，以及互联网扫描器对 `/phpinfo`、`/SDK/*` 等路径的常规探测。这些请求命中兜底路由后仅返回 `404 {"ok":false,"error":"not found"}`，无执行风险；降级后想看谁在探测时翻 `data/web_debug.log` 即可。纯日志/前端优化，不影响路由、鉴权与上传功能。
+
+- **`misc.debugLog` 诊断日志开关（默认关闭）** — `WebUploadServer._debug()`（写 `data/web_debug.log` 的诊断日志：404 未匹配路径、框架错误、handler 异常、自检、启动信息等）原先**无条件**写文件；新增 `misc.debugLog` 配置项（默认 `false`）统一控制，关闭时所有诊断日志完全静默、不写文件。
+
+  为调试而开启：把 `config.json` 的 `misc.debugLog` 设 `true` 并重载配置（`/litematica:config reload`）或重启服务端，诊断日志落到 `data/web_debug.log`。开关放 `misc` 而非 `web`，后续其它模块的 debug 日志可复用同一开关。纯日志开关，不影响任何功能路径。
+
+  同一开关扩到的启动期日志（`misc.debugLog=true` 才打印，默认静默）：
+
+  - `index.js`：`[LitematicaBE] zlib module loaded successfully!`、`[LitematicaBE] fs module loaded successfully!`——模块加载发生在 `configManager` 创建**之前**，无法在 require 处门控，改为 configManager 就绪后按开关补打；加载失败仍走 `warn`（始终保留）。
+  - `ConfigManager`：`[ConfigManager] 配置文件加载成功: <路径>`（加载失败 `error` 始终保留）。
+  - `DataManager`：`Loaded N projections`、`Loaded data for N players`。
+
+  为让 `DataManager` 等实例构造期（早于统一 global 导出处）能读该开关，`index.js` 把 `global.configManager` 的赋值**提前**到 `configManager` 创建之后（原在 `global.*` 统一导出块，晚于 `DataManager` 构造）。`warn`/`error` 类日志不受开关影响，始终输出。
+
+### Security
+
+- **内置上传站防御缺口收口** — `allowIps` 白名单从「只拦上传 init」上提为全局闸门：新增统一入口 `_gate()`，**令牌 + IP 白名单 + 全局限流**一次校验，`list` / `download` / `delete` / `init` / `chunk` / `finish` / `abort` 七个受保护路由全部过闸；此前白名单只作用于 `init`，即使配置了白名单，公网任意 IP 仍可列目录、下载、删除投影（`src/web/WebUploadServer.js`）。
+- **新增 `readOnly` 只读模式** — `true` 时上传 / 删除 / 中止一律返回 403，仅保留列出与下载，配合 `allowIps` 作为「只下载、不收文件」场景的一档防护；对应 `config.json` 的 `web.readOnly`。
+- **新增 `maxRequestsPerMinute` 全局限流** — 每 IP 每分钟所有受保护 API 请求数上限（默认 60），覆盖此前完全不限流的下载 / 删除 / 列表，堵住刷量与带宽滥用；对应 `config.json` 的 `web.maxRequestsPerMinute`。
+- **新增 `downloadMaxMB` 下载体积上限** — 单文件下载超过阈值（默认 8 MB，`0` = 不限制）拒绝 base64 直传并提示走服务器文件，避免大文件一次性读入内存造成放大；对应 `config.json` 的 `web.downloadMaxMB`。
+- **`/api/health` 信息泄漏收敛** — 未带令牌只返回 `ok` / `plugin` / `running` 最小字段；带令牌才返回 `chunkKB` / `maxFileMB` / `allowExt` / `files`，不再把上传站内部参数与文件数暴露给扫描者。
+- **404 兜底日志补记来源** — `未匹配的路径` 诊断日志（`data/web_debug.log`，受 `misc.debugLog` 控制）现在追加请求来源 `remoteAddr`，公网扫描器探测时可据此溯源扫描源 IP。
+- **回归测试** — `tests/test_web_upload.js` 新增 6 个断言（白名单全局生效、全局限流 429、只读模式、下载上限 413、health 精简字段、404 记录来源 IP），离线回归 547 → 553 断言全绿。
+
 ## [3.1.0] - 2026-11-14
 
 ### Added

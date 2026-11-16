@@ -2,6 +2,8 @@
 
 const { CHUNK_SIZE } = require('../core/BinaryChunkStorage');
 const { DebugLogger } = require('../core/DebugLogger');
+// 国际化：t 按玩家语言取翻译，tell 翻译后发聊天栏
+const { tell, t } = require('../i18n/I18n');
 
 // 每 tick 最多读几个分块。1 块约 1–3 ms（32³ 位解码 + gunzip），固定 1 个最稳。
 const CHUNKS_PER_TICK = 1;
@@ -126,7 +128,7 @@ class MegaProjectionRenderer {
         if (!player || !schematicId) return null;
         if (!this.isEnabled()) {
             logger.info('[MegaRender] render.enableMega=false，跳过超大型投影渲染');
-            if (typeof player.tell === 'function') player.tell('§e超大投影渲染未启用（render.enableMega=false）');
+            if (typeof player.tell === 'function') tell(player, 'mega.disabled');
             return null;
         }
 
@@ -154,7 +156,7 @@ class MegaProjectionRenderer {
         }
         if (!index || index.size === 0) {
             logger.warn(`[MegaRender] 分块索引为空或缺失: ${schematicId}`);
-            if (typeof player.tell === 'function') player.tell('§c超大投影的分块数据缺失，请重新加载该投影');
+            if (typeof player.tell === 'function') tell(player, 'mega.noData');
             return null;
         }
 
@@ -285,9 +287,9 @@ class MegaProjectionRenderer {
         try {
             const pl = mc.getPlayer(state.player && state.player.xuid);
             const scope = (state.isLayerMode && state.currentLayer >= 0)
-                ? `第 ${state.currentLayer} 层`
-                : '全部层';
-            if (pl) pl.tell(`§a超大投影${scope}分块已全部入队：§e${state.injectedBlocks} §a格（铺设由 ghost 队列按 tick 推进）`);
+                ? t(pl, 'mega.layerN', state.currentLayer)
+                : t(pl, 'mega.layerAll');
+            if (pl) tell(pl, 'mega.injected', scope, state.injectedBlocks);
         } catch (e) { /* 玩家不在线 */ }
     }
 
@@ -466,9 +468,7 @@ class MegaProjectionRenderer {
     outputDebugInfo(state) {
         const player = state && state.player;
         if (!player || typeof player.tell !== 'function') return;
-        player.tell(`§8[D] 分块 ${state.injectedChunks}/${state.chunkTotal}`
-            + ` 入队 ${state.injectedBlocks} 格 去重 ${state.dupBlocks} 失败 ${state.failedChunks}`
-            + ` done=${state.done}`);
+        tell(player, 'mega.debug', state.injectedChunks, state.chunkTotal, state.injectedBlocks, state.dupBlocks, state.failedChunks, state.done);
     }
 
     setDebugMode(enabled) {

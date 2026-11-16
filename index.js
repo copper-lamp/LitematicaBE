@@ -6,14 +6,14 @@ let zlib = null;
 let fs = null;
 try {
     zlib = require('zlib');
-    logger.info("[LitematicaBE] zlib module loaded successfully!");
+    // 加载成功日志：configManager 就绪后按 misc.debugLog 补打（见 L84 后）
 } catch (e) {
     logger.warn(`[LitematicaBE] zlib not available: ${e.message}`);
 }
 
 try {
     fs = require('fs');
-    logger.info("[LitematicaBE] fs module loaded successfully!");
+    // 加载成功日志：configManager 就绪后按 misc.debugLog 补打（见 L84 后）
 } catch (e) {
     logger.warn(`[LitematicaBE] fs not available: ${e.message}`);
 }
@@ -33,6 +33,8 @@ const { BlockVerifier } = require('./src/easyplace/BlockVerifier');
 const { MaterialCounter } = require('./src/utils/MaterialCounter');
 // 坐标解析唯一实现（表单 / 命令文本 / `~` 相对坐标）
 const { toIntOr, clampCoord, parseXYZText } = require('./src/utils/coordText');
+// 国际化：LSE 的 `i18n` 全局（底层即 LL 的 ll::i18n），见 src/i18n/I18n.js
+const i18nKit = require('./src/i18n/I18n');
 
 // 导入超大型投影模块
 const { MegaSchematicManager } = require('./src/core/MegaSchematicManager');
@@ -58,12 +60,7 @@ const { WorldSnapshot } = require('./src/world/WorldSnapshot');
 
 // 版本号唯一来源。manifest / package.json / tooth.json 由 `npm run check:version` 对齐到同一个字符串，
 // 这里再派生出 LSE 注册用的数字三元组。
-//
-// ⚠ `ll.registerPlugin` 的版本会被 legacy-script-engine 在注册插件时**回写进
-// `plugins/LitematicaBE/manifest.json`**（C++ 文本模式写，LF 会变 CRLF），写成 `x.y.z`
-// （丢掉 `-prerelease` 后缀）。历史坑：这里写死过旧版本三元组（3.0.0），于是每次启动清单都被刷回
-// 3.0.0，与 PLUGIN_VERSION（3.0.3-test.6）对不上，排查"版本号自己变了"时被误判成清单被改。
-// **永远从 PLUGIN_VERSION 派生，不要写死数字数组**（check-version 会拦）。
+// 永远从 PLUGIN_VERSION 派生
 const PLUGIN_VERSION = '3.1.0';
 // 先切掉 `-prerelease`，再取前三段数字：`3.1.0` → [3, 1, 0]
 const PLUGIN_VERSION_TUPLE = PLUGIN_VERSION.split('-')[0]
@@ -81,7 +78,19 @@ ll.registerPlugin(
 
 // 配置管理器（最先初始化，供其他模块使用）
 const configManager = new ConfigManager();
+// 提前暴露 global.configManager：DataManager 等实例的构造（下方 L88 起）早于统一 global 赋值（L186），
+// 但它们构造期的诊断日志要读 misc.debugLog（如 "Loaded N projections"），必须在此就绪。
+global.configManager = configManager;
+// 模块加载确认（zlib/fs 成功）：属诊断日志，受 misc.debugLog 控制——加载成功是预期，默认不打印；
+// 真正要确认模块可用时把 misc.debugLog 开 true 即可。
+if (configManager.get('misc.debugLog', false)) {
+    if (zlib) logger.info("[LitematicaBE] zlib module loaded successfully!");
+    if (fs) logger.info("[LitematicaBE] fs module loaded successfully!");
+}
 const SCHEMATIC_PATH = './plugins/LitematicaBE/schematics/';
+
+// 国际化：加载 lang/*.json（文件名即语言代码，如 zh_CN / en）。失败回落默认文案，不影响启动。
+i18nKit.init();
 
 // 全局实例
 const loader = new LitematicLoader();
@@ -128,16 +137,14 @@ const ghostGuard = new GhostGuard(ghostRegistry);
 // 服务端 addon 与插件版本一致性校验。不一致时禁用 ghost 写入
 const addonCheck = new AddonVersionCheck({ logger });
 
-// 写世界前的原方块快照（data/sessions/）。启动时先收拾上次异常退出留下的会话，
-// 再补 ghost —— 顺序不能反：先还原成"原来的世界"，再按期望集合重放 ghost。
+// 写世界前的原方块快照（data/sessions/）。启动时先收拾上次异常退出留下的会话，再补 ghost 。顺序不能反：先还原成"原来的世界"，再按期望集合重放 ghost。
 // 注意创建顺序：GhostRenderer / ProjectionRenderer 都要用它做"先备再写"，必须早于渲染管线建。
 const worldSnapshot = new WorldSnapshot({
     logger,
     isGhost: (t) => ghostRegistry.isGhost(t),
 }).load();
 
-// ═══════════════════ 渲染管线（ghost 方块取代粒子） ═══════════════════
-// 3.0.0 起投影不再 spawn 粒子，而是在世界里写 lit:g_* 真实方块
+// ═══════════════════ 渲染管线 ═══════════════════
 const ghostRenderer = new GhostRenderer({
     registry: ghostRegistry,
     expectStore: ghostExpect,
@@ -219,8 +226,6 @@ const PLUGIN_NAME = "LitematicaBE";
 const playerSessions = new Map();
 global.playerSessions = playerSessions;
 
-logger.info(`${PLUGIN_NAME} v${PLUGIN_VERSION} Loading...`);
-
 // ═══════════════════ 统一 tick 调度器 ═══════════════════
 const renderScheduler = new RenderScheduler({
     logger,
@@ -254,8 +259,7 @@ renderScheduler.add('log-cleaner', () => {
         if (p && typeof p.catch === 'function') p.catch(() => { });
     } catch (e) { /* 清理失败不影响主循环 */ }
 }, { everyMs: logCleanerInterval, priority: 90, enabled: logCleanerEnabled });
-// 版本更新检查（启动时一次，配置项 updateCheck.enabled 可关，关闭时不注册任务）：
-// 网络结果只能在主线程打印，此处挂一次性任务，onServerStarted 发起后由它取结果并打日志。
+// 版本更新检查：
 if (updateChecker.isEnabled()) {
     renderScheduler.add('update-check', () => drainUpdateCheck(), { everyMs: 500, priority: 95 });
 }
@@ -265,9 +269,6 @@ renderScheduler.start();
 try {
     // 启动期信息日志默认静默（config 的 misc.verboseStartupLog ）
     logCleaner.setVerboseStartup(configManager.get('misc.verboseStartupLog', false) === true);
-    // 把 config 的 logCleaner 段真正装配进 cleaner：此前 configure() 没有调用点，
-    // 段里的 scanInterval / backupEnabled / maxBackupFiles / patterns 全部形同虚设（一直吃构造期默认值）。
-    // patterns 在 config 里是字符串数组，编译成 RegExp 由 LogCleaner.configure 内部完成。
     logCleaner.configure({
         scanInterval: logCleanerInterval,
         backupEnabled: configManager.get('logCleaner.backupEnabled', true),
@@ -544,7 +545,7 @@ function handleRotateMode(player, _session) {
         return;
     }
 
-    // 多投影：只重建**这一个**投影的会话，其它已加载的投影必须原样留着
+    // 多投影：只重建这一个投影的会话，其它已加载的投影必须原样留着
     const rotateId = activeProj.projection.id;
     renderer.clearProjection(player, rotateId);
 
@@ -608,7 +609,7 @@ function handleBuildMode(player, _session) {
         const newLayer = result.renderLayer;
         const isMegaProj = !!(result.projection.isMega && result.projection.schematicId);
 
-        // 统一入口：普通投影 gr.setLayer / MEGA setLayerMode，且**只动这一个投影的会话**
+        // 统一入口：普通投影 gr.setLayer / MEGA setLayerMode，且只动这一个投影的会话
         const r = renderer.applyLayer(player, result.projection, newLayer);
         if (!r.ok) {
             const why = (r.reason === 'mega-not-ready')
@@ -1078,7 +1079,7 @@ function sendWebStatus(player, output) {
     if (s.tokenRequired) {
         if (isOp) {
             say(`§e令牌: §f${s.token}`);
-            say(`§7访问: http://${s.host}:${s.port}/?token=${s.token}`);
+            say(`§7访问: ${s.url}?token=${s.token}`);
             say(`§7令牌文件: ${s.tokenFile}`);
         } else {
             say('§7令牌仅管理员可见');
@@ -1122,7 +1123,7 @@ function buildWebCommand() {
                 if (webServer.start()) {
                     const s = webServer.summary();
                     say(`§a上传站已启动: §f${s.url}`);
-                    if (s.tokenRequired) say(`§7带令牌地址: §fhttp://${s.host}:${s.port}/?token=${s.token}`);
+                    if (s.tokenRequired) say(`§7带令牌地址: §f${s.url}?token=${s.token}`);
                 } else {
                     say('§c启动失败：详见服务端控制台日志（常见原因：端口被占用 / web.enabled=false / 运行时无 HttpServer）');
                 }
@@ -1137,17 +1138,17 @@ function buildWebCommand() {
                 break;
             case "token": {
                 const t = webServer.regenerateToken();
-                const wc = webServer.config();
+                const s = webServer.summary();
                 say('§a已重新生成上传令牌（旧地址立即失效）');
                 say(`§e新令牌: §f${t}`);
-                say(`§7访问: http://${wc.host}:${wc.port}/?token=${t}`);
-                say(`§7已写入: ${webServer.summary().tokenFile}`);
+                say(`§7访问: ${s.url}?token=${t}`);
+                say(`§7已写入: ${s.tokenFile}`);
                 break;
             }
             case "url": {
                 const s = webServer.summary();
                 if (!s.running) say('§7上传站未运行，先执行 §f/litematica:web start');
-                say(`§e访问地址: §fhttp://${s.host}:${s.port}/`
+                say(`§e访问地址: §f${s.url}`
                     + (s.tokenRequired && isOp ? `?token=${s.token}` : ''));
                 if (!isOp) say('§7（令牌请向服主索取）');
                 break;
@@ -1170,7 +1171,11 @@ function registerCommands(reason = 'load') {
     setupCommand('/litematica:web', buildWebCommand);
 
     const okList = Array.from(registeredCommands);
-    logger.info(`[LitematicaBE] 命令注册(${reason}): ${okList.length} 条可用 [${okList.join(', ')}]`);
+    // 命令注册汇总也属于启动噪音（6 条命令 × 每次启动）：默认静默，
+    // 与 setupCommand 内的单条注册日志共用同一门控（misc.verboseCommandLog / misc.verboseStartupLog）。
+    if (configManager.get('misc.verboseStartupLog', false) || configManager.get('misc.verboseCommandLog', false)) {
+        logger.info(`[LitematicaBE] 命令注册(${reason}): ${okList.length} 条可用 [${okList.join(', ')}]`);
+    }
     return okList.length;
 }
 
@@ -2195,18 +2200,10 @@ if (typeof ll !== 'undefined' && ll && typeof ll.onUnload === 'function') {
 // 导出加载函数供UI使用（必须在函数定义之后）
 global.loadSchematicFile = loadSchematicFile;
 
-logger.info(`${PLUGIN_NAME} v${PLUGIN_VERSION} Loaded!`);
-
 // Ghost 子系统状态（渲染走这条路；此处先打印可用性）
 function logGhostRegistryStatus() {
     const gs = ghostRegistry.stats();
-    if (gs.ready) {
-        logger.info(`[LitematicaBE] Ghost 注册表就绪: addon ${(gs.addonVersion || []).join('.')}, ${gs.blockCount} 种定义, javaMap ${gs.javaMapCount} 条`);
-        const st = gs.javaMapStats;
-        if (st) {
-            logger.info(`[LitematicaBE] ghost 命中 ${st.mapped}/${st.total}，其余回落 ${gs.genericId}`);
-        }
-    } else {
+    if (!gs.ready) {
         logger.warn(`[LitematicaBE] Ghost 注册表不可用: ${gs.loadError || '未知'}`);
         logger.warn('[LitematicaBE] 请确认已部署 ghost addon 且 data/ghost_index.json 存在');
     }
@@ -2219,7 +2216,3 @@ const ucOn = updateChecker.isEnabled();
 logger.info(`[LitematicaBE] 版本更新检查: ${ucOn
     ? `已开启（${updateChecker.repo()}，服务端启动时检查）`
     : '已关闭（updateCheck.enabled=false）'}`);
-const snapStats = worldSnapshot.stats();
-logger.info(`[LitematicaBE] 快照: ${snapStats.sessions} 个未还原会话 / ${snapStats.blocks} 格 / 目录 ${snapStats.dir}`);
-logger.info(`Commands: ${Array.from(registeredCommands).join(', ') || '(none)'}`);
-logger.info("Use wooden sword to operate");

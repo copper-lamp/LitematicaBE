@@ -17,7 +17,13 @@ class SpatialIndexUtils {
      * @param {number} radius          搜索半径（格）
      */
     static getBlocksInRadius(projection, relCenterX, relCenterY, relCenterZ, radius) {
-        if (!projection.blockChunks || projection.blockChunks.size === 0) {
+        const chunks = projection.blockChunks;
+        // `blockChunks` 必须是 Map（Loader 构建）。但投影从 projections.json 恢复时，
+        // Map 会被 JSON 序列化成 `{}`，此时 `.get` 不存在 —— 直接调用会抛
+        // `projection.blockChunks.get is not a function`，打印机每 200ms 失败返回（等于没工作）。
+        // 非 Map 一律回退到 blocks 数组（普通投影恢复后 blocks 是完整的）。
+        const isMap = chunks && typeof chunks.get === 'function' && typeof chunks.size === 'number';
+        if (!isMap || chunks.size === 0) {
             return projection.blocks || [];
         }
 

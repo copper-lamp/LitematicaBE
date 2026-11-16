@@ -7,6 +7,8 @@ const { transformPosition } = require('../ghost/GhostRenderer');
 // 会话标定：删除投影时要按投影 id 的哈希后缀认出"这条快照会话属于谁"
 const { shortHash } = require('../ghost/GhostRenderer');
 const { isMegaProjection, normalizeProjection } = require('../data/projectionFlags');
+// 国际化：t 按玩家语言取翻译，tell 翻译后发聊天栏
+const { tell, t, tr } = require('../i18n/I18n');
 
 class ProjectionRenderer {
     /**
@@ -167,7 +169,7 @@ class ProjectionRenderer {
         } catch (e) { /* 同步失败不影响渲染 */ }
 
         if (o.persist !== false) this._remember(player);
-        if (o.notify) player.tell(`§a木剑当前控制：§f${(task.projection && task.projection.name) || task.id}`);
+        if (o.notify) tell(player, 'render.notifyPrimary', (task.projection && task.projection.name) || task.id);
         return true;
     }
 
@@ -180,6 +182,14 @@ class ProjectionRenderer {
             this.currentRenderLayer.delete(xuid);
             this.layerRenderMode.delete(xuid);
             this.loadedProjections.delete(xuid);
+            // 重启后"没有会话但投影记录还在"的删除路径也走这里：不清 projManager
+            // 的话打印机仍会拿残留的活动投影继续放置。
+            try {
+                const pm = (typeof global !== 'undefined') ? global.projManager : null;
+                if (pm && typeof pm.removeActiveProjection === 'function') {
+                    pm.removeActiveProjection(xuid);
+                }
+            } catch (e) { /* 同步失败不影响渲染 */ }
             return;
         }
         const wasPrimary = !!(this.activeProjections.get(xuid) && this.activeProjections.get(xuid).id === projectionId);
@@ -191,6 +201,15 @@ class ProjectionRenderer {
             this.layerRenderMode.delete(xuid);
             this.loadedProjections.delete(xuid);
             this.lastLayerSwitch.delete(xuid);
+            // projManager 是打印机/木剑/建造的"当前操作投影"另一份状态。
+            // 只清本渲染器的任务表、不清它，删除投影后打印机仍会拿到已删除的投影继续放置
+            // （真机表现：删了投影，火把还在被周期性放/破坏，删投影也打断不了）。
+            try {
+                const pm = (typeof global !== 'undefined') ? global.projManager : null;
+                if (pm && typeof pm.removeActiveProjection === 'function') {
+                    pm.removeActiveProjection(xuid);
+                }
+            } catch (e) { /* 同步失败不影响渲染 */ }
             return;
         }
         if (wasPrimary) {
@@ -233,7 +252,7 @@ class ProjectionRenderer {
 
         const task = this.activeProjections.get(player.xuid);
         if (!task || !task.projection) {
-            player.tell('§c当前没有加载的投影');
+            tell(player, 'render.errNoProj');
             return;
         }
 
@@ -261,7 +280,7 @@ class ProjectionRenderer {
 
         const gr = this._gr();
         if (!gr) {
-            player.tell('§c渲染器未就绪（GhostRenderer 未装配）');
+            tell(player, 'render.errNoGr');
             return;
         }
 
@@ -269,14 +288,14 @@ class ProjectionRenderer {
         const r = this.applyLayer(player, projection, currentLayer);
 
         if (!r.ok) {
-            player.tell(`§c切换失败：${this._reasonText(r.reason)}`);
+            tell(player, 'render.errSwitch', this._reasonText(r.reason, player));
             return;
         }
         if (r.unchanged) return;
         const detail = (typeof r.chunks === 'number' && r.chunks > 0)
-            ? `${r.chunks} 个分块待注入`
-            : `${r.count || 0} 格`;
-        player.tell(`§7已切换到第 ${currentLayer} 层 (共 ${maxLayer + 1} 层)，${detail}`);
+            ? t(player, 'render.chunksPending', r.chunks)
+            : t(player, 'render.gridCount', r.count || 0);
+        tell(player, 'render.layerSwitched', currentLayer, maxLayer + 1, detail);
     }
 
     /**
@@ -398,21 +417,25 @@ class ProjectionRenderer {
         return { ok: true, layer: lay, chunks: plan.chunks, unchanged: !!plan.unchanged };
     }
 
-    _reasonText(reason) {
-        switch (reason) {
-            case 'writegate': return 'addon 版本校验未通过，ghost 写入已禁用（/litematica:ghost info 查看）';
-            case 'registry': return 'ghost_index 未就绪（检查 plugins/LitematicaBE/data/ghost_index.json）';
-            case 'too-many': return '投影可见方块超过单次铺设上限';
-            case 'empty':
-            case 'empty-surface': return '这一层没有任何可见方块';
-            case 'no-projection': return '投影数据为空';
-            case 'no-player': return '取不到玩家信息';
-            case 'no-ghost-renderer': return 'GhostRenderer 未装配';
-            case 'mega-not-ready': return '超大投影的分块注入状态不在（通常是服务器重启过），请重新放置该投影';
-            case 'mega-layer': return '超大投影切层失败（分块计划为空）';
-            case 'no-state': return '超大投影注入状态缺失';
-            default: return reason || '未知原因';
-        }
+    _reasonText(reason, player) {
+        const key = (() => {
+            switch (reason) {
+                case 'writegate': return 'render.reason.writegate';
+                case 'registry': return 'render.reason.registry';
+                case 'too-many': return 'render.reason.tooMany';
+                case 'empty':
+                case 'empty-surface': return 'render.reason.empty';
+                case 'no-projection': return 'render.reason.noProjection';
+                case 'no-player': return 'render.reason.noPlayer';
+                case 'no-ghost-renderer': return 'render.reason.noGr';
+                case 'mega-not-ready': return 'render.reason.megaNotReady';
+                case 'mega-layer': return 'render.reason.megaLayer';
+                case 'no-state': return 'render.reason.noState';
+                default: return 'render.reason.unknown';
+            }
+        })();
+        if (player) return t(player, key);
+        return tr(key); // 无玩家上下文：日志用默认语言
     }
 
     // ==================== 契约方法 ====================
@@ -531,19 +554,19 @@ class ProjectionRenderer {
                 // 只清这一份的渲染态（其它投影照常显示），等玩家修好配置或数据后再手动重开。
                 this._dropTask(player, taskId);
                 if (makePrimary && o.persist !== false) this._remember(player);
-                player.tell('§e超大投影渲染未就绪（render.enableMega 未开，或分块数据已缺失）');
-                player.tell('§7投影记录已保留：打开 render.enableMega 后重进，或重新放置该投影');
+                tell(player, 'render.megaNotReady');
+                tell(player, 'render.megaNotReadyHint');
                 if (stateKey === null) {
-                    player.tell('§c该投影缺少 schematicId，无法定位分块数据；请重新加载一次 .litematic');
+                    tell(player, 'render.megaNoSchematicId');
                 }
                 this._log('warn', `[ProjectionRenderer] MEGA 投影 "${projection.name || projection.id}" 缺少注入状态（stateKey=${stateKey || 'null'}），已跳过，保留恢复记录`);
                 return false;
             }
             const r = gr.enqueue(player, projection, { layer: lay, deferBlocks: true, keepOthers: true });
             if (!r.ok) {
-                const text = this._reasonText(r.reason);
+                const text = this._reasonText(r.reason, player);
                 this._log('warn', `[ProjectionRenderer] MEGA 投影 "${projection.name || projection.id}" 会话建立失败：${text}`);
-                if (reasonIsUserFacing(r.reason)) player.tell(`§c超大投影无法显示：${text}`);
+                if (reasonIsUserFacing(r.reason)) tell(player, 'render.megaCantShow', text);
                 return false;
             }
             // count 用投影真实方块数，否则 UI 会显示"0 方块"
@@ -561,7 +584,7 @@ class ProjectionRenderer {
             };
             this._ensureTasks(player.xuid).set(taskId, task);
             finishOk();
-            player.tell(`§e超大投影"${projection.name || projection.id}"：正在按分块注入方块，进度见控制台`);
+            tell(player, 'render.megaInjecting', projection.name || projection.id);
             this._log('info', `[ProjectionRenderer] MEGA 会话已建立 "${projection.name || projection.id}"，等待分块注入（总数 ${projection.totalBlocks || '?'}）`);
             return true;
         }
@@ -569,9 +592,9 @@ class ProjectionRenderer {
         // 普通投影：只替换**这一份**的会话，别的投影会话不动（keepOthers）
         const r = gr.enqueue(player, projection, { layer: lay, keepOthers: true });
         if (!r.ok) {
-            const text = this._reasonText(r.reason);
+            const text = this._reasonText(r.reason, player);
             this._log('warn', `[ProjectionRenderer] 投影 "${projection.name || projection.id}" 未能铺设：${text}`);
-            if (reasonIsUserFacing(r.reason)) player.tell(`§c投影无法显示：${text}`);
+            if (reasonIsUserFacing(r.reason)) tell(player, 'render.cantShow', text);
             return false;
         }
 
@@ -607,24 +630,24 @@ class ProjectionRenderer {
             || null;
 
         if (!tasks || !tasks.size) {
-            player.tell('§c当前没有正在渲染的投影');
+            tell(player, 'render.errNoRendering');
             return false;
         }
         if (pid && !tasks.has(pid)) {
-            player.tell('§c当前没有正在渲染的投影');
+            tell(player, 'render.errNoRendering');
             return false;
         }
 
         if (pid) {
             this.clearProjection(player, pid, { silent: false });
-            player.tell('§a投影显示已取消，世界已还原');
+            tell(player, 'render.cancelled');
             return true;
         }
 
         // 没给 id（旧调用）：清全部会话
         this.clearPlayerProjection(player);
         this._forget(player);      // 用户主动取消：重进不该再把它拉回来
-        player.tell('§a投影显示已取消，世界已还原');
+        tell(player, 'render.cancelled');
         return true;
     }
 
@@ -1283,13 +1306,13 @@ class ProjectionRenderer {
             const y0 = pos.y;
             const y1 = pos.y + h - 1;
 
-            player.tell('§6=== 投影边界 ===');
-            player.tell(`§7名称: §f${projection.name || projection.id || '?'}`);
-            player.tell(`§7尺寸: §f${w} × ${h} × ${d}§7（宽 × 高 × 深）`);
-            player.tell(`§7高度: §fy ${y0} → ${y1}`);
-            player.tell('§7占地四角（x, z）:');
+            tell(player, 'render.boundsTitle');
+            tell(player, 'render.boundsName', projection.name || projection.id || '?');
+            tell(player, 'render.boundsDims', w, h, d);
+            tell(player, 'render.boundsHeight', y0, y1);
+            tell(player, 'render.boundsCorners');
             for (const c of corners) {
-                player.tell(`§7  (§f${c.x}§7, §f${c.z}§7)`);
+                tell(player, 'render.boundsCorner', c.x, c.z);
             }
         } catch (e) {
             // 边界提示失败不能影响投影本身
@@ -1388,12 +1411,12 @@ class ProjectionRenderer {
     loadProjection(player, projectionId) {
         const dataManager = global.dataManager;
         if (!dataManager) {
-            player.tell('§c数据管理器未初始化');
+            tell(player, 'render.errNoDataMgr');
             return false;
         }
         const projection = dataManager.getProjection(projectionId);
         if (!projection) {
-            player.tell('§c投影不存在');
+            tell(player, 'render.errNoProj2');
             return false;
         }
         if (this.isProjectionLoaded(player, projectionId)) {
@@ -1404,7 +1427,7 @@ class ProjectionRenderer {
         const ok = this.startRender(player, projection, -1);
         if (ok) {
             const n = this.getPlayerProjections(player).length;
-            player.tell(`§a已加载投影: ${projection.name}§7（当前共 ${n} 个，木剑控制这一个）`);
+            tell(player, 'render.loaded', projection.name, n);
         }
         return ok;
     }

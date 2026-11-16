@@ -2,6 +2,8 @@
 
 const { SurfaceExtractor } = require('./SurfaceExtractor');
 const { inferPistonExtendedStates } = require('./PistonStateInfer');
+// 国际化：t 按玩家语言取翻译，tell 翻译后发聊天栏
+const { tell, t } = require('../i18n/I18n');
 
 const DEFAULT_WRITES_PER_TICK = 300;
 const DEFAULT_MAX_BLOCKS = 60000;
@@ -718,11 +720,11 @@ class GhostRenderer {
                 const pl = mc.getPlayer(s.xuid);
                 if (pl) {
                     const parts = [];
-                    if (s.pending.length) parts.push(`§7${s.pending.length} 格待补`);
-                    if (s.blocked.length) parts.push(`§7${s.blocked.length} 格被原地形挡住（挖掉后自动补上）`);
-                    const extra = parts.length ? `（${parts.join('，')}）` : '';
-                    const nm = (s.projection && s.projection.name) ? `"${s.projection.name}"` : '投影';
-                    pl.tell(`§a${nm}已铺设 §e${c.placed} §a格${extra}`);
+                    if (s.pending.length) parts.push(t(pl, 'ghost.pending', s.pending.length));
+                    if (s.blocked.length) parts.push(t(pl, 'ghost.blocked', s.blocked.length));
+                    const extra = parts.length ? t(pl, 'ghost.extra', parts.join('，')) : '';
+                    const nm = (s.projection && s.projection.name) ? `"${s.projection.name}"` : t(pl, 'ghost.proj');
+                    tell(pl, 'ghost.done', nm, c.placed, extra);
                 }
             } catch (e) { /* 玩家不在线，无所谓 */ }
         }
@@ -898,8 +900,8 @@ class GhostRenderer {
                 const pl = mc.getPlayer(xuid);
                 const nm = (s.projection && s.projection.name) ? `"${s.projection.name}"` : '';
                 if (pl) {
-                    pl.tell(`§a${nm}投影已撤销：还原 §e${restored} §a格` + (kept ? `，§7${kept} 格已被你放的方块占据，保持原样` : ''));
-                    if (remaining) pl.tell(`§7还有 ${remaining} 格因区块未加载未还原，已留在快照里，重启或靠近后会再试`);
+                    tell(pl, 'ghost.undone', nm, restored, kept ? t(pl, 'ghost.undoneKept', kept) : '');
+                    if (remaining) tell(pl, 'ghost.undoneRemain', remaining);
                 }
             } catch (e) { /* 忽略 */ }
         }

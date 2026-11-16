@@ -424,6 +424,19 @@ class BlockStateConverters {
             return;
         }
 
+        // Torch / wall_torch / soul_torch / redstone_torch
+        // Java 竖立火把没有 facing；墙上的用 facing。BE 统一用 torch_facing_direction。
+        // 与 _convertFacing 的 torch 分支对称：不加这段，读投影时火把朝向会以 BE 键残留在
+        // Java 状态里（`{torch_facing_direction:"south"}`），再打印时链路对不上。
+        if (mapping.b === 'torch' || mapping.b === 'soul_torch' || mapping.b === 'redstone_torch') {
+            if (bs.torch_facing_direction !== undefined) {
+                const dir = bs.torch_facing_direction;
+                if (dir && dir !== 'top') java.facing = dir;
+                delete java.torch_facing_direction;
+            }
+            return;
+        }
+
         // Beds
         if (mapping.b === 'bed' && bs.direction !== undefined) {
             const reverse = { 0: 'east', 1: 'north', 2: 'west', 3: 'south' };

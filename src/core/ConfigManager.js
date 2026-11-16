@@ -36,7 +36,10 @@ class ConfigManager {
                     budgetMs: 6,            // 单轮时间预算（毫秒），溢出顺延
                     placeDelayMs: 0,        // >0 = 每格之间等待时间（毫秒）
                     overwriteReplaceable: true,  // 是否顶替花草/雪/水
-                    debug: false            // logs/LitematicaBE/easyplace_debug.log（5s 一条）
+                    debug: false,           // logs/LitematicaBE/easyplace_debug.log（5s 一条）
+                    // 依附智能打印：火把/红石线/铁轨/按钮/拉杆/双高植物等先放支撑，再放依附方块
+                    supportCheck: true,
+                    supportMaxDepth: 3      // 依附链最大展开深度
                 }
             },
             logCleaner: {
@@ -118,7 +121,9 @@ class ConfigManager {
                 // 命令注册成功日志（失败日志始终保留）
                 verboseCommandLog: false,
                 // 启动期信息日志总开关：LogCleaner 一次性 INFO（warn/error 始终保留）
-                verboseStartupLog: false
+                verboseStartupLog: false,
+                // 诊断日志总开关（默认关闭）：统一控制 data/web_debug.log 等 debug 日志
+                debugLog: false
             }
         };
     }
@@ -153,7 +158,10 @@ class ConfigManager {
             // 这样下次启动不再重复提示（不再作为常态逻辑）。
             if (this.enforceGhostMode()) this.save();
 
-            logger.info(`[ConfigManager] 配置文件加载成功: ${this.configPath}`);
+            // 诊断日志（misc.debugLog，默认关闭）：加载成功是启动噪音，不进日常日志
+            if (this.get('misc.debugLog', false)) {
+                logger.info(`[ConfigManager] 配置文件加载成功: ${this.configPath}`);
+            }
         } catch (e) {
             logger.error(`[ConfigManager] 加载配置文件失败: ${e.message}`);
             logger.warn(`[ConfigManager] 使用默认配置`);

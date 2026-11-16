@@ -6,6 +6,8 @@ const path = require('path');
 const { bidirectionalConverter } = require('../mappings/BidirectionalBlockConverter');
 // 坐标解析唯一实现（表单输入 / 命令文本 / `~` 相对坐标）
 const { toIntOr, clampCoord } = require('../utils/coordText');
+// 国际化：t 按玩家语言取翻译，tell 翻译后发聊天栏（UI 文本也走 t）
+const { tell, t } = require('../i18n/I18n');
 
 /**
  * 玩家所在维度 ID。LSE 的 Player 没有 dim 属性，维度信息在 FloatPos 上
@@ -21,9 +23,9 @@ function dimidOf(player) {
  * 逻辑是「先定格式，再走对应链路」：不是先扫一遍再决定怎么翻译。
  */
 const SAVE_FORMAT_OPTIONS = [
-    { format: 'litematic', label: 'Java 版 .litematic（Litematica 投影）' },
-    { format: 'mcstructure', label: '基岩版 .mcstructure（结构方块文件）' },
-    { format: 'both', label: '两者都导出（.litematic + .mcstructure）' }
+    { format: 'litematic', labelKey: 'ui.save.format.litematic' },
+    { format: 'mcstructure', labelKey: 'ui.save.format.mcstructure' },
+    { format: 'both', labelKey: 'ui.save.format.both' }
 ];
 
 /** 字节数 → 人类可读 */
@@ -116,13 +118,13 @@ class UIManager {
     showMainMenu(player) {
         const fm = mc.newSimpleForm();
         fm.setTitle('Litematica BE');
-        fm.setContent('Litematica BE v3.1.0\n选择一个操作：');
+        fm.setContent(t(player, 'ui.menu.content'));
 
-        fm.addButton('加载投影');
-        fm.addButton('保存投影');
-        fm.addButton('投影管理');
-        fm.addButton('投影操作');
-        fm.addButton('关于投影');
+        fm.addButton(t(player, 'ui.menu.load'));
+        fm.addButton(t(player, 'ui.menu.save'));
+        fm.addButton(t(player, 'ui.menu.manage'));
+        fm.addButton(t(player, 'ui.menu.ops'));
+        fm.addButton(t(player, 'ui.menu.about'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') return;
@@ -149,34 +151,9 @@ class UIManager {
 
     showAbout(player) {
         const fm = mc.newSimpleForm();
-        fm.setTitle('关于投影');
-        fm.setContent(
-            '§6§lLitematica BE§r\n\n' +
-            '§7版本: §f3.1.0\n\n' +
-            '§e§l功能说明:§r\n' +
-            '§f• 加载原理图 (.litematic / .mcstructure)\n' +
-            '§f• 保存原理图\n' +
-            '§f• 逐层渲染\n' +
-            '§f• 木剑换层\n' +
-            '§f• 轻松放置\n' +
-            '§f• 投影打印机§r\n\n' +
-            '§e§l使用教学:§r\n' +
-            '§a1. §f手持§6木剑§f蹲下点击打开主菜单\n' +
-            '§a2. §f选择"浏览新原理图"加载原理图文件\n' +
-            '§a3. §f投影默认放置在玩家脚下位置，可自行设置坐标\n' +
-            '§a4. §f在 §e投影操作 §f开启逐层建造模式\n' +
-            '§a5. §f逐层模式下，§6抬头向上§f切换下层，§6低头向下§f切换上层\n' +
-            '§a6. §f手持材料对准投影即可轻松放置\n' +
-            '§a7. §f开启投影打印机可自动快速放置方块§r\n\n' +
-            '§e§l开发者信息:§r\n' +
-            '§f开发团队: copper-lamp\n' +
-            '§fGitHub: §bhttps://github.com/copper-lamp/LitematicaBE§r\n\n' +
-            '§f本项目为公益开源项目，欢迎参与贡献和提出建议\n' +
-            '§e§lBug反馈:§r\n' +
-            '§f如果遇到问题，请前往GitHub仓库提交Issue，我们会尽快修复\n' +
-            '§f加入QQ群 861900673 反馈问题§r'
-        );
-        fm.addButton('返回主菜单');
+        fm.setTitle(t(player, 'ui.about.title'));
+        fm.setContent(t(player, 'ui.about.content'));
+        fm.addButton(t(player, 'ui.menu.back'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') return;   // 取消表单：LSE 可能回 null 也可能回 undefined
@@ -188,13 +165,11 @@ class UIManager {
 
     showSaveSchematicMenu(player) {
         const fm = mc.newSimpleForm();
-        fm.setTitle('保存原理图');
-        fm.setContent('使用木剑选取两个坐标点，把选区保存为投影文件\n' +
-            '§7可选格式：§f.litematic（Java 版 Litematica）§7 / §f.mcstructure（基岩版结构文件）§7 / 两者都导出\n\n' +
-            '作者将自动设置为您的玩家ID');
+        fm.setTitle(t(player, 'ui.save.title'));
+        fm.setContent(t(player, 'ui.save.menu.content'));
 
-        fm.addButton('开始选区');
-        fm.addButton('返回主菜单');
+        fm.addButton(t(player, 'ui.save.menu.start'));
+        fm.addButton(t(player, 'ui.menu.back'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') {
@@ -217,7 +192,7 @@ class UIManager {
     startSchematicSelection(player) {
         const selectionTool = global.selectionTool;
         if (!selectionTool) {
-            player.tell('§c错误: 选区工具未初始化');
+            tell(player, 'ui.save.errTool');
             return;
         }
 
@@ -246,7 +221,7 @@ class UIManager {
      * 正常是数字索引；某些 LSE 版本可能回传字符串/选项文本，这里一并兼容，
      * 避免"选了 mcstructure 却静默按默认格式导出"。
      */
-    resolveSaveFormatIndex(raw) {
+    resolveSaveFormatIndex(raw, player) {
         const n = SAVE_FORMAT_OPTIONS.length;
         if (typeof raw === 'number' && Number.isFinite(raw)) {
             const i = Math.trunc(raw);
@@ -258,7 +233,7 @@ class UIManager {
                 const i = Number(s);
                 if (i >= 0 && i < n) return i;
             }
-            const byLabel = SAVE_FORMAT_OPTIONS.findIndex((o) => o.label === s);
+            const byLabel = SAVE_FORMAT_OPTIONS.findIndex((o) => t(player, o.labelKey) === s);
             if (byLabel >= 0) return byLabel;
             const byFormat = SAVE_FORMAT_OPTIONS.findIndex((o) => o.format === s.toLowerCase());
             if (byFormat >= 0) return byFormat;
@@ -290,48 +265,44 @@ class UIManager {
      */
     showSaveSchematicForm(player, region) {
         const fm = mc.newCustomForm();
-        fm.setTitle('保存投影');
+        fm.setTitle(t(player, 'ui.save.formTitle'));
 
         const info = this.saveVolumeInfo(region);
         const dimsText = `${info.dimensions.x}×${info.dimensions.y}×${info.dimensions.z}`;
 
         // 控件顺序 = 回调 data 下标：格式(0) → 名称(1) → 描述(2)；label 一律后置
-        fm.addDropdown('导出格式', SAVE_FORMAT_OPTIONS.map((o) => o.label), this.defaultSaveFormatIndex());
-        fm.addInput('原理图名称', '输入原理图名称...', '');
-        fm.addInput('描述（可选）', '输入描述...', '');
+        fm.addDropdown(t(player, 'ui.save.format.label'), SAVE_FORMAT_OPTIONS.map((o) => t(player, o.labelKey)), this.defaultSaveFormatIndex());
+        fm.addInput(t(player, 'ui.save.name.label'), t(player, 'ui.save.name.placeholder'), '');
+        fm.addInput(t(player, 'ui.save.desc.label'), t(player, 'ui.save.desc.placeholder'), '');
 
-        fm.addLabel(
-            `选区范围: (${region.minX}, ${region.minY}, ${region.minZ}) ， (${region.maxX}, ${region.maxY}, ${region.maxZ})\n` +
-            `尺寸: ${dimsText}　体积: ${info.volume} 格\n` +
-            `作者: ${player.name}`
-        );
-        fm.addLabel(
-            `§7.mcstructure 不压缩：预估约 ${formatBytes(info.estimatedBytes)}，当前上限 ${info.maxVolume} 格` +
-            (info.ok ? '' : `\n§c选区已超上限，选 mcstructure / both 会被直接拒绝（不会读取任何方块）`)
-        );
+        fm.addLabel(t(player, 'ui.save.rangeLabel',
+            region.minX, region.minY, region.minZ, region.maxX, region.maxY, region.maxZ,
+            dimsText, info.volume, player.name));
+        fm.addLabel(t(player, 'ui.save.sizeOk', formatBytes(info.estimatedBytes), info.maxVolume) +
+            (info.ok ? '' : t(player, 'ui.save.sizeOver')));
 
         player.sendForm(fm, (player, data) => {
             if (!Array.isArray(data)) {
-                player.tell('§c保存已取消');
+                tell(player, 'ui.save.cancelled');
                 const selectionTool = global.selectionTool;
                 if (selectionTool) selectionTool.cleanup(player.xuid);
                 return;
             }
 
-            const formatIdx = this.resolveSaveFormatIndex(data[0]);
+            const formatIdx = this.resolveSaveFormatIndex(data[0], player);
             const format = (SAVE_FORMAT_OPTIONS[formatIdx] || SAVE_FORMAT_OPTIONS[0]).format;
             const fileName = data[1] ? String(data[1]).trim() : '';
             const description = data[2] ? String(data[2]).trim() : '';
 
             if (!fileName) {
-                player.tell('§c错误: 原理图名称不能为空');
+                tell(player, 'ui.save.errName');
                 this.showSaveSchematicForm(player, region);
                 return;
             }
 
             // 验证文件名
             if (!/^[a-zA-Z0-9_\-\u4e00-\u9fa5]+$/.test(fileName)) {
-                player.tell('§c错误: 名称只能包含字母、数字、下划线、横线和中文');
+                tell(player, 'ui.save.errNameChars');
                 this.showSaveSchematicForm(player, region);
                 return;
             }
@@ -340,12 +311,10 @@ class UIManager {
             if (format !== 'litematic') {
                 const fresh = this.saveVolumeInfo(region);
                 if (!fresh.ok) {
-                    player.tell(
-                        `§c选区 ${fresh.dimensions.x}×${fresh.dimensions.y}×${fresh.dimensions.z} = ${fresh.volume} 格，` +
-                        `超过 .mcstructure 上限 ${fresh.maxVolume} 格（预估 ${formatBytes(fresh.estimatedBytes)}）；` +
-                        `§7未读取任何方块数据`
-                    );
-                    player.tell('§7可改选 .litematic，或缩小选区后重新选区');
+                    tell(player, 'ui.save.overVolume',
+                        fresh.dimensions.x, fresh.dimensions.y, fresh.dimensions.z, fresh.volume,
+                        fresh.maxVolume, formatBytes(fresh.estimatedBytes));
+                    tell(player, 'ui.save.overVolumeHint');
                     this.showSaveSchematicForm(player, region);
                     return;
                 }
@@ -364,12 +333,12 @@ class UIManager {
         const selectionTool = global.selectionTool;
 
         if (!schematicSaver) {
-            player.tell('§c错误: 保存器未初始化');
+            tell(player, 'ui.save.errNoSaver');
             return;
         }
 
-        const fmtLabel = format === 'both' ? '两种格式' : (format === 'mcstructure' ? '.mcstructure' : '.litematic');
-        player.tell(`§a正在扫描方块（${fmtLabel}）...`);
+        const fmtLabel = format === 'both' ? t(player, 'ui.save.fmtBoth') : (format === 'mcstructure' ? '.mcstructure' : '.litematic');
+        tell(player, 'ui.save.scanning', fmtLabel);
 
         try {
             const result = await schematicSaver.save(
@@ -381,25 +350,25 @@ class UIManager {
                 format
             );
 
-            player.tell('§a保存完成!');
+            tell(player, 'ui.save.done');
             for (const r of (result.results || [])) {
-                const extra = r.bytes ? ` §7(${formatBytes(r.bytes)}，未压缩)` : '';
-                player.tell(`§7• §f${r.fileName}${extra}`);
+                const extra = r.bytes ? t(player, 'ui.save.resultExtra', formatBytes(r.bytes)) : '';
+                tell(player, 'ui.save.resultFile', r.fileName, extra);
             }
             for (const f of (result.failures || [])) {
-                player.tell(`§c• ${f.format} 导出失败: ${f.error}`);
+                tell(player, 'ui.save.resultFail', f.format, f.error);
             }
-            player.tell(`§7方块数: §f${result.blockCount}`);
-            player.tell(`§7尺寸: §f${result.dimensions.x}×${result.dimensions.y}×${result.dimensions.z}`);
+            tell(player, 'ui.save.blockCount', result.blockCount);
+            tell(player, 'ui.save.dims', result.dimensions.x, result.dimensions.y, result.dimensions.z);
             if (format !== 'litematic') {
-                player.tell('§7.mcstructure 可直接用结构方块加载，也可用 §f/litematica load §7加载');
+                tell(player, 'ui.save.mcstructureHint');
             }
 
             // 清理选区状态
             if (selectionTool) selectionTool.cleanup(player.xuid);
 
         } catch (e) {
-            player.tell(`§c保存失败: ${e.message}`);
+            tell(player, 'ui.save.failed', e.message);
             logger.error(`[UIManager] saveSchematic error: ${e.message}`);
             logger.error(`[UIManager] Stack: ${e.stack}`);
         }
@@ -409,18 +378,18 @@ class UIManager {
         // 直接读取 schematics 目录
         const schematics = this.listSchematics();
         if (schematics.length === 0) {
-            player.tell('§c未找到原理图文件！');
-            player.tell('§7请将原理图文件（.litematic / .mcstructure）放入 plugins/LitematicaBE/schematics/ 目录');
+            tell(player, 'ui.browser.empty');
+            tell(player, 'ui.browser.emptyHint');
             this.showMainMenu(player);
             return;
         }
 
         const fm = mc.newSimpleForm();
-        fm.setTitle('原理图浏览器');
-        fm.setContent(`找到 ${schematics.length} 个原理图文件\n选择一个来加载并放置：`);
+        fm.setTitle(t(player, 'ui.browser.title'));
+        fm.setContent(t(player, 'ui.browser.content', schematics.length));
 
         for (const schem of schematics) {
-            fm.addButton(`${schem.name}\n${schem.type.toUpperCase()} 格式`);
+            fm.addButton(`${schem.name}\n${t(player, 'ui.browser.format', schem.type.toUpperCase())}`);
         }
 
         player.sendForm(fm, (player, data) => {
@@ -442,7 +411,7 @@ class UIManager {
         const defaultZ = Math.floor(pos.z);
 
         const fm = mc.newCustomForm();
-        fm.setTitle('放置投影');
+        fm.setTitle(t(player, 'ui.place.title'));
 
         // ⚠ 坐标输入必须是表单的**前三个控件**。
         //   CustomForm 回调的 data 按控件顺序排列，但 label 是否占位在不同 LSE 版本/实现下
@@ -457,27 +426,27 @@ class UIManager {
         const totalBlocks = loadedSchematic.totalBlocks || (loadedSchematic.blocks?.length || 0);
         const dims = loadedSchematic.dimensions || { x: '?', y: '?', z: '?' };
         const isMega = !!(loadedSchematic.isMega && loadedSchematic.schematicId);
-        const version = loadedSchematic.version || '未知';
+        const version = loadedSchematic.version || t(player, 'ui.place.unknown');
         const timeCreated = loadedSchematic.timeCreated
             ? new Date(Number(loadedSchematic.timeCreated)).toLocaleString()
-            : '未知';
+            : t(player, 'ui.place.unknown');
         const timeModified = loadedSchematic.timeModified
             ? new Date(Number(loadedSchematic.timeModified)).toLocaleString()
-            : '未知';
+            : t(player, 'ui.place.unknown');
 
-        fm.addLabel(`投影名称: ${loadedSchematic.name}`);
-        fm.addLabel(`作者: ${loadedSchematic.author || '未知'}`);
-        fm.addLabel(`尺寸: ${dims.x} x ${dims.y} x ${dims.z}`);
-        fm.addLabel(`方块数: ${totalBlocks.toLocaleString()}`);
-        fm.addLabel(`创建时间: ${timeCreated}`);
-        fm.addLabel(`修改时间: ${timeModified}`);
-        fm.addLabel(`数据版本: ${version}`);
+        fm.addLabel(t(player, 'ui.place.name', loadedSchematic.name));
+        fm.addLabel(t(player, 'ui.place.author', loadedSchematic.author || t(player, 'ui.place.unknown')));
+        fm.addLabel(t(player, 'ui.place.dims', dims.x, dims.y, dims.z));
+        fm.addLabel(t(player, 'ui.place.blocks', totalBlocks.toLocaleString()));
+        fm.addLabel(t(player, 'ui.place.created', timeCreated));
+        fm.addLabel(t(player, 'ui.place.modified', timeModified));
+        fm.addLabel(t(player, 'ui.place.version', version));
         if (isMega) {
-            fm.addLabel('当前投影为超大型投影，将开启 MEGA 模式');
+            fm.addLabel(t(player, 'ui.place.mega'));
         }
-        fm.addLabel(`放置原点: (${defaultX}, ${defaultY}, ${defaultZ}) ← 玩家脚下`);
-        fm.addLabel('X/Z = 投影西北角水平坐标，Y = 底面所在高度');
-        fm.addLabel('提交放置投影');
+        fm.addLabel(t(player, 'ui.place.origin', defaultX, defaultY, defaultZ));
+        fm.addLabel(t(player, 'ui.place.axisHint'));
+        fm.addLabel(t(player, 'ui.place.submit'));
 
         player.sendForm(fm, (player, data) => {
             if (!Array.isArray(data)) {
@@ -578,8 +547,8 @@ class UIManager {
             const activeCount = (typeof renderer.getPlayerProjections === 'function')
                 ? renderer.getPlayerProjections(player).length : 1;
             if (activeCount > 1) {
-                player.tell(`§7当前同时显示 §f${activeCount}§7 个投影，木剑控制最新的这个`);
-                player.tell('§7可在「投影操作 → 选择木剑控制的投影」里切换');
+                tell(player, 'ui.place.multi', activeCount);
+                tell(player, 'ui.place.multiHint');
             }
             // MEGA 投影：startRender 建空队列会话，MegaProjectionRenderer.onTick 用 appendBlocks 分块注入
 
@@ -591,10 +560,10 @@ class UIManager {
             // 把边界提示打到聊天栏：玩家能立刻确认"确实落在输入的坐标上"（而不是脚下）
             try { renderer.showBounds(projection, player); } catch (e) { /* 提示失败不影响放置 */ }
 
-            player.tell(`投影已放置于 (${placePos.x}, ${placePos.y}, ${placePos.z})`);
+            tell(player, 'ui.place.placed', placePos.x, placePos.y, placePos.z);
 
         } catch (e) {
-            player.tell('放置失败：' + e.message);
+            tell(player, 'ui.place.failed', e.message);
             logger.error(`[UIManager] executePlaceSchematic error: ${e.message}`);
             logger.error(`[UIManager] Stack: ${e.stack}`);
         }
@@ -675,7 +644,7 @@ class UIManager {
             const chunkFiles = megaManager.storage.listChunkFiles(data.schematicId);
 
             if (!chunkFiles || chunkFiles.length === 0) {
-                player.tell('§c没有找到分块数据');
+                tell(player, 'ui.place.errNoData');
                 return;
             }
 
@@ -684,11 +653,11 @@ class UIManager {
             if (meta && meta.totalBlocks) {
                 totalBlocks = meta.totalBlocks;
             } else {
-                player.tell('§e警告: 无法获取方块总数，将显示进度百分比');
+                tell(player, 'ui.place.warnNoTotal');
             }
 
-            player.tell(`§a开始分块放置 ${totalBlocks > 0 ? totalBlocks.toLocaleString() : '?'} 个方块...`);
-            player.tell(`§7共 ${chunkFiles.length} 个分块`);
+            tell(player, 'ui.place.startChunk', totalBlocks > 0 ? totalBlocks.toLocaleString() : '?');
+            tell(player, 'ui.place.chunkCount', chunkFiles.length);
 
             let chunkIdx = 0;
             for (const { cx, cy, cz } of chunkFiles) {
@@ -710,7 +679,7 @@ class UIManager {
                     const pct = totalBlocks > 0
                         ? Math.floor(placed / totalBlocks * 100)
                         : Math.floor(chunkIdx / chunkFiles.length * 100);
-                    player.tell(`§7进度: ${chunkIdx}/${chunkFiles.length} 分块 (${pct}%), 已放置 ${placed.toLocaleString()}`);
+                    tell(player, 'ui.place.progress', chunkIdx, chunkFiles.length, pct, placed.toLocaleString());
                 }
             }
 
@@ -718,11 +687,11 @@ class UIManager {
         } else {
             const blocks = data.blocks || [];
             if (blocks.length === 0) {
-                player.tell('§c没有找到方块数据');
+                tell(player, 'ui.place.errNoBlocks');
                 return;
             }
 
-            player.tell(`§a开始放置 ${blocks.length.toLocaleString()} 个方块...`);
+            tell(player, 'ui.place.startBlocks', blocks.length.toLocaleString());
 
             for (let i = 0; i < blocks.length; i++) {
                 processBlock(blocks[i]);
@@ -735,7 +704,7 @@ class UIManager {
             }
         }
 
-        player.tell(`§a完成: ${placed} 个方块已放置${errors > 0 ? `, §c${errors} 个失败` : ''}`);
+        tell(player, 'ui.place.done', placed.toLocaleString(), errors > 0 ? t(player, 'ui.place.doneErr', errors) : '');
     }
 
     async loadAndPlaceSchematic(player, schematic) {
@@ -747,7 +716,7 @@ class UIManager {
             const loadedSchematic = await loadSchematicFile(schematic.file);
 
             if (!loadedSchematic) {
-                player.tell('§c加载失败：无法解析原理图文件');
+                tell(player, 'ui.place.errLoad');
                 return;
             }
 
@@ -755,7 +724,7 @@ class UIManager {
             this.showPlacementPanel(player, schematic, loadedSchematic);
 
         } catch (e) {
-            player.tell('§c加载失败：' + e.message);
+            tell(player, 'ui.place.errLoadMsg', e.message);
             logger.error(`[UIManager] loadAndPlaceSchematic error: ${e.message}`);
             logger.error(`[UIManager] Stack: ${e.stack}`);
         }
@@ -764,7 +733,7 @@ class UIManager {
     showLoadProjection(player) {
         const dataManager = global.dataManager;
         if (!dataManager) {
-            player.tell('§c错误：数据管理器未初始化');
+            tell(player, 'ui.load.errData');
             this.showMainMenu(player);
             return;
         }
@@ -772,12 +741,12 @@ class UIManager {
         const projections = dataManager.getAllProjections();
 
         const fm = mc.newSimpleForm();
-        fm.setTitle('加载投影');
+        fm.setTitle(t(player, 'ui.load.title'));
 
         if (projections.length === 0) {
-            fm.setContent('暂无已放置的投影\n\n请先使用原理图浏览器加载原理图');
-            fm.addButton('+ 浏览新原理图');
-            fm.addButton('返回主菜单');
+            fm.setContent(t(player, 'ui.load.empty'));
+            fm.addButton(t(player, 'ui.load.browse'));
+            fm.addButton(t(player, 'ui.menu.back'));
 
             player.sendForm(fm, (player, data) => {
                 if (typeof data !== 'number') return;   // 取消表单：LSE 可能回 null 也可能回 undefined
@@ -790,15 +759,15 @@ class UIManager {
             return;
         }
 
-        fm.setContent(`找到 ${projections.length} 个已放置的投影\n选择一个投影查看详情：`);
+        fm.setContent(t(player, 'ui.load.content', projections.length));
 
         for (const proj of projections) {
             if (!proj) continue;
             const status = this._projectionStatusText(player, proj.id);
-            fm.addButton(`${proj.name || '未命名'}\n${status} (${proj.dimensions?.x || '?'}×${proj.dimensions?.y || '?'}×${proj.dimensions?.z || '?'})`);
+            fm.addButton(`${proj.name || t(player, 'ui.load.unnamed')}\n${status} (${proj.dimensions?.x || '?'}×${proj.dimensions?.y || '?'}×${proj.dimensions?.z || '?'})`);
         }
-        fm.addButton('+ 浏览新原理图');
-        fm.addButton('返回主菜单');
+        fm.addButton(t(player, 'ui.load.browse'));
+        fm.addButton(t(player, 'ui.menu.back'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') {
@@ -828,15 +797,15 @@ class UIManager {
     /** 加载状态文案：未加载 / 已加载（木剑控制中）/ 已加载（并存） */
     _projectionStatusText(player, projectionId) {
         const renderer = global.renderer;
-        if (!renderer || typeof renderer.getPlayerProjections !== 'function') return '[未加载]';
+        if (!renderer || typeof renderer.getPlayerProjections !== 'function') return t(player, 'ui.load.statusNotLoaded');
         const row = renderer.getPlayerProjections(player).find((e) => e.id === projectionId);
-        if (!row) return '[未加载]';
-        return row.primary ? '[已加载·木剑控制中]' : '[已加载]';
+        if (!row) return t(player, 'ui.load.statusNotLoaded');
+        return row.primary ? t(player, 'ui.load.statusLoadedPrimary') : t(player, 'ui.load.statusLoaded');
     }
 
     showProjectionDetail(player, projection) {
         if (!projection) {
-            player.tell('§c投影不存在');
+            tell(player, 'ui.detail.errNoProj');
             this.showMainMenu(player);
             return;
         }
@@ -847,32 +816,34 @@ class UIManager {
         const mine = list.find((e) => e.id === projection.id) || null;
         const isLoaded = !!mine;
         const currentLayer = mine ? mine.layer : -1;
-        const layerText = currentLayer < 0 ? '全部层' : `第 ${currentLayer} 层`;
+        const layerText = currentLayer < 0 ? t(player, 'ui.detail.layerAll') : t(player, 'ui.detail.layerN', currentLayer);
 
         const fm = mc.newSimpleForm();
-        fm.setTitle('投影详情');
+        fm.setTitle(t(player, 'ui.detail.title'));
         fm.setContent(
-            `投影名称: ${projection.name}\n` +
-            `位置: (${projection.position?.x}, ${projection.position?.y}, ${projection.position?.z})\n` +
-            `尺寸: ${projection.dimensions?.x}×${projection.dimensions?.y}×${projection.dimensions?.z}\n` +
-            `方块数: ${projection.blocks?.length || projection.totalBlocks || 0}\n` +
-            `状态: ${isLoaded ? (mine.primary ? '已加载（木剑控制中）' : '已加载') : '未加载'}\n` +
-            (isLoaded ? `当前层: ${layerText}\n` : '') +
-            `\n已同时加载: ${list.length} 个投影`
+            t(player, 'ui.detail.name', projection.name) + '\n' +
+            t(player, 'ui.detail.pos', projection.position?.x, projection.position?.y, projection.position?.z) + '\n' +
+            t(player, 'ui.detail.dims', projection.dimensions?.x, projection.dimensions?.y, projection.dimensions?.z) + '\n' +
+            t(player, 'ui.detail.blocks', projection.blocks?.length || projection.totalBlocks || 0) + '\n' +
+            t(player, 'ui.detail.status',
+                isLoaded ? (mine.primary ? t(player, 'ui.detail.statusLoadedPrimary') : t(player, 'ui.detail.statusLoaded'))
+                         : t(player, 'ui.detail.statusNotLoaded')) + '\n' +
+            (isLoaded ? t(player, 'ui.detail.layer', layerText) + '\n' : '') +
+            t(player, 'ui.detail.loadedCount', list.length)
         );
 
         // 按钮 → 动作的显式映射：加/减按钮时不会再把下标错位
         const actions = [];
         if (isLoaded) {
-            actions.push(['unload', '卸载投影']);
-            if (!mine.primary) actions.push(['primary', '设为木剑控制']);
+            actions.push(['unload', t(player, 'ui.detail.unload')]);
+            if (!mine.primary) actions.push(['primary', t(player, 'ui.detail.primary')]);
         } else {
-            actions.push(['load', '加载投影']);
+            actions.push(['load', t(player, 'ui.detail.load')]);
         }
-        actions.push(['materials', '查看材料清单']);
-        actions.push(['placeall', '直接放置全部方块']);
-        actions.push(['delete', '删除投影']);
-        actions.push(['back', '返回']);
+        actions.push(['materials', t(player, 'ui.detail.materials')]);
+        actions.push(['placeall', t(player, 'ui.detail.placeall')]);
+        actions.push(['delete', t(player, 'ui.detail.delete')]);
+        actions.push(['back', t(player, 'ui.detail.back')]);
         for (const [, label] of actions) fm.addButton(label);
 
         player.sendForm(fm, (player, data) => {
@@ -907,11 +878,11 @@ class UIManager {
                     const isCreative = player.gameMode === 1;
                     const isOp = typeof player.isOP === 'function' ? player.isOP() : false;
                     if (!isCreative || !isOp) {
-                        player.tell('§c此功能需要创造模式且具有OP权限');
+                        tell(player, 'ui.detail.errNeedOp');
                         this.showProjectionDetail(player, projection);
                         return;
                     }
-                    player.tell('§a正在直接放置全部方块，请稍候...');
+                    tell(player, 'ui.detail.placing');
                     this.directPlaceAllBlocks(player, projection);
                     // 放置完成后返回详情页
                     setTimeout(() => {
@@ -933,16 +904,16 @@ class UIManager {
     renderProjection(player, projection) {
         const renderer = global.renderer;
         if (!renderer) {
-            player.tell('§c错误：渲染器未初始化');
+            tell(player, 'ui.load.errRender');
             return;
         }
 
         if (!projection) {
-            player.tell('§c错误：投影数据无效');
+            tell(player, 'ui.load.errDataInvalid');
             return;
         }
         if (!projection.isMega && (!projection.blocks || projection.blocks.length === 0)) {
-            player.tell('§c错误：投影数据无效');
+            tell(player, 'ui.load.errDataInvalid');
             return;
         }
 
@@ -951,14 +922,14 @@ class UIManager {
             if (typeof renderer.setPrimaryProjection === 'function') {
                 renderer.setPrimaryProjection(player, projection.id, { notify: true });
             } else {
-                player.tell('§c该投影已在渲染中');
+                tell(player, 'ui.load.already');
             }
             setTimeout(() => this.showProjectionDetail(player, projection), 300);
             return;
         }
 
-        player.tell(`§a正在加载投影: ${projection.name}`);
-        player.tell(`§a方块数: ${projection.blocks?.length || projection.totalBlocks || 0}`);
+        tell(player, 'ui.load.loading', projection.name);
+        tell(player, 'ui.load.blockCount', projection.blocks?.length || projection.totalBlocks || 0);
 
         const ok = renderer.startRender(player, projection, -1);
         if (!ok) {
@@ -967,7 +938,7 @@ class UIManager {
         }
         const n = (typeof renderer.getPlayerProjections === 'function')
             ? renderer.getPlayerProjections(player).length : 1;
-        player.tell(`§7当前同时显示 §f${n}§7 个投影，木剑控制该投影（可在「投影操作 → 选择木剑控制的投影」里切换）`);
+        tell(player, 'ui.load.multi', n);
 
         setTimeout(() => {
             this.showProjectionDetail(player, projection);
@@ -989,7 +960,7 @@ class UIManager {
     unloadProjection(player, projection) {
         const renderer = global.renderer;
         if (!renderer) {
-            player.tell('错误：渲染器未初始化');
+            tell(player, 'ui.load.errRender2');
             return;
         }
 
@@ -999,7 +970,7 @@ class UIManager {
         } else {
             renderer.cancelRender(player);
         }
-        player.tell(`§a投影 "${projection && projection.name}" 已卸载`);
+        tell(player, 'ui.detail.unloaded', projection && projection.name);
 
         setTimeout(() => {
             this.showProjectionDetail(player, projection);
@@ -1012,7 +983,7 @@ class UIManager {
     showSelectActiveProjection(player) {
         const renderer = global.renderer;
         if (!renderer) {
-            player.tell('§c错误：渲染器未初始化');
+            tell(player, 'ui.select.errRender');
             this.showMainMenu(player);
             return;
         }
@@ -1021,11 +992,11 @@ class UIManager {
             ? renderer.getPlayerProjections(player) : [];
 
         const fm = mc.newSimpleForm();
-        fm.setTitle('选择木剑控制的投影');
+        fm.setTitle(t(player, 'ui.select.title'));
 
         if (!list.length) {
-            fm.setContent('当前没有已加载的投影\n\n先在「加载投影」里加载一个');
-            fm.addButton('返回');
+            fm.setContent(t(player, 'ui.select.empty'));
+            fm.addButton(t(player, 'ui.select.back'));
             player.sendForm(fm, (player, data) => {
                 if (typeof data !== 'number') return;
                 this.showProjectionOperations(player);
@@ -1035,18 +1006,17 @@ class UIManager {
 
         const current = list.find((e) => e.primary);
         fm.setContent(
-            `已加载 ${list.length} 个投影\n` +
-            `当前木剑控制: ${current ? (current.projection?.name || current.id) : '（无）'}\n\n` +
-            `点击切换（只换控制目标，不会重新铺设）`
+            t(player, 'ui.select.content', list.length,
+                current ? (current.projection?.name || current.id) : t(player, 'ui.select.none'))
         );
 
         for (const row of list) {
-            const tag = row.primary ? '§a← 当前' : '§7点击切换';
-            const mega = row.isMega ? ' §8[MEGA]' : '';
-            const ly = row.layer < 0 ? '全部层' : `第 ${row.layer} 层`;
+            const tag = row.primary ? t(player, 'ui.select.current') : t(player, 'ui.select.switch');
+            const mega = row.isMega ? t(player, 'ui.select.mega') : '';
+            const ly = row.layer < 0 ? t(player, 'ui.detail.layerAll') : t(player, 'ui.detail.layerN', row.layer);
             fm.addButton(`${row.projection?.name || row.id}${mega}\n${tag} §8(${ly})`);
         }
-        fm.addButton('返回');
+        fm.addButton(t(player, 'ui.select.back'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') {
@@ -1071,12 +1041,10 @@ class UIManager {
 
     confirmDeleteProjection(player, projection) {
         const fm = mc.newSimpleForm();
-        fm.setTitle('确认删除');
-        fm.setContent(
-            `确定要删除投影 "${projection.name}" 吗？\n\n`
-        );
-        fm.addButton('确认删除');
-        fm.addButton('取消');
+        fm.setTitle(t(player, 'ui.del.title'));
+        fm.setContent(t(player, 'ui.del.content', projection.name));
+        fm.addButton(t(player, 'ui.del.confirm'));
+        fm.addButton(t(player, 'ui.del.cancel'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') return;   // 取消表单：LSE 可能回 null 也可能回 undefined
@@ -1104,8 +1072,8 @@ class UIManager {
                     : { ok: true };
 
                 if (!purge.ok) {
-                    player.tell(`§c还有 §e${purge.remaining}§c 格投影没能还原（区块未加载）—— 记录已保留`);
-                    player.tell('§7在投影附近重新删除，或先执行 §f/lit ghost clean');
+                    tell(player, 'ui.detail.purgeRemain', purge.remaining);
+                    tell(player, 'ui.detail.purgeHint');
                     this.showProjectionDetail(player, projection);
                     return;
                 }
@@ -1114,13 +1082,23 @@ class UIManager {
                     // 只卸载这一个：其它已加载的投影不受影响
                     renderer.cancelRender(player, projection.id);
                 }
+                // 无活跃任务时 cancelRender 不会走 _dropTask，projManager 里的活动投影会残留，
+                // 打印机/木剑继续拿已删除的投影工作。这里兜底清一次。
+                try {
+                    const pm = global.projManager;
+                    const act = pm && typeof pm.getActiveProjectionByPlayer === 'function'
+                        ? pm.getActiveProjectionByPlayer(player) : null;
+                    if (act && act.projection && String(act.projection.id) === String(projection.id)) {
+                        pm.removeActiveProjection(player.xuid);
+                    }
+                } catch (e) { /* 忽略 */ }
                 try {
                     if (typeof dataManager.removeProjectionFromAllPlayers === 'function') {
                         dataManager.removeProjectionFromAllPlayers(projection.id);
                     }
                 } catch (e) { /* 忽略 */ }
                 dataManager.removeProjection(projection.id);
-                player.tell(`§a投影 "${projection.name}" 已删除§7（已还原 ${purge.restored || 0} 格）`);
+                tell(player, 'ui.detail.deleted', projection.name, purge.restored || 0);
 
                 setTimeout(() => {
                     this.showLoadProjection(player);
@@ -1133,14 +1111,10 @@ class UIManager {
 
     showMaterialList(player, projection) {
         const fm = mc.newSimpleForm();
-        fm.setTitle('材料清单');
-        fm.setContent(
-            `投影: ${projection.name}\n\n` +
-            `方块总数: ${projection.blocks?.length || 0}\n\n` +
-            `点击"生成Excel"导出材料清单到文件`
-        );
-        fm.addButton('生成Excel');
-        fm.addButton('返回');
+        fm.setTitle(t(player, 'ui.mat.title'));
+        fm.setContent(t(player, 'ui.mat.content', projection.name, projection.blocks?.length || 0));
+        fm.addButton(t(player, 'ui.mat.gen'));
+        fm.addButton(t(player, 'ui.mat.back'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number' || data === 1) {
@@ -1159,7 +1133,7 @@ class UIManager {
         // 使用全局已初始化的 materialCounter
         const materialCounter = global.materialCounter;
         if (!materialCounter) {
-            player.tell('§c错误：材料统计模块未初始化');
+            tell(player, 'ui.mat.err');
             return;
         }
 
@@ -1175,7 +1149,7 @@ class UIManager {
     showProjectionManage(player) {
         const dataManager = global.dataManager;
         if (!dataManager) {
-            player.tell('§c错误：数据管理器未初始化');
+            tell(player, 'ui.manage.errData');
             this.showMainMenu(player);
             return;
         }
@@ -1183,19 +1157,19 @@ class UIManager {
         const projections = dataManager.getAllProjections();
 
         const fm = mc.newSimpleForm();
-        fm.setTitle('投影管理');
+        fm.setTitle(t(player, 'ui.manage.title'));
 
         if (projections.length === 0) {
-            fm.setContent('暂无投影\n\n请先加载原理图');
+            fm.setContent(t(player, 'ui.manage.empty'));
         } else {
-            fm.setContent(`共 ${projections.length} 个投影`);
+            fm.setContent(t(player, 'ui.manage.content', projections.length));
             for (const proj of projections) {
                 fm.addButton(`${proj.name}\n(${proj.position?.x}, ${proj.position?.y}, ${proj.position?.z})`);
             }
         }
 
-        fm.addButton('删除所有投影');
-        fm.addButton('返回主菜单');
+        fm.addButton(t(player, 'ui.manage.delAll'));
+        fm.addButton(t(player, 'ui.manage.back'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') {
@@ -1219,7 +1193,7 @@ class UIManager {
                 if (projection && projection.id) {
                     this.showProjectionDetail(player, projection);
                 } else {
-                    player.tell('§c错误：投影数据无效');
+                    tell(player, 'ui.manage.errInvalid');
                     this.showProjectionManage(player);
                 }
             } else {
@@ -1230,11 +1204,11 @@ class UIManager {
 
     showSettings(player) {
         const fm = mc.newSimpleForm();
-        fm.setTitle('LitematicaBE 设置');
-        fm.setContent('选择设置选项：');
+        fm.setTitle(t(player, 'ui.settings.title'));
+        fm.setContent(t(player, 'ui.settings.content'));
 
-        fm.addButton('清除所有投影');
-        fm.addButton('返回主菜单');
+        fm.addButton(t(player, 'ui.settings.clear'));
+        fm.addButton(t(player, 'ui.settings.back'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number' || data === 1) {
@@ -1250,12 +1224,10 @@ class UIManager {
 
     confirmClearProjections(player) {
         const fm = mc.newSimpleForm();
-        fm.setTitle('确认清除');
-        fm.setContent(
-            '确定要清除所有投影吗？\n'
-        );
-        fm.addButton('确认清除');
-        fm.addButton('取消');
+        fm.setTitle(t(player, 'ui.clear.title'));
+        fm.setContent(t(player, 'ui.clear.content'));
+        fm.addButton(t(player, 'ui.clear.confirm'));
+        fm.addButton(t(player, 'ui.clear.cancel'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') return;   // 取消表单：LSE 可能回 null 也可能回 undefined
@@ -1289,7 +1261,7 @@ class UIManager {
                             }
                         }
                     } catch (e) { /* 忽略 */ }
-                    player.tell(`§a已清除 §e${removed}§a 个投影` + (kept ? `，§e${kept}§a 个因区块未加载保留（靠近后重删）` : ''));
+                    tell(player, 'ui.clear.done', removed, kept ? t(player, 'ui.clear.doneKept', kept) : '');
                 }
             }
             this.showMainMenu(player);
@@ -1301,7 +1273,7 @@ class UIManager {
         const easyPlaceManager = global.easyPlaceManager;
 
         if (!renderer) {
-            player.tell('§c错误：渲染器未初始化');
+            tell(player, 'ui.ops.errRender');
             this.showMainMenu(player);
             return;
         }
@@ -1316,36 +1288,29 @@ class UIManager {
         const isCorrection = easyPlaceManager?.isCorrectionEnabled(player) || false;
         const hasActive = list.length > 0 || !!renderer.activeProjections?.has(player.xuid);
 
-        const layerStatus = isLayerMode ? '开启' : '关闭';
-        const easyStatus = isEasyPlace ? '开启' : '关闭';
-        const fastStatus = isFastPlace ? '开启' : '关闭';
-        const correctionStatus = isCorrection ? '开启' : '关闭';
+        const layerStatus = isLayerMode ? t(player, 'ui.ops.on') : t(player, 'ui.ops.off');
+        const easyStatus = isEasyPlace ? t(player, 'ui.ops.on') : t(player, 'ui.ops.off');
+        const fastStatus = isFastPlace ? t(player, 'ui.ops.on') : t(player, 'ui.ops.off');
+        const correctionStatus = isCorrection ? t(player, 'ui.ops.on') : t(player, 'ui.ops.off');
         const projStatus = hasActive
-            ? `${list.length} 个已加载` + (primary ? `（木剑控制：${primary.projection?.name || primary.id}）` : '')
-            : '未加载';
+            ? t(player, 'ui.ops.projStatus', list.length) + (primary ? t(player, 'ui.ops.projStatusPrimary', primary.projection?.name || primary.id) : '')
+            : t(player, 'ui.ops.projNone');
 
         const fm = mc.newSimpleForm();
-        fm.setTitle('投影操作');
-        fm.setContent(
-            `当前状态:\n` +
-            `逐层显示: ${layerStatus}\n` +
-            `轻松放置: ${easyStatus}\n` +
-            `投影打印机: ${fastStatus}\n` +
-            `投影纠错: ${correctionStatus}\n` +
-            `投影状态: ${projStatus}`
-        );
+        fm.setTitle(t(player, 'ui.ops.title'));
+        fm.setContent(t(player, 'ui.ops.content', layerStatus, easyStatus, fastStatus, correctionStatus, projStatus));
 
         // 动作 → 按钮：动态按钮集合也不会错位
         const actions = [
-            ['layer', `${isLayerMode ? '关闭' : '开启'}逐层显示`],
-            ['easy', `${isEasyPlace ? '关闭' : '开启'}轻松放置`],
-            ['fast', `${isFastPlace ? '关闭' : '开启'}投影打印机`],
-            ['correction', `${isCorrection ? '关闭' : '开启'}投影纠错`],
-            ['verify', '验证投影'],
-            ['select', '选择木剑控制的投影'],
-            ['unload', '卸载某个投影'],
-            ['cancel', '取消全部渲染'],
-            ['back', '返回主菜单'],
+            ['layer', isLayerMode ? t(player, 'ui.ops.layerOff') : t(player, 'ui.ops.layerOn')],
+            ['easy', isEasyPlace ? t(player, 'ui.ops.easyOff') : t(player, 'ui.ops.easyOn')],
+            ['fast', isFastPlace ? t(player, 'ui.ops.fastOff') : t(player, 'ui.ops.fastOn')],
+            ['correction', isCorrection ? t(player, 'ui.ops.corrOff') : t(player, 'ui.ops.corrOn')],
+            ['verify', t(player, 'ui.ops.verify')],
+            ['select', t(player, 'ui.ops.select')],
+            ['unload', t(player, 'ui.ops.unload')],
+            ['cancel', t(player, 'ui.ops.cancel')],
+            ['back', t(player, 'ui.ops.back')],
         ];
         for (const [, label] of actions) fm.addButton(label);
 
@@ -1383,11 +1348,11 @@ class UIManager {
             ? renderer.getPlayerProjections(player) : [];
 
         const fm = mc.newSimpleForm();
-        fm.setTitle('卸载投影');
+        fm.setTitle(t(player, 'ui.unload.title'));
 
         if (!list.length) {
-            fm.setContent('当前没有已加载的投影');
-            fm.addButton('返回');
+            fm.setContent(t(player, 'ui.unload.empty'));
+            fm.addButton(t(player, 'ui.unload.back'));
             player.sendForm(fm, (player, data) => {
                 if (typeof data !== 'number') return;
                 this.showProjectionOperations(player);
@@ -1395,13 +1360,14 @@ class UIManager {
             return;
         }
 
-        fm.setContent(`已加载 ${list.length} 个投影\n点击卸载其中一个`);
+        fm.setContent(t(player, 'ui.unload.content', list.length));
         for (const row of list) {
-            const tag = row.primary ? '§a（木剑控制中）' : '';
-            fm.addButton(`${row.projection?.name || row.id}${tag}\n§7${row.layer < 0 ? '全部层' : `第 ${row.layer} 层`}`);
+            const tag = row.primary ? t(player, 'ui.unload.primary') : '';
+            const ly = row.layer < 0 ? t(player, 'ui.detail.layerAll') : t(player, 'ui.detail.layerN', row.layer);
+            fm.addButton(`${row.projection?.name || row.id}${tag}\n§7${ly}`);
         }
-        fm.addButton('全部卸载');
-        fm.addButton('返回');
+        fm.addButton(t(player, 'ui.unload.all'));
+        fm.addButton(t(player, 'ui.unload.back'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') {
@@ -1411,7 +1377,7 @@ class UIManager {
             if (data === list.length) {
                 // 全部卸载
                 renderer.cancelRender(player);
-                player.tell('§a已卸载全部投影');
+                tell(player, 'ui.unload.done');
                 setTimeout(() => this.showProjectionOperations(player), 300);
                 return;
             }
@@ -1425,7 +1391,7 @@ class UIManager {
                 return;
             }
             renderer.cancelRender(player, row.id);
-            player.tell(`§a已卸载投影 "${row.projection?.name || row.id}"`);
+            tell(player, 'ui.unload.doneOne', row.projection?.name || row.id);
             setTimeout(() => this.showUnloadPicker(player), 300);
         });
     }
@@ -1436,7 +1402,7 @@ class UIManager {
         const projManager = global.projManager;
         
         if (!renderer) {
-            player.tell('§c错误：渲染器未初始化');
+            tell(player, 'ui.ops.errRender');
             this.showProjectionOperations(player);
             return;
         }
@@ -1448,13 +1414,13 @@ class UIManager {
         const current = renderer.layerRenderMode.get(player.xuid) || false;
         renderer.layerRenderMode.set(player.xuid, !current);
 
-        const status = !current ? '§a开启' : '§c关闭';
-        player.tell(`逐层渲染模式已${status}`);
+        const status = !current ? t(player, 'ui.ops.onColor') : t(player, 'ui.ops.offColor');
+        tell(player, 'ui.ops.layerToggled', status);
 
         // 自动切换到建造模式
         if (!current && dataManager) {
             dataManager.setPlayerToolMode(player.xuid, 'build');
-            player.tell('§a已自动切换到建造模式');
+            tell(player, 'ui.ops.autoBuild');
         }
 
         const activeProj = projManager?.getActiveProjectionByPlayer(player);
@@ -1471,9 +1437,9 @@ class UIManager {
                     : null;
                 if (r && r.ok) {
                     const detail = (typeof r.chunks === 'number' && r.chunks > 0)
-                        ? `${r.chunks} 个分块待注入`
-                        : `${r.count || 0} 格`;
-                    player.tell(`已切换到第 0 层（共 ${projection.dimensions.y} 层），${detail}`);
+                        ? t(player, 'ui.ops.chunksPending', r.chunks)
+                        : t(player, 'ui.ops.gridCount', r.count || 0);
+                    tell(player, 'ui.ops.layer0', projection.dimensions.y, detail);
                 } else {
                     renderer.currentRenderLayer.set(player.xuid, targetLayer);
                 }
@@ -1483,10 +1449,10 @@ class UIManager {
                     ? renderer.applyLayer(player, projection, -1)
                     : null;
                 if (r && r.ok) {
-                    player.tell('已切换到完整渲染模式（正在重新注入全部层）');
+                    tell(player, 'ui.ops.layerAllPending');
                 } else {
                     renderer.currentRenderLayer.set(player.xuid, -1);
-                    player.tell('已切换到完整渲染模式');
+                    tell(player, 'ui.ops.layerAll');
                 }
             }
         }
@@ -1499,7 +1465,7 @@ class UIManager {
     toggleEasyPlaceFromMenu(player) {
         const easyPlaceManager = global.easyPlaceManager;
         if (!easyPlaceManager) {
-            player.tell('§c错误：轻松放置模块未初始化');
+            tell(player, 'ui.ops.errEasy');
             this.showProjectionOperations(player);
             return;
         }
@@ -1514,7 +1480,7 @@ class UIManager {
     toggleCorrectionFromMenu(player) {
         const easyPlaceManager = global.easyPlaceManager;
         if (!easyPlaceManager) {
-            player.tell('§c错误：轻松放置模块未初始化');
+            tell(player, 'ui.ops.errEasy');
             this.showProjectionOperations(player);
             return;
         }
@@ -1529,14 +1495,14 @@ class UIManager {
     cancelRenderFromMenu(player) {
         const renderer = global.renderer;
         if (!renderer) {
-            player.tell('§c错误：渲染器未初始化');
+            tell(player, 'ui.ops.errRender');
             this.showMainMenu(player);
             return;
         }
 
         // 不带投影 id = 撤销该玩家全部会话（"取消全部渲染"）
         renderer.cancelRender(player);
-        player.tell('§a已取消全部投影的渲染');
+        tell(player, 'ui.ops.cancelDone');
 
         setTimeout(() => {
             this.showMainMenu(player);
@@ -1546,7 +1512,7 @@ class UIManager {
     toggleFastPlaceFromMenu(player) {
         const easyPlaceManager = global.easyPlaceManager;
         if (!easyPlaceManager) {
-            player.tell('§c错误：轻松放置模块未初始化');
+            tell(player, 'ui.ops.errEasy');
             this.showProjectionOperations(player);
             return;
         }
@@ -1563,7 +1529,7 @@ class UIManager {
         const projManager = global.projManager;
 
         if (!blockVerifier) {
-            player.tell('§c错误：验证模块未初始化');
+            tell(player, 'ui.ops.errVerify');
             this.showProjectionOperations(player);
             return;
         }
@@ -1571,13 +1537,13 @@ class UIManager {
         const activeProj = projManager?.getActiveProjectionByPlayer(player);
 
         if (!activeProj || !activeProj.projection) {
-            player.tell('§c没有活动的投影');
+            tell(player, 'ui.ops.noActive');
             this.showProjectionOperations(player);
             return;
         }
 
         const projection = activeProj.projection;
-        player.tell('§7正在验证投影，请稍候...');
+        tell(player, 'ui.ops.verifying');
 
         // 执行核心验证
         let results;
@@ -1585,7 +1551,7 @@ class UIManager {
             results = blockVerifier.verifyProjection(projection);
         } catch (e) {
             logger.error(`[UIManager] verifyProjection failed: ${e.message}`);
-            player.tell('§c验证失败: ' + e.message);
+            tell(player, 'ui.ops.verifyFail', e.message);
             this.showProjectionOperations(player);
             return;
         }
@@ -1620,50 +1586,50 @@ class UIManager {
 
         const matchPercent = results.total > 0 ? ((results.match / results.total) * 100).toFixed(1) : 0;
 
-        let content = `投影: ${projection.name}\n\n`;
-        content += `§e总方块数: §f${results.total}\n`;
-        content += `§a完全匹配: §f${results.match}\n`;
-        content += `§e状态错误: §f${results.typeMatch}\n`;
-        content += `§c错误方块: §f${results.noMatch}\n`;
-        content += `§b缺失方块: §f${results.missing}\n`;
+        let content = t(player, 'ui.verify.proj', projection.name) + '\n\n';
+        content += t(player, 'ui.verify.total', results.total) + '\n';
+        content += t(player, 'ui.verify.match', results.match) + '\n';
+        content += t(player, 'ui.verify.typeErr', results.typeMatch) + '\n';
+        content += t(player, 'ui.verify.errBlock', results.noMatch) + '\n';
+        content += t(player, 'ui.verify.missing', results.missing) + '\n';
 
         if (extraResult) {
-            content += `§6多余方块: §f${extraResult.extraCount}`;
+            content += t(player, 'ui.verify.extra', extraResult.extraCount);
             if (extraResult.totalScanned >= 50000) {
-                content += ` §7(已扫描${extraResult.totalScanned}格)`;
+                content += t(player, 'ui.verify.extraScanned', extraResult.totalScanned);
             }
             content += '\n';
         }
 
-        content += `\n§7完成度: §f${matchPercent}%\n`;
-        content += `§7问题方块合计: §f${allProblems.length} 个`;
+        content += t(player, 'ui.verify.percent', matchPercent) + '\n';
+        content += t(player, 'ui.verify.problemTotal', allProblems.length);
 
         // 简要问题分布
         if (allProblems.length > 0) {
             const sampleCount = Math.min(allProblems.length, 5);
-            content += '\n\n§7问题方块示例:\n';
+            content += t(player, 'ui.verify.sampleTitle');
             for (let i = 0; i < sampleCount; i++) {
                 const b = allProblems[i];
                 const colorChar = b.level === 'extra' ? '§6' : 
                     (b.level === 1 ? '§c' : (b.level === 2 ? '§e' : '§b'));
-                const name = b.levelName || (b.level === 'extra' ? '多余方块' : '未知');
-                content += `${colorChar}  ${name} @ (${b.position.x}, ${b.position.y}, ${b.position.z})\n`;
+                const name = b.levelName || (b.level === 'extra' ? t(player, 'ui.verify.catExtra') : t(player, 'ui.verify.catUnknown'));
+                content += t(player, 'ui.verify.sampleItem', colorChar, name, b.position.x, b.position.y, b.position.z) + '\n';
             }
             if (allProblems.length > 5) {
-                content += `§7  ... 还有 ${allProblems.length - 5} 个问题方块`;
+                content += t(player, 'ui.verify.more', allProblems.length - 5);
             }
         }
 
         const fm = mc.newSimpleForm();
-        fm.setTitle('验证结果');
+        fm.setTitle(t(player, 'ui.verify.title'));
         fm.setContent(content);
 
         if (allProblems.length > 0) {
-            fm.addButton('标注问题方块');
+            fm.addButton(t(player, 'ui.verify.mark'));
         }
-        fm.addButton('详细问题列表');
-        fm.addButton('刷新验证');
-        fm.addButton('返回');
+        fm.addButton(t(player, 'ui.verify.detail'));
+        fm.addButton(t(player, 'ui.verify.refresh'));
+        fm.addButton(t(player, 'ui.verify.back'));
 
         player.sendForm(fm, (player, data) => {
             if (typeof data !== 'number') {
@@ -1681,7 +1647,7 @@ class UIManager {
             if (hasProblems && data === markBtn) {
                 // 标注问题方块
                 if (!saved) {
-                    player.tell('§c验证结果已过期，请重新验证');
+                    tell(player, 'ui.verify.expired');
                     this.showProjectionOperations(player);
                     return;
                 }
@@ -1689,7 +1655,7 @@ class UIManager {
                 if (marked > 0) {
                     setTimeout(() => this.showProjectionOperations(player), 1000);
                 } else {
-                    player.tell('§c无法标记问题方块（可能所有问题位置均未加载）');
+                    tell(player, 'ui.verify.cantMark');
                     setTimeout(() => this.showProjectionOperations(player), 1000);
                 }
             } else if (data === detailBtn) {
@@ -1710,14 +1676,14 @@ class UIManager {
     showVerificationDetail(player) {
         const saved = this.lastVerifyResults.get(player.xuid);
         if (!saved) {
-            player.tell('§c验证结果已过期，请重新验证');
+            tell(player, 'ui.verify.expired');
             this.showProjectionOperations(player);
             return;
         }
 
         const allProblems = saved.allProblems;
         if (allProblems.length === 0) {
-            player.tell('§a没有检测到问题方块');
+            tell(player, 'ui.verify.noProblems');
             this.showVerifyResult(player);
             return;
         }
@@ -1732,39 +1698,39 @@ class UIManager {
             const pageBlocks = allProblems.slice(start, end);
 
             const fm = mc.newSimpleForm();
-            fm.setTitle(`问题方块 (${currentPage + 1}/${totalPages})`);
+            fm.setTitle(t(player, 'ui.verify.title2', currentPage + 1, totalPages));
 
             let content = '';
             for (let i = 0; i < pageBlocks.length; i++) {
                 const b = pageBlocks[i];
                 const idx = start + i + 1;
                 let catName = b.levelName;
-                if (b.level === 'extra') catName = '§6多余方块';
-                else if (b.level === 1) catName = '§c错误方块';
-                else if (b.level === 2) catName = '§e状态错误';
-                else if (b.level === 4) catName = '§b缺失方块';
+                if (b.level === 'extra') catName = t(player, 'ui.verify.catExtra');
+                else if (b.level === 1) catName = t(player, 'ui.verify.catErr');
+                else if (b.level === 2) catName = t(player, 'ui.verify.catTypeErr');
+                else if (b.level === 4) catName = t(player, 'ui.verify.catMissing');
 
-                content += `${idx}. ${catName}§r @ (${b.position.x}, ${b.position.y}, ${b.position.z})\n`;
+                content += t(player, 'ui.verify.item', idx, catName, b.position.x, b.position.y, b.position.z) + '\n';
             }
 
-            content += `\n§7共 ${allProblems.length} 个问题方块`;
+            content += t(player, 'ui.verify.total2', allProblems.length);
 
             fm.setContent(content);
 
             // 每个问题方块一个按钮用于传送
             for (let i = 0; i < pageBlocks.length; i++) {
-                fm.addButton(`传送到 #${start + i + 1}`);
+                fm.addButton(t(player, 'ui.verify.teleport', start + i + 1));
             }
 
             if (currentPage < totalPages - 1) {
-                fm.addButton('下一页 ▶');
+                fm.addButton(t(player, 'ui.verify.next'));
             }
             if (currentPage > 0) {
-                fm.addButton('◀ 上一页');
+                fm.addButton(t(player, 'ui.verify.prev'));
             }
 
-            fm.addButton('标注全部问题方块');
-            fm.addButton('返回');
+            fm.addButton(t(player, 'ui.verify.markAll'));
+            fm.addButton(t(player, 'ui.verify.back'));
 
             player.sendForm(fm, (player, data) => {
                 if (typeof data !== 'number') {
@@ -1790,7 +1756,7 @@ class UIManager {
                     try {
                         mc.runcmdEx(`tp "${player.name}" ${wx} ${wy} ${wz}`);
                     } catch (e) {
-                        player.tell(`§c传送失败: ${e.message}`);
+                        tell(player, 'ui.verify.teleFail', e.message);
                     }
                     this.showVerificationDetail(player);
                 } else if (data === teleCount && currentPage < totalPages - 1) {
@@ -1803,7 +1769,7 @@ class UIManager {
                     const blockVerifier = global.blockVerifier;
                     const marked = blockVerifier.markProblemBlocks(player, allProblems);
                     if (marked > 0) {
-                        player.tell('§a已标注全部问题方块');
+                        tell(player, 'ui.verify.marked');
                     }
                     this.showVerifyResult(player);
                 } else {

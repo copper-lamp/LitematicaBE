@@ -238,7 +238,7 @@ function fakeLitematic(bytes) {
     await check('宿主 logger 抛 EngineScope → 服务照常，日志降级写文件', async () => {
         const boom = () => { throw new Error('call engine APIs without a ::script::EngineScope'); };
         const engineScopeLogger = { info: boom, warn: boom, error: boom };
-        await withServer({ logger: engineScopeLogger }, async ({ base, svr }) => {
+        await withServer({ logger: engineScopeLogger, overrides: { 'misc.debugLog': true } }, async ({ base, svr }) => {
             // start() 在主线程里会用 logger，这里本来就会抛；_emit 会吞掉并转文件
             const r = await fetch(`${base}/ping`);
             assert.strictEqual(r.status, 200);

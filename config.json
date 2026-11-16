@@ -20,7 +20,9 @@
       "budgetMs": 6,  // 单轮时间预算（毫秒），溢出顺延
       "placeDelayMs": 0,  // 放置间隔（毫秒），为 0 时立即放置
       "overwriteReplaceable": true,  // 顶掉花草/雪/水；玩家自己放的方块永远不覆盖
-      "debug": false  // true = 写 logs/LitematicaBE/easyplace_debug.log（最多 5 秒一条）
+      "debug": false,  // true = 写 logs/LitematicaBE/easyplace_debug.log（最多 5 秒一条）
+      "supportCheck": true,  // 依附智能打印：火把/红石线/铁轨/按钮/拉杆/双高植物等先放支撑
+      "supportMaxDepth": 3  // 依附链最大展开深度（A 依附 B、B 依附 C…）
     }
   },
 
@@ -65,7 +67,7 @@
   "enableMega":true,  // false时超阈值会回退普通加载
   "megaSchematic": {
     "threshold": 100000,  // MEGA投影方块数阈值
-    "enabled": true,  // 允许超大型投影加载（仍需 render.enableMega 才能真渲染）
+    "enabled": true,  // 允许超大型投影加载
     "chunkSize": 32,  // 仅作说明：实际分块大小由 BinaryChunkStorage.CHUNK_SIZE 固定为 32，改这里无效
     "storagePath": "./plugins/LitematicaBE/mega_schematics/"  // 分块存储路径
   },
@@ -77,21 +79,23 @@
   },
 
   // ===== 内置 HTTP 上传站 =====
-  // 文件直接落进 schematics/ 目录，游戏内 /litematica load 立即可用。
   "web": {
     "enabled": true,
-    "engine": "node",  // node = Node 原生 http（默认，回调不受引擎作用域限制）；lse = ll.network 的 HttpServer（0.17.x 下回调会 500，仅兼容保留）
-    "host": "0.0.0.0",  // 服务器 IP
+    "engine": "node",  // node = Node 原生 http；lse = ll.network 的 HttpServer （bug）
+    "host": "0.0.0.0",  // 服务器 IP；建议只监听内网/127.0.0.1，公网用 nginx/caddy 反代 + TLS
     "port": 8080,
-    "tokenRequired": false,  // 是否开启令牌认证
+    "tokenRequired": false,  // 是否开启令牌认证（公网开放必开 true）
     "localhostNoToken": true,  // 本机访问省略令牌认证
     "token": "INPUT-YOUR_TOKEN_HERE",
-    "allowIps": [],  // 前缀匹配，如 ["192.168.", "10.0."]；空 = 不限制
+    "allowIps": [],  // 前缀匹配，如 ["192.168.", "10.0."]；空 = 不限制。注意：此白名单对所有接口生效
+    "readOnly": false,  // true = 只读模式：禁止上传/删除，仅保留列出与下载
     "maxFileMB": 64,  // 单文件上限
-    "chunkKB": 512,  // 分片大小（LSE 的 req.body 是字符串，二进制 base64 分片传）
+    "chunkKB": 512,  // 分片大小
     "allowExt": [".litematic", ".mcstructure"],
     "overwrite": false,  // false = 同名文件自动加 -1/-2，防顶投影
     "maxUploadsPerMinute": 10,  // 单 IP 每分钟最多上传次数
+    "maxRequestsPerMinute": 60,  // 单 IP 每分钟所有 API 请求数上限
+    "downloadMaxMB": 8,  // 单文件下载上限（base64 直传有内存/带宽放大风险）；0 = 不限制
     "targetDir": "./plugins/LitematicaBE/schematics/",
     "publicUrl": ""  // 反代时填对外地址，仅用于日志和页面展示
   },

@@ -269,7 +269,7 @@ GitHub：<https://github.com/copper-lamp/LitematicaBE>
 
 - [Litematica](https://github.com/maruohon/litematica) — Java 版原理图模组，对 Minecraft 投影生态影响深远
 - [LeviDev](https://github.com/LiteLDev) — 由 LeviMC 开发的 Levilamina 及 LegacyScriptEngine 为本项目功能实现提供了基础
-- [EasyPlace](https://github.com/wyl-gq/EasyPlace) — 借鉴其部分功能实现
+- [EasyPlace](https://github.com/wyl-gq/EasyPlace) — 借鉴其轻松放置及投影打印机部分功能实现
 - 以及所有为 LitematicaBE 作出贡献的开发者
 
 ## 许可证

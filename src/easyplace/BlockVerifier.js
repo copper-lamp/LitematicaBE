@@ -1,6 +1,8 @@
 const { BlockStateConverters } = require('../mappings/BlockStateConverters');
 const { BlockMappingRegistry } = require('../mappings/BlockMappingRegistry');
 const { isSlabName, slabDoubleName } = require('../mappings/SlabNames');
+// 国际化：tell 翻译后发聊天栏
+const { tell } = require('../i18n/I18n');
 
 const VerificationLevel = Object.freeze({
     UNKNOWN: 0,
@@ -448,12 +450,12 @@ class BlockVerifier {
         }
 
         if (count > 0) {
-            player.tell(`§a已标记 ${count} 个问题方块（§c红色=错误 §e黄色=状态错误 §b蓝色=缺失 §6橙色=多余），持续 ${Math.floor(duration / 1000)} 秒`);
+            tell(player, 'verify.marked2', count, Math.floor(duration / 1000));
         }
 
         // 定时清除标记的引用（粒子的视觉效果会自然消散）
         const clearMsg = () => {
-            try { player.tell('§7问题方块标记已清除'); } catch (e) {}
+            try { tell(player, 'verify.cleared'); } catch (e) {}
         };
         setTimeout(clearMsg, duration);
 

@@ -7,20 +7,20 @@ const { SpatialIndexUtils } = require('./SpatialIndexUtils');
 const { BlockStateConverters } = require('../mappings/BlockStateConverters');
 const { BlockMappingRegistry } = require('../mappings/BlockMappingRegistry');
 const { PlacementLogger } = require('./PlacementLogger');
+// 依附表（从 easyplace 移植）：只给"火把/红石线/铁轨/按钮/拉杆/双高植物…"判定支撑方向，
+// 不碰世界/投影。普通方块查表返回 null，零开销。
+const { getAttachedOffsets } = require('./AttachedBlockSupport');
 // 世界坐标的唯一实现（镜像 + 旋转 + 原点平移）：打印机不能自己再算一遍，否则投影一转就错位。
 // REPLACEABLE 与 ghost 写入共用同一份"可被顶掉"名单（草/雪/水/花…），避免两套口径。
 const { transformPosition, shortName, REPLACEABLE } = require('../ghost/GhostRenderer');
 const { isMegaProjection } = require('../data/projectionFlags');
+// 国际化：t 按玩家语言取翻译，tell 翻译后发聊天栏
+const { tell, t } = require('../i18n/I18n');
 const fs = require('fs');
 const path = require('path');
 
 /** 与 GhostGuard.isAirLike 的兜底口径一致（注入的谓词不可用时才走这里） */
 const AIR_LIKE = new Set(['air', 'cave_air', 'void_air', 'structure_void']);
-
-/** 二高植物（double_plant 族）的 BE 短名：上格必须先有同种下格支撑，否则 BDS 立即破坏 */
-const DOUBLE_PLANT_BE = new Set([
-    'rose_bush', 'sunflower', 'lilac', 'peony', 'large_fern', 'tall_grass',
-]);
 
 /** 颜色写在方块状态、物品用 Damage 表达颜色的方块（纠错返还时要折一下，否则串色） */
 const COLOR_STATE_BLOCKS = new Set(['bed', 'banner', 'wool', 'shulker_box']);
@@ -39,6 +39,9 @@ const PRINTER_DEFAULTS = {
     placeDelayMs: 0,
     overwriteReplaceable: true,
     debug: false,
+    // 依附智能打印：先放支撑、再放依附方块（火把/红石线/铁轨/按钮/拉杆/双高植物…）
+    supportCheck: true,
+    supportMaxDepth: 3,
 };
 
 class EasyPlaceManager {
@@ -77,7 +80,7 @@ class EasyPlaceManager {
         this.printerStats = {
             cycles: 0, checked: 0, placed: 0, free: 0, replaceable: 0,
             blockedTarget: 0, unloaded: 0, banned: 0, missing: 0, failed: 0, layerFiltered: 0,
-            pendingDouble: 0,
+            pendingSupport: 0,
         };
         this.ensureDebugLogDir();
     }
@@ -129,7 +132,7 @@ class EasyPlaceManager {
 
     enable(player) {
         if (!this.easyPlaceAllowed()) {
-            player.tell('§c配置里 easyPlace.enabled = false，轻松放置关闭中');
+            tell(player, 'easyplace.disabledCfg');
             return;
         }
         this.playerStates.set(player.xuid, {
@@ -137,13 +140,13 @@ class EasyPlaceManager {
             correctionEnabled: true,
             placedCount: 0
         });
-        player.tell('§a轻松放置已启用');
-        player.tell('§7放置方块时会自动修正');
+        tell(player, 'easyplace.enabled');
+        tell(player, 'easyplace.enabledHint');
     }
 
     disable(player) {
         this.playerStates.delete(player.xuid);
-        player.tell('§c轻松放置已禁用');
+        tell(player, 'easyplace.disabled');
     }
 
     /**
@@ -190,13 +193,13 @@ class EasyPlaceManager {
         if (!s) s = { enabled: false, correctionEnabled: false, placedCount: 0 };
         s.correctionEnabled = true;
         this.playerStates.set(player.xuid, s);
-        player.tell('§a投影纠错已启用');
+        tell(player, 'easyplace.corrOn');
     }
 
     disableCorrection(player) {
         const s = this.playerStates.get(player.xuid);
         if (s) s.correctionEnabled = false;
-        player.tell('§c投影纠错已禁用');
+        tell(player, 'easyplace.corrOff');
     }
 
     toggleCorrection(player) {
@@ -230,6 +233,8 @@ class EasyPlaceManager {
             placeDelayMs: num(get('placeDelayMs', PRINTER_DEFAULTS.placeDelayMs), PRINTER_DEFAULTS.placeDelayMs, 0),
             overwriteReplaceable: get('overwriteReplaceable', PRINTER_DEFAULTS.overwriteReplaceable) !== false,
             debug: get('debug', PRINTER_DEFAULTS.debug) === true,
+            supportCheck: get('supportCheck', PRINTER_DEFAULTS.supportCheck) !== false,
+            supportMaxDepth: num(get('supportMaxDepth', PRINTER_DEFAULTS.supportMaxDepth), PRINTER_DEFAULTS.supportMaxDepth, 1),
         };
         this.debugMode = cfg.debug;
         return cfg;
@@ -251,26 +256,26 @@ class EasyPlaceManager {
     setFastPlace(player, on) {
         if (on) {
             if (this.fastPlaceStates.has(player.xuid)) {
-                player.tell('§c投影打印机已经开着了（§7/litematica printer§c 关闭）');
+                tell(player, 'easyplace.printerOn');
                 return true;
             }
             if (!this.easyPlaceAllowed()) {
-                player.tell('§c配置里 easyPlace.enabled = false，打印机关闭中（改配置后 /litematica debug reload 或重启）');
+                tell(player, 'easyplace.printerCfg');
                 return false;
             }
             const cfg = this.printerConfig();
             this.fastPlaceStates.set(player.xuid, { enabled: true, placedCount: 0, startedAt: Date.now() });
             this.missingNotified.clear();
             this.consumeBlockedUntil.clear();   // 重新开启 = 重新给一次机会（玩家可能刚补了材料/解开背包锁）
-            player.tell(`§a投影打印机已启用§7（半径 ${cfg.radius} 格，每轮最多 ${cfg.maxPerCycle} 格）`);
-            player.tell('§7会把投影里的 ghost 格自动填成真方块；关掉用 §f/litematica printer');
+            tell(player, 'easyplace.printerOn2', cfg.radius, cfg.maxPerCycle);
+            tell(player, 'easyplace.printerHint');
             if (!this.tickInterval) this.startTickLoop();
             return true;
         }
 
         this.fastPlaceStates.delete(player.xuid);
         this.placedLocations.delete(player.xuid);
-        player.tell('§c投影打印机已关闭');
+        tell(player, 'easyplace.printerOff');
         if (this.fastPlaceStates.size === 0 && this.tickInterval) this.stopTickLoop();
         return false;
     }
@@ -415,7 +420,7 @@ class EasyPlaceManager {
         if (this.missingNotified.has(key)) return;
         this.missingNotified.add(key);
         try {
-            player.tell(`§e投影打印机缺少材料：§f${beName}§7（背包与潜影盒里都没有，其它方块照常放）`);
+            tell(player, 'easyplace.missing', beName);
         } catch (e) { /* 玩家可能已离线 */ }
         if (this.logFailures) {
             this.placementLogger.logFailure(player.name, javaName, beName, javaStates, beStates, '', `缺少物品: ${beName}`);
@@ -461,48 +466,16 @@ class EasyPlaceManager {
         };
     }
 
-    /**
-     * 二高植物上格的"下方支撑"检查：y-1 世界方块必须是同种植物**下格**。
-     * BDS 放置上格（upper_block_bit=1）时，若 y-1 不是同种下格，会立即把上格
-     * 破坏成凋落物 → 打印机每轮重试 → 死循环 + 无限凋落物。
-     * @returns {boolean} true = y-1 已是同种下格，可以安全放上格
-     */
-    _doublePlantBaseSettled(cand, target, dimid) {
-        let below = null;
-        try {
-            below = mc.getBlock(cand.w.x, cand.w.y - 1, cand.w.z, dimid);
-        } catch (e) {
-            return false;
-        }
-        if (!below) return false;
-        const bt = shortName(below.type || below.name || '');
-        if (bt !== shortName(target.name)) return false;
-        const bs = this._extractBlockStates(below) || {};
-        // 下格必须是 upper_block_bit=0（或缺省=0）；1/true 说明 y-1 反而是上格，不算支撑
-        const upper = bs.upper_block_bit;
-        return !(upper === 1 || upper === true);
-    }
-
-    /** 放一格并处理物品消耗 / 日志记账 */
-    _placeOneFromProjection(player, cand, dimid, isCreative) {
+    /** 放一格并处理物品消耗 / 日志记账（preTarget 可传已解析的 target，避免重复映射） */
+    _placeOneFromProjection(player, cand, dimid, isCreative, preTarget = null) {
         const javaName = cand.block.name;
         const javaStates = cand.block.state || {};
 
         if (BlockConversions.isBanned(javaName, dimid)) return 'banned';
         if (!BlockConversions.isWhitelistedState(javaName, javaStates)) return 'banned';
 
-        const target = this._resolveTargetBlock(javaName, javaStates);
+        const target = preTarget || this._resolveTargetBlock(javaName, javaStates);
         if (!target) return 'skipped';
-
-        // 二高植物上格（upper_block_bit=1）必须有同种植物下格支撑，否则 BDS 会把刚放的
-        // 上格破坏成凋落物 → 打印机每轮重试 → 死循环 + 无限凋落物。
-        // 下格不依赖上格、必然先被放好；上格本轮跳过，下一轮下格就位后再放。
-        // 投影数据缺下格（y-1 不是同种下格）时永远 pending，这是物理上放不出来的正确行为。
-        if (DOUBLE_PLANT_BE.has(shortName(target.name)) && target.states.upper_block_bit === 1) {
-            if (!this._doublePlantBaseSettled(cand, target, dimid)) {
-                return 'pending-double';
-            }
-        }
 
         let success = false;
         if (isCreative) {
@@ -540,7 +513,7 @@ class EasyPlaceManager {
                     this.consumeBlockedUntil.set(blockedKey, Date.now() + 5000);
                     if (first) {
                         try {
-                            player.tell(`§c打印机扣不掉 §f${target.name}§c：已暂停自动放置这个方块（检查背包是否被其它插件锁定）`);
+                            tell(player, 'easyplace.consumeBlocked', target.name);
                         } catch (e) { /* 玩家可能已离线 */ }
                         logger.warn(`[EasyPlace] 扣物品失败，暂停放置 ${target.name}`);
                     }
@@ -570,6 +543,130 @@ class EasyPlaceManager {
     }
 
     /**
+     * 投影内某格的方块定义（普通投影走 blockIndex / 测试桩兜底 blocks；MEGA 走磁盘）。
+     * 只用于依附检查取"支撑格应该是什么"，不参与放置。
+     */
+    _getProjectionBlockDef(projection, rel) {
+        if (!projection || !rel) return null;
+        const x = rel[0];
+        const y = rel[1];
+        const z = rel[2];
+        const dims = projection.dimensions || {};
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+        if (x < 0 || x >= (dims.x || 0) || y < 0 || y >= (dims.y || 0) || z < 0 || z >= (dims.z || 0)) {
+            return null;
+        }
+
+        if (isMegaProjection(projection) && projection.schematicId && this.megaManager) {
+            try {
+                return this.megaManager.getBlockAt(projection.schematicId, x, y, z) || null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        if (projection.blockIndex && typeof projection.blockIndex.get === 'function') {
+            const hit = projection.blockIndex.get(`${x},${y},${z}`);
+            if (hit) return hit;
+            // 索引非空 = 生产投影，查不到就是真没有这一格；空索引（测试桩 / 未建索引）才兜底扫 blocks。
+            if (projection.blockIndex.size > 0) return null;
+        }
+
+        // 测试桩兜底：没有 blockIndex（或空索引）时线性扫 blocks。
+        // 生产环境的普通投影一定带非空 blockIndex（LitematicLoader 构建），不会走这里。
+        if (Array.isArray(projection.blocks)) {
+            for (const b of projection.blocks) {
+                if (!b || !b.pos) continue;
+                const p = b.pos;
+                const bx = Array.isArray(p) ? p[0] : p.x;
+                const by = Array.isArray(p) ? p[1] : p.y;
+                const bz = Array.isArray(p) ? p[2] : p.z;
+                if (bx === x && by === y && bz === z) return b;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 依附网关：若 cand 是依附型方块且某个方向的支撑还没就位，就**先放支撑、本轮跳过自己**。
+     *
+     * 与 easyplace 的 attached_set_block 等价，但适配本项目的"逐轮调度"：
+     *   - 原插件在同一个 tick 里同步递归放支撑；本项目每 200ms 一轮，支撑格放进本轮候选，
+     *     依附方块留到下一轮（支撑已在世界 → 网关放行）。
+     *   - `supportMaxDepth` 限制依赖链展开深度，防止 A↔B 互相依附或超深链条。
+     *
+     * @returns {null | {placed: boolean}} null = 正常放自己；对象 = 本轮不放自己（placed 表示是否放下了支撑）
+     */
+    _handleAttachment(player, cand, projection, dimid, cfg, isCreative, depth = 0) {
+        if (!cfg || cfg.supportCheck === false) return null;
+        if (!cand || !cand.rel || !cand.block) return null;
+
+        const target = this._resolveTargetBlock(cand.block.name, cand.block.state || {});
+        if (!target) return null;
+        const attach = getAttachedOffsets(target.name, target.states);
+        if (!attach || !attach.offsets) return null;
+
+        let sawValidSupport = false;
+        for (const [dx, dy, dz] of attach.offsets) {
+            const srel = [cand.rel.x + dx, cand.rel.y + dy, cand.rel.z + dz];
+            const supportDef = this._getProjectionBlockDef(projection, srel);
+            if (!supportDef || !supportDef.name || supportDef.name === 'minecraft:air') continue;
+            // 双高植物：支撑必须是同种方块（下格）
+            if (attach.sameAsSelf && shortName(supportDef.name) !== shortName(target.name)) continue;
+            sawValidSupport = true;
+
+            // 世界支撑坐标必须走 transformPosition：镜像/旋转下 `cand.w + offset` 会落到错位的格
+            const sw = transformPosition(srel, projection);
+            let worldSupport = null;
+            try {
+                worldSupport = mc.getBlock(sw.x, sw.y, sw.z, dimid);
+            } catch (e) {
+                worldSupport = null;
+            }
+            const st = worldSupport ? (worldSupport.type || worldSupport.name || '') : '';
+            let settled = !!worldSupport && !this._isAirLike(worldSupport) && !REPLACEABLE.has(shortName(st));
+            if (attach.sameAsSelf) {
+                // 双高植物上格：世界支撑必须是**同种下格**。
+                if (!settled) {
+                    // 空/ghost/可替换 → 走"先放支撑"分支
+                } else {
+                    // 已有方块但不是同种 → 不覆盖（那是玩家建筑）；是上格也不算下格
+                    if (shortName(st) !== shortName(target.name)) return { placed: false };
+                    const ss = this._extractBlockStates(worldSupport) || {};
+                    if (ss.upper_block_bit === 1 || ss.upper_block_bit === true) return { placed: false };
+                    continue;   // 同种下格已就位
+                }
+            } else if (settled) {
+                continue;   // 普通依附：支撑已有任何方块即视为就位
+            }
+
+            if (depth >= cfg.supportMaxDepth) return { placed: false };   // 超深度：本轮跳过
+
+            // 支撑格本身可能也是依附型：递归先处理它
+            const supportCand = {
+                block: supportDef,
+                w: sw,
+                rel: { x: srel[0], y: srel[1], z: srel[2] },
+                key: `${sw.x},${sw.y},${sw.z}`,
+                distSquared: cand.distSquared,
+            };
+            const sub = this._handleAttachment(player, supportCand, projection, dimid, cfg, isCreative, depth + 1);
+            if (sub && sub.placed === false) return { placed: false };
+
+            // 放支撑（支撑自身的依附已由 sub 处理过，这里直接放它自己）
+            const supportTarget = this._resolveTargetBlock(supportCand.block.name, supportCand.block.state || {});
+            const r = this._placeOneFromProjection(player, supportCand, dimid, isCreative, supportTarget);
+            return { placed: r === 'placed' };
+        }
+
+        // 双高植物上格在投影里根本找不到同种下格：物理上放不出来（BDS 会立即破坏），
+        // 只能永远 pending。普通依附方块（火把/红石线…）投影缺支撑则视为贴投影外地面，直接放。
+        if (attach.sameAsSelf && !sawValidSupport) return { placed: false };
+
+        return null;   // 所有方向都就位 / 无有效支撑 → 正常放自己
+    }
+
+    /**
      * 打印机的一轮：找半径内的待放格 → 按距离近的先放 → 限速 + 时间预算。
      * 由统一调度器（easyplace-fast，200ms）调用，**不要**自己起定时器。
      */
@@ -579,7 +676,7 @@ class EasyPlaceManager {
             if (!this.noProjectionNotified.has(player.xuid)) {
                 this.noProjectionNotified.add(player.xuid);
                 try {
-                    player.tell('§e投影打印机开着，但你现在没有正在显示的投影（先 /litematica place <文件>）');
+                    tell(player, 'easyplace.noProjection');
                 } catch (e) { /* 忽略 */ }
             }
             this.logDebug('FASTPLACE_NO_PROJECTION', { player: player.xuid });
@@ -637,7 +734,7 @@ class EasyPlaceManager {
         const st = {
             checked: blocksToCheck.length, layer: 0, radius: 0, dup: 0,
             free: 0, replaceable: 0, blocked: 0, unloaded: 0,
-            placed: 0, missing: 0, banned: 0, failed: 0, pendingDouble: 0,
+            placed: 0, missing: 0, banned: 0, failed: 0, pendingSupport: 0,
         };
         const candidates = [];
 
@@ -669,7 +766,7 @@ class EasyPlaceManager {
 
             const key = `${w.x},${w.y},${w.z}`;
             if (this.wasPlacedThisTick(player.xuid, key)) { st.dup++; continue; }
-            candidates.push({ block, w, key, distSquared });
+            candidates.push({ block, w, key, distSquared, rel: { x: rx, y: ry, z: rz } });
         }
 
         candidates.sort((a, b) => a.distSquared - b.distSquared);   // 近的先放：玩家立刻看到效果
@@ -693,12 +790,19 @@ class EasyPlaceManager {
             if (kind === 'blocked') { st.blocked++; continue; }
             if (kind === 'free') st.free++; else st.replaceable++;
 
+            // 依附智能打印：先放支撑、本轮跳过依附方块（下一轮支撑就位后自然放行）
+            const gate = this._handleAttachment(player, cand, projection, dimid, cfg, isCreative);
+            if (gate) {
+                if (gate.placed) { placed++; st.placed++; }
+                st.pendingSupport++;
+                continue;
+            }
+
             const r = this._placeOneFromProjection(player, cand, dimid, isCreative);
             if (r === 'placed') { placed++; st.placed++; }
             else if (r === 'missing') st.missing++;
             else if (r === 'banned') st.banned++;
             else if (r === 'failed') st.failed++;
-            else if (r === 'pending-double') st.pendingDouble++;
 
             if (cfg.placeDelayMs > 0 && placed > 0) break;   // 启用放置间隔时每轮仅放一格，避免主线程繁忙等待
         }
@@ -710,7 +814,7 @@ class EasyPlaceManager {
         ps.blockedTarget += st.blocked; ps.unloaded += st.unloaded;
         ps.placed += st.placed; ps.missing += st.missing;
         ps.banned += st.banned; ps.failed += st.failed;
-        ps.pendingDouble = (ps.pendingDouble || 0) + st.pendingDouble;
+        ps.pendingSupport = (ps.pendingSupport || 0) + st.pendingSupport;
 
         if (st.placed || st.checked) {
             this.logDebug('FASTPLACE_SUMMARY', { layer, isMega, radius: cfg.radius, ...st });
@@ -803,8 +907,8 @@ class EasyPlaceManager {
         if (isMegaProjection(projection) && projection.schematicId) {
             // Mega 模式：从磁盘查询方块（使用相对投影坐标，不是世界坐标）
             projBlock = this.megaManager.getBlockAt(projection.schematicId, relX, relY, relZ);
-        } else if (projection.blockIndex) {
-            // 普通模式：从内存索引查询
+        } else if (projection.blockIndex && typeof projection.blockIndex.get === 'function') {
+            // 普通模式：从内存索引查询（非 Map 的 {} 会由 DataManager 恢复时重建成 Map）
             projBlock = projection.blockIndex.get(`${relX},${relY},${relZ}`);
         }
 
@@ -901,7 +1005,7 @@ class EasyPlaceManager {
             if (!consumed && !this.missingNotified.has(consumeKey)) {
                 this.missingNotified.add(consumeKey);
                 try {
-                    player.tell(`§c轻松放置扣不掉 §f${neededBlockType}§c：请检查背包（可能是其它插件锁定或只剩最后 1 个）`);
+                    tell(player, 'easyplace.easyConsume', neededBlockType);
                 } catch (e) { /* 玩家可能已离线 */ }
                 logger.warn(`[EasyPlace] 轻松放置扣物品失败: ${neededBlockType}`);
             }
@@ -959,7 +1063,7 @@ class EasyPlaceManager {
             // Mega 模式：从磁盘查询方块（使用相对投影坐标）
             projBlock = this.megaManager.getBlockAt(projection.schematicId, rel.x, rel.y, rel.z);
         } else {
-            projBlock = projection.blockIndex
+            projBlock = (projection.blockIndex && typeof projection.blockIndex.get === 'function')
                 ? projection.blockIndex.get(`${rel.x},${rel.y},${rel.z}`)
                 : null;
         }
@@ -1030,7 +1134,8 @@ class EasyPlaceManager {
             this._notifyCorrection(
                 player,
                 `correction-missing:${finalType}`,
-                `§e投影纠错需要材料 §f${finalType}§e：背包与潜影盒里都没有，已保留你放的方块`
+                'easyplace.corrNeedMaterial',
+                finalType
             );
             return;
         }
@@ -1045,7 +1150,8 @@ class EasyPlaceManager {
             this._notifyCorrection(
                 player,
                 `correction-consume:${finalType}`,
-                `§c投影纠错扣不掉 §f${finalType}§c：已暂停 5 秒内的自动纠错`
+                'easyplace.corrConsume',
+                finalType
             );
             return;
         }
@@ -1071,7 +1177,8 @@ class EasyPlaceManager {
             this._notifyCorrection(
                 player,
                 `correction-refund-nf:${beBlockType}`,
-                `§e投影纠错：§f${beBlockType}§e 找不到对应的物品形态，已跳过返还`
+                'easyplace.corrRefundNoItem',
+                beBlockType
             );
             return false;
         }
@@ -1084,7 +1191,8 @@ class EasyPlaceManager {
         this._notifyCorrection(
             player,
             `correction-refund-full:${beBlockType}`,
-            `§c投影纠错：背包已满，§f${beBlockType}§c 没能返还（清理背包后再放一次即可）`
+            'easyplace.corrRefundFull',
+            beBlockType
         );
         return false;
     }
@@ -1132,12 +1240,12 @@ class EasyPlaceManager {
     }
 
     /** 纠错相关提示节流（复用 missingNotified，按 (玩家, key) 去重） */
-    _notifyCorrection(player, key, message) {
+    _notifyCorrection(player, key, msgKey, ...args) {
         const k = `${player.xuid}:${key}`;
         if (this.missingNotified.has(k)) return;
         this.missingNotified.add(k);
         try {
-            player.tell(message);
+            tell(player, msgKey, ...args);
         } catch (e) { /* 玩家可能已离线 */ }
     }
 
@@ -1175,13 +1283,49 @@ class EasyPlaceManager {
         return null;
     }
 
+    /**
+     * 带状态放置：走 /setblock 命令。
+     *
+     * 为什么不用 NBT：原版方块的方块 NBT 状态键在 1.21 带命名空间
+     * （`minecraft:torch_facing_direction` 一类），而 `buildBlockNbt` 写的是无前缀键
+     * （`torch_facing_direction`），BDS 会忽略 → 放出来是默认状态。
+     * 实测：墙火把被放成竖立火把 → 贴墙无支撑 → 立即破坏成掉落物 → 打印机循环重放。
+     * 命令语法的状态键与原版 /setblock 一致（无命名空间），是最稳的带状态放置方式。
+     *
+     * @returns {boolean} 命令是否执行成功
+     */
+    _setBlockViaCommand(x, y, z, dimid, blockName, blockStates) {
+        try {
+            const dimName = ['overworld', 'nether', 'the_end'][Number(dimid)] || 'overworld';
+            const parts = [];
+            for (const [k, v] of Object.entries(blockStates || {})) {
+                if (v === undefined || v === null) continue;
+                const key = k.startsWith('minecraft:') ? k.slice('minecraft:'.length) : k;
+                const sv = typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v);
+                parts.push(`"${key}"="${sv}"`);
+            }
+            const statesPart = parts.length ? ` [${parts.join(',')}]` : '';
+            const cmd = `execute in ${dimName} run setblock ${x} ${y} ${z} ${blockName}${statesPart}`;
+            const res = mc.runcmdEx(cmd);
+            return !!(res && res.success);
+        } catch (e) {
+            return false;
+        }
+    }
+
     placeBlockAt(x, y, z, dimid, blockType, blockStates) {
         try {
             if (!blockType || typeof blockType !== 'string') {
                 this.logDebug('PLACE_FAILED_INVALID_TYPE', { x, y, z, dimid, blockType });
                 return false;
             }
-            
+
+            // 有状态：先走命令（NBT 的状态键在 1.21 上可能被忽略，见 _setBlockViaCommand）
+            if (blockStates && Object.keys(blockStates).length > 0
+                && this._setBlockViaCommand(x, y, z, dimid, blockType, blockStates)) {
+                return true;
+            }
+
             // 使用NBT对象方式放置方块
             // 这是基岩版最可靠的方块状态设置方式
             let success = false;
@@ -1237,6 +1381,12 @@ class EasyPlaceManager {
         try {
             if (!blockName || typeof blockName !== 'string') {
                 return false;
+            }
+
+            // 有状态：先走命令（与 placeBlockAt 同一口径，见 _setBlockViaCommand）
+            if (blockStates && Object.keys(blockStates).length > 0
+                && this._setBlockViaCommand(x, y, z, dimid, blockName, blockStates)) {
+                return true;
             }
 
             // 使用 NBT 方式放置方块（更可靠，支持颜色等状态）

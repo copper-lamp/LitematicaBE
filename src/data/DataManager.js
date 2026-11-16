@@ -15,6 +15,16 @@ class DataManager {
         this.loadAll();
     }
 
+    /** misc.debugLog 诊断日志开关（默认关闭）。构造期 global.configManager 已由 index.js 提前赋值。 */
+    _debugLog() {
+        try {
+            return !!(typeof global !== 'undefined' && global.configManager
+                && global.configManager.get('misc.debugLog', false) === true);
+        } catch (e) {
+            return false;
+        }
+    }
+
     /**
      * 确保数据目录存在
      */
@@ -58,6 +68,48 @@ class DataManager {
     }
 
     /**
+     * 重建投影的空间索引（blockChunks / blockIndex）。
+     *
+     * projections.json 落盘时 Map 会被 JSON 序列化成 `{}`，恢复后：
+     *   - 打印机 SpatialIndexUtils 调 `blockChunks.get` 抛
+     *     `projection.blockChunks.get is not a function` → 每 200ms 失败返回，打印机等于没工作；
+     *   - 轻松放置 / 纠错调 `blockIndex.get` 同样抛错。
+     * 所以恢复时必须按 blocks 数组重建（普通投影；MEGA 的方块在 .mcmega 分块里，跳过）。
+     *
+     * 注意：重建只发生在内存，saveProjections 仍写 `{}`（Map 不可 JSON 化），下次加载再重建。
+     */
+    _rebuildSpatialIndex(proj) {
+        if (!proj || proj.isMega) return;
+        const blocks = proj.blocks;
+        if (!Array.isArray(blocks) || blocks.length === 0) return;
+        // 已经是真 Map（本次会话内新建的投影）→ 不动
+        if (proj.blockChunks && typeof proj.blockChunks.get === 'function'
+            && typeof proj.blockChunks.size === 'number'
+            && proj.blockIndex && typeof proj.blockIndex.get === 'function') {
+            return;
+        }
+        // CHUNK_SIZE 必须与 LitematicLoader / McstructureLoader 构建分块时一致（16）
+        const CHUNK = 16;
+        const chunks = new Map();
+        const index = new Map();
+        for (const b of blocks) {
+            if (!b || !b.pos) continue;
+            const p = b.pos;
+            const x = Array.isArray(p) ? p[0] : p.x;
+            const y = Array.isArray(p) ? p[1] : p.y;
+            const z = Array.isArray(p) ? p[2] : p.z;
+            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+            index.set(`${x},${y},${z}`, b);
+            const key = `${Math.floor(x / CHUNK)},${Math.floor(y / CHUNK)},${Math.floor(z / CHUNK)}`;
+            let arr = chunks.get(key);
+            if (!arr) { arr = []; chunks.set(key, arr); }
+            arr.push(b);
+        }
+        proj.blockChunks = chunks;
+        proj.blockIndex = index;
+    }
+
+    /**
      * 按 id 取投影（读的时候也归一化一次，防止运行期被写脏）
      */
     getProjection(id) {
@@ -83,11 +135,13 @@ class DataManager {
                     // （`const isMega = x.isMega && x.schematicId` 的短路返回值），
                     // 而严格判定 `isMega !== true` 会因此永远为假 → 重启后 MEGA 注入状态建不起来。
                     this.normalizeProjection(proj);
+                    // 恢复 Map 索引：JSON 里 blockChunks/blockIndex 是 `{}`，不重建则打印机/轻松放置/纠错全失效
+                    this._rebuildSpatialIndex(proj);
                     this.projections.set(proj.id, proj);
                 }
             }
             
-            logger.info(`Loaded ${this.projections.size} projections`);
+            if (this._debugLog()) logger.info(`Loaded ${this.projections.size} projections`);
         } catch (e) {
             logger.error(`Failed to load projections: ${e.message}`);
         }
@@ -230,7 +284,7 @@ class DataManager {
                 }
             }
             
-            logger.info(`Loaded data for ${this.playerData.size} players`);
+            if (this._debugLog()) logger.info(`Loaded data for ${this.playerData.size} players`);
         } catch (e) {
             logger.error(`Failed to load player data: ${e.message}`);
         }
