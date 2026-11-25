@@ -1,0 +1,5 @@
+﻿lit saveinfo
+lit sel
+lit savediag
+lit saveat smoke1 0 60 0 7 66 7
+lit list

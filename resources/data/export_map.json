@@ -1,0 +1,2586 @@
+{
+  "schema": 1,
+  "source": "D:\\GitHub\\LitematicaBE\\src\\mappings\\BlockMappingRegistry.js",
+  "count": 817,
+  "blocks": {
+    "acacia_door": {
+      "java": "minecraft:acacia_door"
+    },
+    "acacia_fence": {
+      "java": "minecraft:acacia_fence"
+    },
+    "acacia_fence_gate": {
+      "java": "minecraft:acacia_fence_gate"
+    },
+    "acacia_hanging_sign": {
+      "java": "minecraft:acacia_hanging_sign"
+    },
+    "acacia_leaves": {
+      "java": "minecraft:acacia_leaves"
+    },
+    "acacia_log": {
+      "java": "minecraft:acacia_log"
+    },
+    "acacia_planks": {
+      "java": "minecraft:acacia_planks"
+    },
+    "acacia_pressure_plate": {
+      "java": "minecraft:acacia_pressure_plate"
+    },
+    "acacia_sapling": {
+      "java": "minecraft:acacia_sapling"
+    },
+    "acacia_slab": {
+      "java": "minecraft:acacia_slab"
+    },
+    "acacia_stairs": {
+      "java": "minecraft:acacia_stairs"
+    },
+    "acacia_standing_sign": {
+      "java": "minecraft:acacia_sign"
+    },
+    "acacia_trapdoor": {
+      "java": "minecraft:acacia_trapdoor"
+    },
+    "acacia_wall_sign": {
+      "java": "minecraft:acacia_wall_sign"
+    },
+    "acacia_wood": {
+      "java": "minecraft:acacia_wood"
+    },
+    "activator_rail": {
+      "java": "minecraft:activator_rail"
+    },
+    "air": {
+      "java": "minecraft:air",
+      "aliases": [
+        "minecraft:cave_air",
+        "minecraft:void_air"
+      ]
+    },
+    "amethyst_block": {
+      "java": "minecraft:amethyst_block"
+    },
+    "amethyst_cluster": {
+      "java": "minecraft:amethyst_cluster"
+    },
+    "ancient_debris": {
+      "java": "minecraft:ancient_debris"
+    },
+    "andesite": {
+      "java": "minecraft:andesite"
+    },
+    "anvil": {
+      "java": "minecraft:anvil"
+    },
+    "azalea": {
+      "java": "minecraft:azalea"
+    },
+    "azalea_leaves": {
+      "java": "minecraft:azalea_leaves"
+    },
+    "azalea_leaves_flowered": {
+      "java": "minecraft:flowering_azalea_leaves"
+    },
+    "bamboo": {
+      "java": "minecraft:bamboo"
+    },
+    "bamboo_block": {
+      "java": "minecraft:bamboo_block"
+    },
+    "bamboo_button": {
+      "java": "minecraft:bamboo_button"
+    },
+    "bamboo_door": {
+      "java": "minecraft:bamboo_door"
+    },
+    "bamboo_fence": {
+      "java": "minecraft:bamboo_fence"
+    },
+    "bamboo_fence_gate": {
+      "java": "minecraft:bamboo_fence_gate"
+    },
+    "bamboo_hanging_sign": {
+      "java": "minecraft:bamboo_hanging_sign"
+    },
+    "bamboo_planks": {
+      "java": "minecraft:bamboo_planks"
+    },
+    "bamboo_pressure_plate": {
+      "java": "minecraft:bamboo_pressure_plate"
+    },
+    "bamboo_sapling": {
+      "java": "minecraft:bamboo_sapling"
+    },
+    "bamboo_slab": {
+      "java": "minecraft:bamboo_slab"
+    },
+    "bamboo_stairs": {
+      "java": "minecraft:bamboo_stairs"
+    },
+    "bamboo_standing_sign": {
+      "java": "minecraft:bamboo_sign"
+    },
+    "bamboo_trapdoor": {
+      "java": "minecraft:bamboo_trapdoor"
+    },
+    "bamboo_wall_sign": {
+      "java": "minecraft:bamboo_wall_sign"
+    },
+    "barrel": {
+      "java": "minecraft:barrel"
+    },
+    "basalt": {
+      "java": "minecraft:basalt",
+      "states": {
+        "pillar_axis": "axis"
+      }
+    },
+    "beacon": {
+      "java": "minecraft:beacon"
+    },
+    "bed": {
+      "java": "minecraft:white_bed",
+      "aliases": [
+        "minecraft:orange_bed",
+        "minecraft:magenta_bed",
+        "minecraft:light_blue_bed",
+        "minecraft:yellow_bed",
+        "minecraft:lime_bed",
+        "minecraft:pink_bed",
+        "minecraft:gray_bed",
+        "minecraft:light_gray_bed",
+        "minecraft:cyan_bed",
+        "minecraft:purple_bed",
+        "minecraft:blue_bed",
+        "minecraft:brown_bed",
+        "minecraft:green_bed",
+        "minecraft:red_bed",
+        "minecraft:black_bed"
+      ]
+    },
+    "bedrock": {
+      "java": "minecraft:bedrock"
+    },
+    "bee_nest": {
+      "java": "minecraft:bee_nest"
+    },
+    "beehive": {
+      "java": "minecraft:beehive"
+    },
+    "beetroot": {
+      "java": "minecraft:beetroots"
+    },
+    "bell": {
+      "java": "minecraft:bell"
+    },
+    "big_dripleaf": {
+      "java": "minecraft:big_dripleaf"
+    },
+    "birch_door": {
+      "java": "minecraft:birch_door"
+    },
+    "birch_fence": {
+      "java": "minecraft:birch_fence"
+    },
+    "birch_fence_gate": {
+      "java": "minecraft:birch_fence_gate"
+    },
+    "birch_hanging_sign": {
+      "java": "minecraft:birch_hanging_sign"
+    },
+    "birch_leaves": {
+      "java": "minecraft:birch_leaves"
+    },
+    "birch_log": {
+      "java": "minecraft:birch_log"
+    },
+    "birch_planks": {
+      "java": "minecraft:birch_planks"
+    },
+    "birch_pressure_plate": {
+      "java": "minecraft:birch_pressure_plate"
+    },
+    "birch_sapling": {
+      "java": "minecraft:birch_sapling"
+    },
+    "birch_slab": {
+      "java": "minecraft:birch_slab"
+    },
+    "birch_stairs": {
+      "java": "minecraft:birch_stairs"
+    },
+    "birch_standing_sign": {
+      "java": "minecraft:birch_sign"
+    },
+    "birch_trapdoor": {
+      "java": "minecraft:birch_trapdoor"
+    },
+    "birch_wall_sign": {
+      "java": "minecraft:birch_wall_sign"
+    },
+    "birch_wood": {
+      "java": "minecraft:birch_wood"
+    },
+    "black_candle": {
+      "java": "minecraft:black_candle"
+    },
+    "black_carpet": {
+      "java": "minecraft:black_carpet"
+    },
+    "black_concrete": {
+      "java": "minecraft:black_concrete"
+    },
+    "black_concrete_powder": {
+      "java": "minecraft:black_concrete_powder"
+    },
+    "black_glazed_terracotta": {
+      "java": "minecraft:black_glazed_terracotta"
+    },
+    "black_shulker_box": {
+      "java": "minecraft:black_shulker_box"
+    },
+    "black_stained_glass": {
+      "java": "minecraft:black_stained_glass"
+    },
+    "black_stained_glass_pane": {
+      "java": "minecraft:black_stained_glass_pane"
+    },
+    "black_terracotta": {
+      "java": "minecraft:black_terracotta"
+    },
+    "black_wool": {
+      "java": "minecraft:black_wool"
+    },
+    "blackstone": {
+      "java": "minecraft:blackstone"
+    },
+    "blackstone_slab": {
+      "java": "minecraft:blackstone_slab"
+    },
+    "blackstone_stairs": {
+      "java": "minecraft:blackstone_stairs"
+    },
+    "blackstone_wall": {
+      "java": "minecraft:blackstone_wall"
+    },
+    "blast_furnace": {
+      "java": "minecraft:blast_furnace"
+    },
+    "blue_candle": {
+      "java": "minecraft:blue_candle"
+    },
+    "blue_carpet": {
+      "java": "minecraft:blue_carpet"
+    },
+    "blue_concrete": {
+      "java": "minecraft:blue_concrete"
+    },
+    "blue_concrete_powder": {
+      "java": "minecraft:blue_concrete_powder"
+    },
+    "blue_glazed_terracotta": {
+      "java": "minecraft:blue_glazed_terracotta"
+    },
+    "blue_ice": {
+      "java": "minecraft:blue_ice"
+    },
+    "blue_shulker_box": {
+      "java": "minecraft:blue_shulker_box"
+    },
+    "blue_stained_glass": {
+      "java": "minecraft:blue_stained_glass"
+    },
+    "blue_stained_glass_pane": {
+      "java": "minecraft:blue_stained_glass_pane"
+    },
+    "blue_terracotta": {
+      "java": "minecraft:blue_terracotta"
+    },
+    "blue_wool": {
+      "java": "minecraft:blue_wool"
+    },
+    "bone_block": {
+      "java": "minecraft:bone_block",
+      "states": {
+        "pillar_axis": "axis"
+      }
+    },
+    "bookshelf": {
+      "java": "minecraft:bookshelf"
+    },
+    "brain_coral": {
+      "java": "minecraft:brain_coral"
+    },
+    "brain_coral_block": {
+      "java": "minecraft:brain_coral_block"
+    },
+    "brain_coral_fan": {
+      "java": "minecraft:brain_coral_fan"
+    },
+    "brewing_stand": {
+      "java": "minecraft:brewing_stand"
+    },
+    "brick_block": {
+      "java": "minecraft:bricks",
+      "aliases": [
+        "minecraft:brick_block"
+      ]
+    },
+    "brick_slab": {
+      "java": "minecraft:brick_slab"
+    },
+    "brick_stairs": {
+      "java": "minecraft:brick_stairs"
+    },
+    "brick_wall": {
+      "java": "minecraft:brick_wall"
+    },
+    "brown_candle": {
+      "java": "minecraft:brown_candle"
+    },
+    "brown_carpet": {
+      "java": "minecraft:brown_carpet"
+    },
+    "brown_concrete": {
+      "java": "minecraft:brown_concrete"
+    },
+    "brown_concrete_powder": {
+      "java": "minecraft:brown_concrete_powder"
+    },
+    "brown_glazed_terracotta": {
+      "java": "minecraft:brown_glazed_terracotta"
+    },
+    "brown_mushroom": {
+      "java": "minecraft:brown_mushroom"
+    },
+    "brown_mushroom_block": {
+      "java": "minecraft:brown_mushroom_block"
+    },
+    "brown_shulker_box": {
+      "java": "minecraft:brown_shulker_box"
+    },
+    "brown_stained_glass": {
+      "java": "minecraft:brown_stained_glass"
+    },
+    "brown_stained_glass_pane": {
+      "java": "minecraft:brown_stained_glass_pane"
+    },
+    "brown_terracotta": {
+      "java": "minecraft:brown_terracotta"
+    },
+    "brown_wool": {
+      "java": "minecraft:brown_wool"
+    },
+    "bubble_column": {
+      "java": "minecraft:bubble_column"
+    },
+    "bubble_coral": {
+      "java": "minecraft:bubble_coral"
+    },
+    "bubble_coral_block": {
+      "java": "minecraft:bubble_coral_block"
+    },
+    "bubble_coral_fan": {
+      "java": "minecraft:bubble_coral_fan"
+    },
+    "budding_amethyst": {
+      "java": "minecraft:budding_amethyst"
+    },
+    "cactus": {
+      "java": "minecraft:cactus"
+    },
+    "cake": {
+      "java": "minecraft:cake",
+      "aliases": [
+        "minecraft:candle_cake"
+      ]
+    },
+    "calcite": {
+      "java": "minecraft:calcite"
+    },
+    "calibrated_sculk_sensor": {
+      "java": "minecraft:calibrated_sculk_sensor"
+    },
+    "campfire": {
+      "java": "minecraft:campfire"
+    },
+    "candle": {
+      "java": "minecraft:candle"
+    },
+    "carrots": {
+      "java": "minecraft:carrots"
+    },
+    "cartography_table": {
+      "java": "minecraft:cartography_table"
+    },
+    "carved_pumpkin": {
+      "java": "minecraft:carved_pumpkin"
+    },
+    "cauldron": {
+      "java": "minecraft:cauldron",
+      "aliases": [
+        "minecraft:water_cauldron"
+      ]
+    },
+    "cave_vines": {
+      "java": "minecraft:cave_vines",
+      "aliases": [
+        "minecraft:glow_berries"
+      ]
+    },
+    "cave_vines_body_with_berries": {
+      "java": "minecraft:cave_vines_plant"
+    },
+    "chain": {
+      "java": "minecraft:chain"
+    },
+    "chain_command_block": {
+      "java": "minecraft:chain_command_block"
+    },
+    "cherry_button": {
+      "java": "minecraft:cherry_button"
+    },
+    "cherry_door": {
+      "java": "minecraft:cherry_door"
+    },
+    "cherry_fence": {
+      "java": "minecraft:cherry_fence"
+    },
+    "cherry_fence_gate": {
+      "java": "minecraft:cherry_fence_gate"
+    },
+    "cherry_hanging_sign": {
+      "java": "minecraft:cherry_hanging_sign"
+    },
+    "cherry_leaves": {
+      "java": "minecraft:cherry_leaves"
+    },
+    "cherry_log": {
+      "java": "minecraft:cherry_log"
+    },
+    "cherry_planks": {
+      "java": "minecraft:cherry_planks"
+    },
+    "cherry_pressure_plate": {
+      "java": "minecraft:cherry_pressure_plate"
+    },
+    "cherry_sapling": {
+      "java": "minecraft:cherry_sapling"
+    },
+    "cherry_slab": {
+      "java": "minecraft:cherry_slab"
+    },
+    "cherry_stairs": {
+      "java": "minecraft:cherry_stairs"
+    },
+    "cherry_standing_sign": {
+      "java": "minecraft:cherry_sign"
+    },
+    "cherry_trapdoor": {
+      "java": "minecraft:cherry_trapdoor"
+    },
+    "cherry_wall_sign": {
+      "java": "minecraft:cherry_wall_sign"
+    },
+    "cherry_wood": {
+      "java": "minecraft:cherry_wood"
+    },
+    "chest": {
+      "java": "minecraft:chest"
+    },
+    "chipped_anvil": {
+      "java": "minecraft:chipped_anvil"
+    },
+    "chiseled_bookshelf": {
+      "java": "minecraft:chiseled_bookshelf"
+    },
+    "chiseled_deepslate": {
+      "java": "minecraft:chiseled_deepslate"
+    },
+    "chiseled_nether_bricks": {
+      "java": "minecraft:chiseled_nether_bricks"
+    },
+    "chiseled_polished_blackstone": {
+      "java": "minecraft:chiseled_polished_blackstone"
+    },
+    "chiseled_quartz_block": {
+      "java": "minecraft:chiseled_quartz_block"
+    },
+    "chiseled_red_sandstone": {
+      "java": "minecraft:chiseled_red_sandstone"
+    },
+    "chiseled_sandstone": {
+      "java": "minecraft:chiseled_sandstone"
+    },
+    "chiseled_stone_bricks": {
+      "java": "minecraft:chiseled_stone_bricks"
+    },
+    "chiseled_stonebrick": {
+      "java": "minecraft:chiseled_stone_bricks"
+    },
+    "chiseled_tuff": {
+      "java": "minecraft:chiseled_tuff"
+    },
+    "chiseled_tuff_bricks": {
+      "java": "minecraft:chiseled_tuff_bricks"
+    },
+    "chorus_flower": {
+      "java": "minecraft:chorus_flower"
+    },
+    "chorus_plant": {
+      "java": "minecraft:chorus_plant"
+    },
+    "clay": {
+      "java": "minecraft:clay"
+    },
+    "coal_block": {
+      "java": "minecraft:coal_block"
+    },
+    "coal_ore": {
+      "java": "minecraft:coal_ore"
+    },
+    "coarse_dirt": {
+      "java": "minecraft:coarse_dirt"
+    },
+    "cobbled_deepslate": {
+      "java": "minecraft:cobbled_deepslate"
+    },
+    "cobbled_deepslate_slab": {
+      "java": "minecraft:cobbled_deepslate_slab"
+    },
+    "cobbled_deepslate_stairs": {
+      "java": "minecraft:cobbled_deepslate_stairs"
+    },
+    "cobbled_deepslate_wall": {
+      "java": "minecraft:cobbled_deepslate_wall"
+    },
+    "cobblestone": {
+      "java": "minecraft:cobblestone"
+    },
+    "command_block": {
+      "java": "minecraft:command_block"
+    },
+    "composter": {
+      "java": "minecraft:composter"
+    },
+    "conduit": {
+      "java": "minecraft:conduit"
+    },
+    "copper_block": {
+      "java": "minecraft:copper_block"
+    },
+    "copper_bulb": {
+      "java": "minecraft:copper_bulb"
+    },
+    "copper_door": {
+      "java": "minecraft:copper_door"
+    },
+    "copper_grate": {
+      "java": "minecraft:copper_grate"
+    },
+    "copper_ore": {
+      "java": "minecraft:copper_ore"
+    },
+    "copper_trapdoor": {
+      "java": "minecraft:copper_trapdoor"
+    },
+    "cracked_deepslate_bricks": {
+      "java": "minecraft:cracked_deepslate_bricks"
+    },
+    "cracked_deepslate_tiles": {
+      "java": "minecraft:cracked_deepslate_tiles"
+    },
+    "cracked_nether_bricks": {
+      "java": "minecraft:cracked_nether_bricks"
+    },
+    "cracked_polished_blackstone_bricks": {
+      "java": "minecraft:cracked_polished_blackstone_bricks"
+    },
+    "cracked_stone_bricks": {
+      "java": "minecraft:cracked_stone_bricks"
+    },
+    "cracked_stonebrick": {
+      "java": "minecraft:cracked_stone_bricks"
+    },
+    "crafter": {
+      "java": "minecraft:crafter"
+    },
+    "crafting_table": {
+      "java": "minecraft:crafting_table"
+    },
+    "crimson_button": {
+      "java": "minecraft:crimson_button"
+    },
+    "crimson_door": {
+      "java": "minecraft:crimson_door"
+    },
+    "crimson_fence": {
+      "java": "minecraft:crimson_fence"
+    },
+    "crimson_fence_gate": {
+      "java": "minecraft:crimson_fence_gate"
+    },
+    "crimson_hanging_sign": {
+      "java": "minecraft:crimson_hanging_sign"
+    },
+    "crimson_hyphae": {
+      "java": "minecraft:crimson_hyphae"
+    },
+    "crimson_nylium": {
+      "java": "minecraft:crimson_nylium"
+    },
+    "crimson_planks": {
+      "java": "minecraft:crimson_planks"
+    },
+    "crimson_pressure_plate": {
+      "java": "minecraft:crimson_pressure_plate"
+    },
+    "crimson_slab": {
+      "java": "minecraft:crimson_slab"
+    },
+    "crimson_stairs": {
+      "java": "minecraft:crimson_stairs"
+    },
+    "crimson_standing_sign": {
+      "java": "minecraft:crimson_sign"
+    },
+    "crimson_stem": {
+      "java": "minecraft:crimson_stem",
+      "states": {
+        "pillar_axis": "axis"
+      }
+    },
+    "crimson_trapdoor": {
+      "java": "minecraft:crimson_trapdoor"
+    },
+    "crimson_wall_sign": {
+      "java": "minecraft:crimson_wall_sign"
+    },
+    "crying_obsidian": {
+      "java": "minecraft:crying_obsidian"
+    },
+    "cut_copper": {
+      "java": "minecraft:cut_copper"
+    },
+    "cut_red_sandstone": {
+      "java": "minecraft:cut_red_sandstone"
+    },
+    "cut_sandstone": {
+      "java": "minecraft:cut_sandstone"
+    },
+    "cyan_candle": {
+      "java": "minecraft:cyan_candle"
+    },
+    "cyan_carpet": {
+      "java": "minecraft:cyan_carpet"
+    },
+    "cyan_concrete": {
+      "java": "minecraft:cyan_concrete"
+    },
+    "cyan_concrete_powder": {
+      "java": "minecraft:cyan_concrete_powder"
+    },
+    "cyan_glazed_terracotta": {
+      "java": "minecraft:cyan_glazed_terracotta"
+    },
+    "cyan_shulker_box": {
+      "java": "minecraft:cyan_shulker_box"
+    },
+    "cyan_stained_glass": {
+      "java": "minecraft:cyan_stained_glass"
+    },
+    "cyan_stained_glass_pane": {
+      "java": "minecraft:cyan_stained_glass_pane"
+    },
+    "cyan_terracotta": {
+      "java": "minecraft:cyan_terracotta"
+    },
+    "cyan_wool": {
+      "java": "minecraft:cyan_wool"
+    },
+    "damaged_anvil": {
+      "java": "minecraft:damaged_anvil"
+    },
+    "dark_oak_door": {
+      "java": "minecraft:dark_oak_door"
+    },
+    "dark_oak_fence": {
+      "java": "minecraft:dark_oak_fence"
+    },
+    "dark_oak_fence_gate": {
+      "java": "minecraft:dark_oak_fence_gate"
+    },
+    "dark_oak_hanging_sign": {
+      "java": "minecraft:dark_oak_hanging_sign"
+    },
+    "dark_oak_leaves": {
+      "java": "minecraft:dark_oak_leaves"
+    },
+    "dark_oak_log": {
+      "java": "minecraft:dark_oak_log"
+    },
+    "dark_oak_planks": {
+      "java": "minecraft:dark_oak_planks"
+    },
+    "dark_oak_pressure_plate": {
+      "java": "minecraft:dark_oak_pressure_plate"
+    },
+    "dark_oak_sapling": {
+      "java": "minecraft:dark_oak_sapling"
+    },
+    "dark_oak_slab": {
+      "java": "minecraft:dark_oak_slab"
+    },
+    "dark_oak_stairs": {
+      "java": "minecraft:dark_oak_stairs"
+    },
+    "dark_oak_trapdoor": {
+      "java": "minecraft:dark_oak_trapdoor"
+    },
+    "dark_oak_wood": {
+      "java": "minecraft:dark_oak_wood"
+    },
+    "dark_prismarine": {
+      "java": "minecraft:dark_prismarine"
+    },
+    "dark_prismarine_slab": {
+      "java": "minecraft:dark_prismarine_slab"
+    },
+    "dark_prismarine_stairs": {
+      "java": "minecraft:dark_prismarine_stairs"
+    },
+    "darkoak_standing_sign": {
+      "java": "minecraft:dark_oak_sign"
+    },
+    "darkoak_wall_sign": {
+      "java": "minecraft:dark_oak_wall_sign"
+    },
+    "daylight_detector": {
+      "java": "minecraft:daylight_detector"
+    },
+    "dead_brain_coral": {
+      "java": "minecraft:dead_brain_coral"
+    },
+    "dead_brain_coral_block": {
+      "java": "minecraft:dead_brain_coral_block"
+    },
+    "dead_brain_coral_fan": {
+      "java": "minecraft:dead_brain_coral_fan"
+    },
+    "dead_bubble_coral": {
+      "java": "minecraft:dead_bubble_coral"
+    },
+    "dead_bubble_coral_block": {
+      "java": "minecraft:dead_bubble_coral_block"
+    },
+    "dead_bubble_coral_fan": {
+      "java": "minecraft:dead_bubble_coral_fan"
+    },
+    "dead_fire_coral": {
+      "java": "minecraft:dead_fire_coral"
+    },
+    "dead_fire_coral_block": {
+      "java": "minecraft:dead_fire_coral_block"
+    },
+    "dead_fire_coral_fan": {
+      "java": "minecraft:dead_fire_coral_fan"
+    },
+    "dead_horn_coral": {
+      "java": "minecraft:dead_horn_coral"
+    },
+    "dead_horn_coral_block": {
+      "java": "minecraft:dead_horn_coral_block"
+    },
+    "dead_horn_coral_fan": {
+      "java": "minecraft:dead_horn_coral_fan"
+    },
+    "dead_tube_coral": {
+      "java": "minecraft:dead_tube_coral"
+    },
+    "dead_tube_coral_block": {
+      "java": "minecraft:dead_tube_coral_block"
+    },
+    "dead_tube_coral_fan": {
+      "java": "minecraft:dead_tube_coral_fan"
+    },
+    "deadbush": {
+      "java": "minecraft:dead_bush"
+    },
+    "decorated_pot": {
+      "java": "minecraft:decorated_pot"
+    },
+    "deepslate": {
+      "java": "minecraft:deepslate"
+    },
+    "deepslate_brick_slab": {
+      "java": "minecraft:deepslate_brick_slab"
+    },
+    "deepslate_brick_stairs": {
+      "java": "minecraft:deepslate_brick_stairs"
+    },
+    "deepslate_brick_wall": {
+      "java": "minecraft:deepslate_brick_wall"
+    },
+    "deepslate_bricks": {
+      "java": "minecraft:deepslate_bricks"
+    },
+    "deepslate_coal_ore": {
+      "java": "minecraft:deepslate_coal_ore"
+    },
+    "deepslate_copper_ore": {
+      "java": "minecraft:deepslate_copper_ore"
+    },
+    "deepslate_diamond_ore": {
+      "java": "minecraft:deepslate_diamond_ore"
+    },
+    "deepslate_emerald_ore": {
+      "java": "minecraft:deepslate_emerald_ore"
+    },
+    "deepslate_gold_ore": {
+      "java": "minecraft:deepslate_gold_ore"
+    },
+    "deepslate_iron_ore": {
+      "java": "minecraft:deepslate_iron_ore"
+    },
+    "deepslate_lapis_ore": {
+      "java": "minecraft:deepslate_lapis_ore"
+    },
+    "deepslate_redstone_ore": {
+      "java": "minecraft:deepslate_redstone_ore"
+    },
+    "deepslate_tile_slab": {
+      "java": "minecraft:deepslate_tile_slab"
+    },
+    "deepslate_tile_stairs": {
+      "java": "minecraft:deepslate_tile_stairs"
+    },
+    "deepslate_tile_wall": {
+      "java": "minecraft:deepslate_tile_wall"
+    },
+    "deepslate_tiles": {
+      "java": "minecraft:deepslate_tiles"
+    },
+    "detector_rail": {
+      "java": "minecraft:detector_rail"
+    },
+    "diamond_block": {
+      "java": "minecraft:diamond_block"
+    },
+    "diamond_ore": {
+      "java": "minecraft:diamond_ore"
+    },
+    "diorite": {
+      "java": "minecraft:diorite"
+    },
+    "dirt": {
+      "java": "minecraft:dirt",
+      "aliases": [
+        "minecraft:coarse_dirt"
+      ]
+    },
+    "dirt_path": {
+      "java": "minecraft:dirt_path"
+    },
+    "dirt_with_roots": {
+      "java": "minecraft:rooted_dirt"
+    },
+    "dispenser": {
+      "java": "minecraft:dispenser"
+    },
+    "dragon_egg": {
+      "java": "minecraft:dragon_egg"
+    },
+    "dried_kelp_block": {
+      "java": "minecraft:dried_kelp_block"
+    },
+    "dripstone_block": {
+      "java": "minecraft:dripstone_block"
+    },
+    "dropper": {
+      "java": "minecraft:dropper"
+    },
+    "emerald_block": {
+      "java": "minecraft:emerald_block"
+    },
+    "emerald_ore": {
+      "java": "minecraft:emerald_ore"
+    },
+    "enchanting_table": {
+      "java": "minecraft:enchanting_table"
+    },
+    "end_brick_slab": {
+      "java": "minecraft:end_stone_brick_slab"
+    },
+    "end_brick_stairs": {
+      "java": "minecraft:end_stone_brick_stairs"
+    },
+    "end_brick_wall": {
+      "java": "minecraft:end_stone_brick_wall"
+    },
+    "end_bricks": {
+      "java": "minecraft:end_stone_bricks"
+    },
+    "end_gateway": {
+      "java": "minecraft:end_gateway"
+    },
+    "end_portal": {
+      "java": "minecraft:end_portal"
+    },
+    "end_portal_frame": {
+      "java": "minecraft:end_portal_frame"
+    },
+    "end_rod": {
+      "java": "minecraft:end_rod"
+    },
+    "end_stone": {
+      "java": "minecraft:end_stone"
+    },
+    "ender_chest": {
+      "java": "minecraft:ender_chest"
+    },
+    "exposed_copper": {
+      "java": "minecraft:exposed_copper"
+    },
+    "exposed_copper_bulb": {
+      "java": "minecraft:exposed_copper_bulb"
+    },
+    "exposed_copper_grate": {
+      "java": "minecraft:exposed_copper_grate"
+    },
+    "exposed_cut_copper": {
+      "java": "minecraft:exposed_cut_copper"
+    },
+    "farmland": {
+      "java": "minecraft:farmland"
+    },
+    "farmland_block": {
+      "java": "minecraft:farmland"
+    },
+    "fence_gate": {
+      "java": "minecraft:oak_fence_gate"
+    },
+    "fern": {
+      "java": "minecraft:fern"
+    },
+    "fire": {
+      "java": "minecraft:fire"
+    },
+    "fire_coral": {
+      "java": "minecraft:fire_coral"
+    },
+    "fire_coral_block": {
+      "java": "minecraft:fire_coral_block"
+    },
+    "fire_coral_fan": {
+      "java": "minecraft:fire_coral_fan"
+    },
+    "fletching_table": {
+      "java": "minecraft:fletching_table"
+    },
+    "flower_pot": {
+      "java": "minecraft:flower_pot"
+    },
+    "flowering_azalea": {
+      "java": "minecraft:flowering_azalea"
+    },
+    "frog_spawn": {
+      "java": "minecraft:frogspawn"
+    },
+    "frosted_ice": {
+      "java": "minecraft:frosted_ice"
+    },
+    "furnace": {
+      "java": "minecraft:furnace"
+    },
+    "gilded_blackstone": {
+      "java": "minecraft:gilded_blackstone"
+    },
+    "glass": {
+      "java": "minecraft:glass"
+    },
+    "glass_pane": {
+      "java": "minecraft:glass_pane"
+    },
+    "glow_lichen": {
+      "java": "minecraft:glow_lichen"
+    },
+    "glowstone": {
+      "java": "minecraft:glowstone"
+    },
+    "gold_block": {
+      "java": "minecraft:gold_block"
+    },
+    "gold_ore": {
+      "java": "minecraft:gold_ore"
+    },
+    "golden_rail": {
+      "java": "minecraft:powered_rail"
+    },
+    "granite": {
+      "java": "minecraft:granite"
+    },
+    "grass": {
+      "java": "minecraft:grass_block"
+    },
+    "grass_path": {
+      "java": "minecraft:dirt_path"
+    },
+    "gravel": {
+      "java": "minecraft:gravel"
+    },
+    "gray_candle": {
+      "java": "minecraft:gray_candle"
+    },
+    "gray_carpet": {
+      "java": "minecraft:gray_carpet"
+    },
+    "gray_concrete": {
+      "java": "minecraft:gray_concrete"
+    },
+    "gray_concrete_powder": {
+      "java": "minecraft:gray_concrete_powder"
+    },
+    "gray_glazed_terracotta": {
+      "java": "minecraft:gray_glazed_terracotta"
+    },
+    "gray_shulker_box": {
+      "java": "minecraft:gray_shulker_box"
+    },
+    "gray_stained_glass": {
+      "java": "minecraft:gray_stained_glass"
+    },
+    "gray_stained_glass_pane": {
+      "java": "minecraft:gray_stained_glass_pane"
+    },
+    "gray_terracotta": {
+      "java": "minecraft:gray_terracotta"
+    },
+    "gray_wool": {
+      "java": "minecraft:gray_wool"
+    },
+    "green_candle": {
+      "java": "minecraft:green_candle"
+    },
+    "green_carpet": {
+      "java": "minecraft:green_carpet"
+    },
+    "green_concrete": {
+      "java": "minecraft:green_concrete"
+    },
+    "green_concrete_powder": {
+      "java": "minecraft:green_concrete_powder"
+    },
+    "green_glazed_terracotta": {
+      "java": "minecraft:green_glazed_terracotta"
+    },
+    "green_shulker_box": {
+      "java": "minecraft:green_shulker_box"
+    },
+    "green_stained_glass": {
+      "java": "minecraft:green_stained_glass"
+    },
+    "green_stained_glass_pane": {
+      "java": "minecraft:green_stained_glass_pane"
+    },
+    "green_terracotta": {
+      "java": "minecraft:green_terracotta"
+    },
+    "green_wool": {
+      "java": "minecraft:green_wool"
+    },
+    "grindstone": {
+      "java": "minecraft:grindstone"
+    },
+    "hanging_roots": {
+      "java": "minecraft:hanging_roots"
+    },
+    "hay_block": {
+      "java": "minecraft:hay_block",
+      "states": {
+        "pillar_axis": "axis"
+      }
+    },
+    "heavy_weighted_pressure_plate": {
+      "java": "minecraft:heavy_weighted_pressure_plate"
+    },
+    "honey_block": {
+      "java": "minecraft:honey_block"
+    },
+    "honeycomb_block": {
+      "java": "minecraft:honeycomb_block"
+    },
+    "hopper": {
+      "java": "minecraft:hopper"
+    },
+    "horn_coral": {
+      "java": "minecraft:horn_coral"
+    },
+    "horn_coral_block": {
+      "java": "minecraft:horn_coral_block"
+    },
+    "horn_coral_fan": {
+      "java": "minecraft:horn_coral_fan"
+    },
+    "ice": {
+      "java": "minecraft:ice"
+    },
+    "infested_chiseled_stone_bricks": {
+      "java": "minecraft:infested_chiseled_stone_bricks"
+    },
+    "infested_cobblestone": {
+      "java": "minecraft:infested_cobblestone"
+    },
+    "infested_cracked_stone_bricks": {
+      "java": "minecraft:infested_cracked_stone_bricks"
+    },
+    "infested_mossy_stone_bricks": {
+      "java": "minecraft:infested_mossy_stone_bricks"
+    },
+    "infested_stone": {
+      "java": "minecraft:infested_stone"
+    },
+    "infested_stone_bricks": {
+      "java": "minecraft:infested_stone_bricks"
+    },
+    "iron_bars": {
+      "java": "minecraft:iron_bars"
+    },
+    "iron_block": {
+      "java": "minecraft:iron_block"
+    },
+    "iron_door": {
+      "java": "minecraft:iron_door"
+    },
+    "iron_ore": {
+      "java": "minecraft:iron_ore"
+    },
+    "iron_trapdoor": {
+      "java": "minecraft:iron_trapdoor"
+    },
+    "jigsaw": {
+      "java": "minecraft:jigsaw"
+    },
+    "jukebox": {
+      "java": "minecraft:jukebox"
+    },
+    "jungle_door": {
+      "java": "minecraft:jungle_door"
+    },
+    "jungle_fence": {
+      "java": "minecraft:jungle_fence"
+    },
+    "jungle_fence_gate": {
+      "java": "minecraft:jungle_fence_gate"
+    },
+    "jungle_hanging_sign": {
+      "java": "minecraft:jungle_hanging_sign"
+    },
+    "jungle_leaves": {
+      "java": "minecraft:jungle_leaves"
+    },
+    "jungle_log": {
+      "java": "minecraft:jungle_log"
+    },
+    "jungle_planks": {
+      "java": "minecraft:jungle_planks"
+    },
+    "jungle_pressure_plate": {
+      "java": "minecraft:jungle_pressure_plate"
+    },
+    "jungle_sapling": {
+      "java": "minecraft:jungle_sapling"
+    },
+    "jungle_slab": {
+      "java": "minecraft:jungle_slab"
+    },
+    "jungle_stairs": {
+      "java": "minecraft:jungle_stairs"
+    },
+    "jungle_standing_sign": {
+      "java": "minecraft:jungle_sign"
+    },
+    "jungle_trapdoor": {
+      "java": "minecraft:jungle_trapdoor"
+    },
+    "jungle_wall_sign": {
+      "java": "minecraft:jungle_wall_sign"
+    },
+    "jungle_wood": {
+      "java": "minecraft:jungle_wood"
+    },
+    "kelp": {
+      "java": "minecraft:kelp",
+      "aliases": [
+        "minecraft:kelp_plant"
+      ]
+    },
+    "ladder": {
+      "java": "minecraft:ladder"
+    },
+    "lantern": {
+      "java": "minecraft:lantern"
+    },
+    "lapis_block": {
+      "java": "minecraft:lapis_block"
+    },
+    "lapis_ore": {
+      "java": "minecraft:lapis_ore"
+    },
+    "large_amethyst_bud": {
+      "java": "minecraft:large_amethyst_bud"
+    },
+    "large_fern": {
+      "java": "minecraft:large_fern"
+    },
+    "lava": {
+      "java": "minecraft:lava"
+    },
+    "lava_cauldron": {
+      "java": "minecraft:lava_cauldron"
+    },
+    "lectern": {
+      "java": "minecraft:lectern"
+    },
+    "lever": {
+      "java": "minecraft:lever"
+    },
+    "light_block": {
+      "java": "minecraft:light"
+    },
+    "light_blue_candle": {
+      "java": "minecraft:light_blue_candle"
+    },
+    "light_blue_carpet": {
+      "java": "minecraft:light_blue_carpet"
+    },
+    "light_blue_concrete": {
+      "java": "minecraft:light_blue_concrete"
+    },
+    "light_blue_concrete_powder": {
+      "java": "minecraft:light_blue_concrete_powder"
+    },
+    "light_blue_glazed_terracotta": {
+      "java": "minecraft:light_blue_glazed_terracotta"
+    },
+    "light_blue_shulker_box": {
+      "java": "minecraft:light_blue_shulker_box"
+    },
+    "light_blue_stained_glass": {
+      "java": "minecraft:light_blue_stained_glass"
+    },
+    "light_blue_stained_glass_pane": {
+      "java": "minecraft:light_blue_stained_glass_pane"
+    },
+    "light_blue_terracotta": {
+      "java": "minecraft:light_blue_terracotta"
+    },
+    "light_blue_wool": {
+      "java": "minecraft:light_blue_wool"
+    },
+    "light_gray_candle": {
+      "java": "minecraft:light_gray_candle"
+    },
+    "light_gray_carpet": {
+      "java": "minecraft:light_gray_carpet"
+    },
+    "light_gray_concrete": {
+      "java": "minecraft:light_gray_concrete"
+    },
+    "light_gray_concrete_powder": {
+      "java": "minecraft:light_gray_concrete_powder"
+    },
+    "light_gray_shulker_box": {
+      "java": "minecraft:light_gray_shulker_box"
+    },
+    "light_gray_stained_glass": {
+      "java": "minecraft:light_gray_stained_glass"
+    },
+    "light_gray_stained_glass_pane": {
+      "java": "minecraft:light_gray_stained_glass_pane"
+    },
+    "light_gray_terracotta": {
+      "java": "minecraft:light_gray_terracotta"
+    },
+    "light_gray_wool": {
+      "java": "minecraft:light_gray_wool"
+    },
+    "light_weighted_pressure_plate": {
+      "java": "minecraft:light_weighted_pressure_plate"
+    },
+    "lightning_rod": {
+      "java": "minecraft:lightning_rod"
+    },
+    "lilac": {
+      "java": "minecraft:lilac"
+    },
+    "lime_candle": {
+      "java": "minecraft:lime_candle"
+    },
+    "lime_carpet": {
+      "java": "minecraft:lime_carpet"
+    },
+    "lime_concrete": {
+      "java": "minecraft:lime_concrete"
+    },
+    "lime_concrete_powder": {
+      "java": "minecraft:lime_concrete_powder"
+    },
+    "lime_glazed_terracotta": {
+      "java": "minecraft:lime_glazed_terracotta"
+    },
+    "lime_shulker_box": {
+      "java": "minecraft:lime_shulker_box"
+    },
+    "lime_stained_glass": {
+      "java": "minecraft:lime_stained_glass"
+    },
+    "lime_stained_glass_pane": {
+      "java": "minecraft:lime_stained_glass_pane"
+    },
+    "lime_terracotta": {
+      "java": "minecraft:lime_terracotta"
+    },
+    "lime_wool": {
+      "java": "minecraft:lime_wool"
+    },
+    "lit_pumpkin": {
+      "java": "minecraft:jack_o_lantern"
+    },
+    "lodestone": {
+      "java": "minecraft:lodestone"
+    },
+    "loom": {
+      "java": "minecraft:loom"
+    },
+    "magenta_candle": {
+      "java": "minecraft:magenta_candle"
+    },
+    "magenta_carpet": {
+      "java": "minecraft:magenta_carpet"
+    },
+    "magenta_concrete": {
+      "java": "minecraft:magenta_concrete"
+    },
+    "magenta_concrete_powder": {
+      "java": "minecraft:magenta_concrete_powder"
+    },
+    "magenta_glazed_terracotta": {
+      "java": "minecraft:magenta_glazed_terracotta"
+    },
+    "magenta_shulker_box": {
+      "java": "minecraft:magenta_shulker_box"
+    },
+    "magenta_stained_glass": {
+      "java": "minecraft:magenta_stained_glass"
+    },
+    "magenta_stained_glass_pane": {
+      "java": "minecraft:magenta_stained_glass_pane"
+    },
+    "magenta_terracotta": {
+      "java": "minecraft:magenta_terracotta"
+    },
+    "magenta_wool": {
+      "java": "minecraft:magenta_wool"
+    },
+    "magma": {
+      "java": "minecraft:magma_block"
+    },
+    "mangrove_button": {
+      "java": "minecraft:mangrove_button"
+    },
+    "mangrove_door": {
+      "java": "minecraft:mangrove_door"
+    },
+    "mangrove_fence": {
+      "java": "minecraft:mangrove_fence"
+    },
+    "mangrove_fence_gate": {
+      "java": "minecraft:mangrove_fence_gate"
+    },
+    "mangrove_hanging_sign": {
+      "java": "minecraft:mangrove_hanging_sign"
+    },
+    "mangrove_leaves": {
+      "java": "minecraft:mangrove_leaves"
+    },
+    "mangrove_log": {
+      "java": "minecraft:mangrove_log"
+    },
+    "mangrove_planks": {
+      "java": "minecraft:mangrove_planks"
+    },
+    "mangrove_pressure_plate": {
+      "java": "minecraft:mangrove_pressure_plate"
+    },
+    "mangrove_propagule": {
+      "java": "minecraft:mangrove_propagule"
+    },
+    "mangrove_roots": {
+      "java": "minecraft:mangrove_roots"
+    },
+    "mangrove_slab": {
+      "java": "minecraft:mangrove_slab"
+    },
+    "mangrove_stairs": {
+      "java": "minecraft:mangrove_stairs"
+    },
+    "mangrove_standing_sign": {
+      "java": "minecraft:mangrove_sign"
+    },
+    "mangrove_trapdoor": {
+      "java": "minecraft:mangrove_trapdoor"
+    },
+    "mangrove_wall_sign": {
+      "java": "minecraft:mangrove_wall_sign"
+    },
+    "mangrove_wood": {
+      "java": "minecraft:mangrove_wood"
+    },
+    "medium_amethyst_bud": {
+      "java": "minecraft:medium_amethyst_bud"
+    },
+    "melon_block": {
+      "java": "minecraft:melon"
+    },
+    "melon_stem": {
+      "java": "minecraft:melon_stem"
+    },
+    "mob_spawner": {
+      "java": "minecraft:spawner"
+    },
+    "moss_block": {
+      "java": "minecraft:moss_block"
+    },
+    "moss_carpet": {
+      "java": "minecraft:moss_carpet"
+    },
+    "mossy_cobblestone": {
+      "java": "minecraft:mossy_cobblestone"
+    },
+    "mossy_stone_bricks": {
+      "java": "minecraft:mossy_stone_bricks"
+    },
+    "mossy_stonebrick": {
+      "java": "minecraft:mossy_stone_bricks"
+    },
+    "moving_block": {
+      "java": "minecraft:moving_piston"
+    },
+    "mud": {
+      "java": "minecraft:mud"
+    },
+    "mud_brick_slab": {
+      "java": "minecraft:mud_brick_slab"
+    },
+    "mud_brick_stairs": {
+      "java": "minecraft:mud_brick_stairs"
+    },
+    "mud_brick_wall": {
+      "java": "minecraft:mud_brick_wall"
+    },
+    "mud_bricks": {
+      "java": "minecraft:mud_bricks"
+    },
+    "muddy_mangrove_roots": {
+      "java": "minecraft:muddy_mangrove_roots"
+    },
+    "mushroom_stem": {
+      "java": "minecraft:mushroom_stem"
+    },
+    "mycelium": {
+      "java": "minecraft:mycelium"
+    },
+    "nether_brick": {
+      "java": "minecraft:nether_bricks"
+    },
+    "nether_brick_fence": {
+      "java": "minecraft:nether_brick_fence"
+    },
+    "nether_brick_slab": {
+      "java": "minecraft:nether_brick_slab"
+    },
+    "nether_brick_stairs": {
+      "java": "minecraft:nether_brick_stairs"
+    },
+    "nether_brick_wall": {
+      "java": "minecraft:nether_brick_wall"
+    },
+    "nether_gold_ore": {
+      "java": "minecraft:nether_gold_ore"
+    },
+    "nether_wart": {
+      "java": "minecraft:nether_wart"
+    },
+    "nether_wart_block": {
+      "java": "minecraft:nether_wart_block"
+    },
+    "netherite_block": {
+      "java": "minecraft:netherite_block"
+    },
+    "netherrack": {
+      "java": "minecraft:netherrack"
+    },
+    "noteblock": {
+      "java": "minecraft:note_block"
+    },
+    "oak_fence": {
+      "java": "minecraft:oak_fence"
+    },
+    "oak_hanging_sign": {
+      "java": "minecraft:oak_hanging_sign"
+    },
+    "oak_leaves": {
+      "java": "minecraft:oak_leaves"
+    },
+    "oak_log": {
+      "java": "minecraft:oak_log",
+      "states": {
+        "pillar_axis": "axis"
+      }
+    },
+    "oak_planks": {
+      "java": "minecraft:oak_planks"
+    },
+    "oak_sapling": {
+      "java": "minecraft:oak_sapling"
+    },
+    "oak_slab": {
+      "java": "minecraft:oak_slab"
+    },
+    "oak_stairs": {
+      "java": "minecraft:oak_stairs"
+    },
+    "oak_wood": {
+      "java": "minecraft:oak_wood",
+      "states": {
+        "pillar_axis": "axis"
+      }
+    },
+    "observer": {
+      "java": "minecraft:observer"
+    },
+    "obsidian": {
+      "java": "minecraft:obsidian"
+    },
+    "ochre_froglight": {
+      "java": "minecraft:ochre_froglight"
+    },
+    "orange_candle": {
+      "java": "minecraft:orange_candle"
+    },
+    "orange_carpet": {
+      "java": "minecraft:orange_carpet"
+    },
+    "orange_concrete": {
+      "java": "minecraft:orange_concrete"
+    },
+    "orange_concrete_powder": {
+      "java": "minecraft:orange_concrete_powder"
+    },
+    "orange_glazed_terracotta": {
+      "java": "minecraft:orange_glazed_terracotta"
+    },
+    "orange_shulker_box": {
+      "java": "minecraft:orange_shulker_box"
+    },
+    "orange_stained_glass": {
+      "java": "minecraft:orange_stained_glass"
+    },
+    "orange_stained_glass_pane": {
+      "java": "minecraft:orange_stained_glass_pane"
+    },
+    "orange_terracotta": {
+      "java": "minecraft:orange_terracotta"
+    },
+    "orange_wool": {
+      "java": "minecraft:orange_wool"
+    },
+    "oxidized_copper": {
+      "java": "minecraft:oxidized_copper"
+    },
+    "oxidized_copper_bulb": {
+      "java": "minecraft:oxidized_copper_bulb"
+    },
+    "oxidized_copper_grate": {
+      "java": "minecraft:oxidized_copper_grate"
+    },
+    "oxidized_cut_copper": {
+      "java": "minecraft:oxidized_cut_copper"
+    },
+    "packed_ice": {
+      "java": "minecraft:packed_ice"
+    },
+    "packed_mud": {
+      "java": "minecraft:packed_mud"
+    },
+    "pale_oak_log": {
+      "java": "minecraft:pale_oak_log"
+    },
+    "pearlescent_froglight": {
+      "java": "minecraft:pearlescent_froglight"
+    },
+    "peony": {
+      "java": "minecraft:peony"
+    },
+    "pink_candle": {
+      "java": "minecraft:pink_candle"
+    },
+    "pink_carpet": {
+      "java": "minecraft:pink_carpet"
+    },
+    "pink_concrete": {
+      "java": "minecraft:pink_concrete"
+    },
+    "pink_concrete_powder": {
+      "java": "minecraft:pink_concrete_powder"
+    },
+    "pink_glazed_terracotta": {
+      "java": "minecraft:pink_glazed_terracotta"
+    },
+    "pink_petals": {
+      "java": "minecraft:pink_petals"
+    },
+    "pink_shulker_box": {
+      "java": "minecraft:pink_shulker_box"
+    },
+    "pink_stained_glass": {
+      "java": "minecraft:pink_stained_glass"
+    },
+    "pink_stained_glass_pane": {
+      "java": "minecraft:pink_stained_glass_pane"
+    },
+    "pink_terracotta": {
+      "java": "minecraft:pink_terracotta"
+    },
+    "pink_wool": {
+      "java": "minecraft:pink_wool"
+    },
+    "piston": {
+      "java": "minecraft:piston"
+    },
+    "piston_arm_collision": {
+      "java": "minecraft:piston_head"
+    },
+    "pitcher_crop": {
+      "java": "minecraft:pitcher_crop"
+    },
+    "pitcher_plant": {
+      "java": "minecraft:pitcher_plant"
+    },
+    "podzol": {
+      "java": "minecraft:podzol"
+    },
+    "pointed_dripstone": {
+      "java": "minecraft:pointed_dripstone"
+    },
+    "polished_andesite": {
+      "java": "minecraft:polished_andesite"
+    },
+    "polished_basalt": {
+      "java": "minecraft:polished_basalt",
+      "states": {
+        "pillar_axis": "axis"
+      }
+    },
+    "polished_blackstone": {
+      "java": "minecraft:polished_blackstone"
+    },
+    "polished_blackstone_brick_slab": {
+      "java": "minecraft:polished_blackstone_brick_slab"
+    },
+    "polished_blackstone_brick_stairs": {
+      "java": "minecraft:polished_blackstone_brick_stairs"
+    },
+    "polished_blackstone_brick_wall": {
+      "java": "minecraft:polished_blackstone_brick_wall"
+    },
+    "polished_blackstone_bricks": {
+      "java": "minecraft:polished_blackstone_bricks"
+    },
+    "polished_blackstone_slab": {
+      "java": "minecraft:polished_blackstone_slab"
+    },
+    "polished_blackstone_stairs": {
+      "java": "minecraft:polished_blackstone_stairs"
+    },
+    "polished_blackstone_wall": {
+      "java": "minecraft:polished_blackstone_wall"
+    },
+    "polished_deepslate": {
+      "java": "minecraft:polished_deepslate"
+    },
+    "polished_deepslate_slab": {
+      "java": "minecraft:polished_deepslate_slab"
+    },
+    "polished_deepslate_stairs": {
+      "java": "minecraft:polished_deepslate_stairs"
+    },
+    "polished_deepslate_wall": {
+      "java": "minecraft:polished_deepslate_wall"
+    },
+    "polished_diorite": {
+      "java": "minecraft:polished_diorite"
+    },
+    "polished_granite": {
+      "java": "minecraft:polished_granite"
+    },
+    "polished_tuff": {
+      "java": "minecraft:polished_tuff"
+    },
+    "polished_tuff_slab": {
+      "java": "minecraft:polished_tuff_slab"
+    },
+    "polished_tuff_stairs": {
+      "java": "minecraft:polished_tuff_stairs"
+    },
+    "polished_tuff_wall": {
+      "java": "minecraft:polished_tuff_wall"
+    },
+    "portal": {
+      "java": "minecraft:nether_portal"
+    },
+    "potatoes": {
+      "java": "minecraft:potatoes"
+    },
+    "powder_snow": {
+      "java": "minecraft:powder_snow"
+    },
+    "powder_snow_cauldron": {
+      "java": "minecraft:powder_snow_cauldron"
+    },
+    "prismarine": {
+      "java": "minecraft:prismarine"
+    },
+    "prismarine_brick_slab": {
+      "java": "minecraft:prismarine_brick_slab"
+    },
+    "prismarine_brick_stairs": {
+      "java": "minecraft:prismarine_brick_stairs"
+    },
+    "prismarine_bricks": {
+      "java": "minecraft:prismarine_bricks"
+    },
+    "prismarine_slab": {
+      "java": "minecraft:prismarine_slab"
+    },
+    "prismarine_stairs": {
+      "java": "minecraft:prismarine_stairs"
+    },
+    "prismarine_wall": {
+      "java": "minecraft:prismarine_wall"
+    },
+    "pumpkin": {
+      "java": "minecraft:pumpkin",
+      "states": {
+        "direction": "facing"
+      }
+    },
+    "pumpkin_stem": {
+      "java": "minecraft:pumpkin_stem"
+    },
+    "purple_candle": {
+      "java": "minecraft:purple_candle"
+    },
+    "purple_carpet": {
+      "java": "minecraft:purple_carpet"
+    },
+    "purple_concrete": {
+      "java": "minecraft:purple_concrete"
+    },
+    "purple_concrete_powder": {
+      "java": "minecraft:purple_concrete_powder"
+    },
+    "purple_glazed_terracotta": {
+      "java": "minecraft:purple_glazed_terracotta"
+    },
+    "purple_shulker_box": {
+      "java": "minecraft:purple_shulker_box"
+    },
+    "purple_stained_glass": {
+      "java": "minecraft:purple_stained_glass"
+    },
+    "purple_stained_glass_pane": {
+      "java": "minecraft:purple_stained_glass_pane"
+    },
+    "purple_terracotta": {
+      "java": "minecraft:purple_terracotta"
+    },
+    "purple_wool": {
+      "java": "minecraft:purple_wool"
+    },
+    "purpur_block": {
+      "java": "minecraft:purpur_block"
+    },
+    "purpur_pillar": {
+      "java": "minecraft:purpur_pillar"
+    },
+    "purpur_slab": {
+      "java": "minecraft:purpur_slab"
+    },
+    "purpur_stairs": {
+      "java": "minecraft:purpur_stairs"
+    },
+    "quartz_block": {
+      "java": "minecraft:quartz_block"
+    },
+    "quartz_bricks": {
+      "java": "minecraft:quartz_bricks"
+    },
+    "quartz_ore": {
+      "java": "minecraft:nether_quartz_ore"
+    },
+    "quartz_pillar": {
+      "java": "minecraft:quartz_pillar"
+    },
+    "quartz_slab": {
+      "java": "minecraft:quartz_slab"
+    },
+    "quartz_stairs": {
+      "java": "minecraft:quartz_stairs"
+    },
+    "rail": {
+      "java": "minecraft:rail"
+    },
+    "red_candle": {
+      "java": "minecraft:red_candle"
+    },
+    "red_carpet": {
+      "java": "minecraft:red_carpet"
+    },
+    "red_concrete": {
+      "java": "minecraft:red_concrete"
+    },
+    "red_concrete_powder": {
+      "java": "minecraft:red_concrete_powder"
+    },
+    "red_flower": {
+      "java": "minecraft:poppy",
+      "aliases": [
+        "minecraft:blue_orchid",
+        "minecraft:allium",
+        "minecraft:azure_bluet",
+        "minecraft:red_tulip",
+        "minecraft:orange_tulip",
+        "minecraft:white_tulip",
+        "minecraft:pink_tulip",
+        "minecraft:oxeye_daisy",
+        "minecraft:cornflower",
+        "minecraft:lily_of_the_valley"
+      ]
+    },
+    "red_glazed_terracotta": {
+      "java": "minecraft:red_glazed_terracotta"
+    },
+    "red_mushroom": {
+      "java": "minecraft:red_mushroom"
+    },
+    "red_mushroom_block": {
+      "java": "minecraft:red_mushroom_block"
+    },
+    "red_nether_brick": {
+      "java": "minecraft:red_nether_bricks"
+    },
+    "red_sand": {
+      "java": "minecraft:red_sand"
+    },
+    "red_sandstone": {
+      "java": "minecraft:red_sandstone"
+    },
+    "red_sandstone_slab": {
+      "java": "minecraft:red_sandstone_slab"
+    },
+    "red_sandstone_stairs": {
+      "java": "minecraft:red_sandstone_stairs"
+    },
+    "red_shulker_box": {
+      "java": "minecraft:red_shulker_box"
+    },
+    "red_stained_glass": {
+      "java": "minecraft:red_stained_glass"
+    },
+    "red_stained_glass_pane": {
+      "java": "minecraft:red_stained_glass_pane"
+    },
+    "red_terracotta": {
+      "java": "minecraft:red_terracotta"
+    },
+    "red_wool": {
+      "java": "minecraft:red_wool"
+    },
+    "redstone_block": {
+      "java": "minecraft:redstone_block"
+    },
+    "redstone_lamp": {
+      "java": "minecraft:redstone_lamp"
+    },
+    "redstone_ore": {
+      "java": "minecraft:redstone_ore"
+    },
+    "redstone_torch": {
+      "java": "minecraft:redstone_torch",
+      "aliases": [
+        "minecraft:redstone_wall_torch"
+      ]
+    },
+    "redstone_wire": {
+      "java": "minecraft:redstone_wire"
+    },
+    "reeds": {
+      "java": "minecraft:sugar_cane"
+    },
+    "reinforced_deepslate": {
+      "java": "minecraft:reinforced_deepslate"
+    },
+    "repeating_command_block": {
+      "java": "minecraft:repeating_command_block"
+    },
+    "respawn_anchor": {
+      "java": "minecraft:respawn_anchor"
+    },
+    "rose_bush": {
+      "java": "minecraft:rose_bush"
+    },
+    "sand": {
+      "java": "minecraft:sand"
+    },
+    "sandstone": {
+      "java": "minecraft:sandstone"
+    },
+    "sandstone_slab": {
+      "java": "minecraft:sandstone_slab"
+    },
+    "sandstone_stairs": {
+      "java": "minecraft:sandstone_stairs"
+    },
+    "sandstone_wall": {
+      "java": "minecraft:sandstone_wall"
+    },
+    "sculk": {
+      "java": "minecraft:sculk"
+    },
+    "sculk_catalyst": {
+      "java": "minecraft:sculk_catalyst"
+    },
+    "sculk_sensor": {
+      "java": "minecraft:sculk_sensor"
+    },
+    "sculk_shrieker": {
+      "java": "minecraft:sculk_shrieker"
+    },
+    "sculk_vein": {
+      "java": "minecraft:sculk_vein"
+    },
+    "sea_lantern": {
+      "java": "minecraft:sea_lantern"
+    },
+    "sea_pickle": {
+      "java": "minecraft:sea_pickle"
+    },
+    "seagrass": {
+      "java": "minecraft:tall_seagrass"
+    },
+    "short_grass": {
+      "java": "minecraft:grass"
+    },
+    "shroomlight": {
+      "java": "minecraft:shroomlight"
+    },
+    "silver_glazed_terracotta": {
+      "java": "minecraft:light_gray_glazed_terracotta"
+    },
+    "slime": {
+      "java": "minecraft:slime_block"
+    },
+    "small_amethyst_bud": {
+      "java": "minecraft:small_amethyst_bud"
+    },
+    "small_dripleaf": {
+      "java": "minecraft:small_dripleaf"
+    },
+    "smithing_table": {
+      "java": "minecraft:smithing_table"
+    },
+    "smoker": {
+      "java": "minecraft:smoker"
+    },
+    "smooth_basalt": {
+      "java": "minecraft:smooth_basalt"
+    },
+    "smooth_quartz": {
+      "java": "minecraft:smooth_quartz"
+    },
+    "smooth_quartz_slab": {
+      "java": "minecraft:smooth_quartz_slab"
+    },
+    "smooth_quartz_stairs": {
+      "java": "minecraft:smooth_quartz_stairs"
+    },
+    "smooth_red_sandstone": {
+      "java": "minecraft:smooth_red_sandstone"
+    },
+    "smooth_sandstone": {
+      "java": "minecraft:smooth_sandstone"
+    },
+    "sniffer_egg": {
+      "java": "minecraft:sniffer_egg"
+    },
+    "snow": {
+      "java": "minecraft:snow_block"
+    },
+    "snow_layer": {
+      "java": "minecraft:snow"
+    },
+    "soul_campfire": {
+      "java": "minecraft:soul_campfire"
+    },
+    "soul_fire": {
+      "java": "minecraft:soul_fire"
+    },
+    "soul_lantern": {
+      "java": "minecraft:soul_lantern"
+    },
+    "soul_sand": {
+      "java": "minecraft:soul_sand"
+    },
+    "soul_soil": {
+      "java": "minecraft:soul_soil"
+    },
+    "soul_torch": {
+      "java": "minecraft:soul_torch",
+      "aliases": [
+        "minecraft:soul_wall_torch"
+      ]
+    },
+    "sponge": {
+      "java": "minecraft:sponge"
+    },
+    "spore_blossom": {
+      "java": "minecraft:spore_blossom"
+    },
+    "spruce_door": {
+      "java": "minecraft:spruce_door"
+    },
+    "spruce_fence": {
+      "java": "minecraft:spruce_fence"
+    },
+    "spruce_fence_gate": {
+      "java": "minecraft:spruce_fence_gate"
+    },
+    "spruce_hanging_sign": {
+      "java": "minecraft:spruce_hanging_sign"
+    },
+    "spruce_leaves": {
+      "java": "minecraft:spruce_leaves"
+    },
+    "spruce_log": {
+      "java": "minecraft:spruce_log"
+    },
+    "spruce_planks": {
+      "java": "minecraft:spruce_planks"
+    },
+    "spruce_pressure_plate": {
+      "java": "minecraft:spruce_pressure_plate"
+    },
+    "spruce_sapling": {
+      "java": "minecraft:spruce_sapling"
+    },
+    "spruce_slab": {
+      "java": "minecraft:spruce_slab"
+    },
+    "spruce_stairs": {
+      "java": "minecraft:spruce_stairs"
+    },
+    "spruce_standing_sign": {
+      "java": "minecraft:spruce_sign"
+    },
+    "spruce_trapdoor": {
+      "java": "minecraft:spruce_trapdoor"
+    },
+    "spruce_wall_sign": {
+      "java": "minecraft:spruce_wall_sign"
+    },
+    "spruce_wood": {
+      "java": "minecraft:spruce_wood"
+    },
+    "standing_banner": {
+      "java": "minecraft:white_banner",
+      "states": {
+        "ground_sign_direction": "rotation"
+      },
+      "aliases": [
+        "minecraft:orange_banner",
+        "minecraft:magenta_banner",
+        "minecraft:light_blue_banner",
+        "minecraft:yellow_banner",
+        "minecraft:lime_banner",
+        "minecraft:pink_banner",
+        "minecraft:gray_banner",
+        "minecraft:light_gray_banner",
+        "minecraft:cyan_banner",
+        "minecraft:purple_banner",
+        "minecraft:blue_banner",
+        "minecraft:brown_banner",
+        "minecraft:green_banner",
+        "minecraft:red_banner",
+        "minecraft:black_banner"
+      ]
+    },
+    "standing_sign": {
+      "java": "minecraft:oak_sign"
+    },
+    "sticky_piston": {
+      "java": "minecraft:sticky_piston"
+    },
+    "stone": {
+      "java": "minecraft:stone"
+    },
+    "stone_brick_slab": {
+      "java": "minecraft:stone_brick_slab"
+    },
+    "stone_brick_stairs": {
+      "java": "minecraft:stone_brick_stairs"
+    },
+    "stone_brick_wall": {
+      "java": "minecraft:stone_brick_wall"
+    },
+    "stone_bricks": {
+      "java": "minecraft:stone_bricks"
+    },
+    "stone_button": {
+      "java": "minecraft:stone_button"
+    },
+    "stone_pressure_plate": {
+      "java": "minecraft:stone_pressure_plate"
+    },
+    "stone_stairs": {
+      "java": "minecraft:stone_stairs"
+    },
+    "stonebrick": {
+      "java": "minecraft:stone_bricks"
+    },
+    "stonecutter_block": {
+      "java": "minecraft:stonecutter"
+    },
+    "stripped_acacia_log": {
+      "java": "minecraft:stripped_acacia_log"
+    },
+    "stripped_acacia_wood": {
+      "java": "minecraft:stripped_acacia_wood"
+    },
+    "stripped_bamboo_block": {
+      "java": "minecraft:stripped_bamboo_block"
+    },
+    "stripped_birch_log": {
+      "java": "minecraft:stripped_birch_log"
+    },
+    "stripped_birch_wood": {
+      "java": "minecraft:stripped_birch_wood"
+    },
+    "stripped_cherry_log": {
+      "java": "minecraft:stripped_cherry_log"
+    },
+    "stripped_cherry_wood": {
+      "java": "minecraft:stripped_cherry_wood"
+    },
+    "stripped_crimson_hyphae": {
+      "java": "minecraft:stripped_crimson_hyphae"
+    },
+    "stripped_crimson_stem": {
+      "java": "minecraft:stripped_crimson_stem"
+    },
+    "stripped_dark_oak_log": {
+      "java": "minecraft:stripped_dark_oak_log"
+    },
+    "stripped_dark_oak_wood": {
+      "java": "minecraft:stripped_dark_oak_wood"
+    },
+    "stripped_jungle_log": {
+      "java": "minecraft:stripped_jungle_log"
+    },
+    "stripped_jungle_wood": {
+      "java": "minecraft:stripped_jungle_wood"
+    },
+    "stripped_mangrove_log": {
+      "java": "minecraft:stripped_mangrove_log"
+    },
+    "stripped_mangrove_wood": {
+      "java": "minecraft:stripped_mangrove_wood"
+    },
+    "stripped_oak_log": {
+      "java": "minecraft:stripped_oak_log"
+    },
+    "stripped_oak_wood": {
+      "java": "minecraft:stripped_oak_wood"
+    },
+    "stripped_spruce_log": {
+      "java": "minecraft:stripped_spruce_log"
+    },
+    "stripped_spruce_wood": {
+      "java": "minecraft:stripped_spruce_wood"
+    },
+    "stripped_warped_hyphae": {
+      "java": "minecraft:stripped_warped_hyphae"
+    },
+    "stripped_warped_stem": {
+      "java": "minecraft:stripped_warped_stem"
+    },
+    "structure_block": {
+      "java": "minecraft:structure_block"
+    },
+    "structure_void": {
+      "java": "minecraft:structure_void"
+    },
+    "sunflower": {
+      "java": "minecraft:sunflower"
+    },
+    "suspicious_gravel": {
+      "java": "minecraft:suspicious_gravel"
+    },
+    "suspicious_sand": {
+      "java": "minecraft:suspicious_sand"
+    },
+    "sweet_berry_bush": {
+      "java": "minecraft:sweet_berry_bush"
+    },
+    "tall_grass": {
+      "java": "minecraft:tall_grass"
+    },
+    "tallgrass": {
+      "java": "minecraft:tall_grass"
+    },
+    "target": {
+      "java": "minecraft:target"
+    },
+    "terracotta": {
+      "java": "minecraft:terracotta"
+    },
+    "tinted_glass": {
+      "java": "minecraft:tinted_glass"
+    },
+    "tnt": {
+      "java": "minecraft:tnt"
+    },
+    "torch": {
+      "java": "minecraft:torch",
+      "aliases": [
+        "minecraft:wall_torch"
+      ]
+    },
+    "torchflower": {
+      "java": "minecraft:torchflower"
+    },
+    "torchflower_crop": {
+      "java": "minecraft:torchflower_crop"
+    },
+    "trapdoor": {
+      "java": "minecraft:oak_trapdoor"
+    },
+    "trapped_chest": {
+      "java": "minecraft:trapped_chest"
+    },
+    "trial_spawner": {
+      "java": "minecraft:trial_spawner"
+    },
+    "trip_wire": {
+      "java": "minecraft:tripwire"
+    },
+    "tripwire": {
+      "java": "minecraft:tripwire"
+    },
+    "tripwire_hook": {
+      "java": "minecraft:tripwire_hook"
+    },
+    "tube_coral": {
+      "java": "minecraft:tube_coral"
+    },
+    "tube_coral_block": {
+      "java": "minecraft:tube_coral_block"
+    },
+    "tube_coral_fan": {
+      "java": "minecraft:tube_coral_fan"
+    },
+    "tuff": {
+      "java": "minecraft:tuff"
+    },
+    "tuff_brick_slab": {
+      "java": "minecraft:tuff_brick_slab"
+    },
+    "tuff_brick_stairs": {
+      "java": "minecraft:tuff_brick_stairs"
+    },
+    "tuff_brick_wall": {
+      "java": "minecraft:tuff_brick_wall"
+    },
+    "tuff_bricks": {
+      "java": "minecraft:tuff_bricks"
+    },
+    "tuff_slab": {
+      "java": "minecraft:tuff_slab"
+    },
+    "tuff_stairs": {
+      "java": "minecraft:tuff_stairs"
+    },
+    "tuff_wall": {
+      "java": "minecraft:tuff_wall"
+    },
+    "turtle_egg": {
+      "java": "minecraft:turtle_egg"
+    },
+    "twisting_vines": {
+      "java": "minecraft:twisting_vines"
+    },
+    "undyed_shulker_box": {
+      "java": "minecraft:shulker_box"
+    },
+    "unpowered_comparator": {
+      "java": "minecraft:comparator"
+    },
+    "unpowered_repeater": {
+      "java": "minecraft:repeater"
+    },
+    "vault": {
+      "java": "minecraft:vault"
+    },
+    "verdant_froglight": {
+      "java": "minecraft:verdant_froglight"
+    },
+    "vine": {
+      "java": "minecraft:vine"
+    },
+    "wall_banner": {
+      "java": "minecraft:white_wall_banner",
+      "aliases": [
+        "minecraft:orange_wall_banner",
+        "minecraft:magenta_wall_banner",
+        "minecraft:light_blue_wall_banner",
+        "minecraft:yellow_wall_banner",
+        "minecraft:lime_wall_banner",
+        "minecraft:pink_wall_banner",
+        "minecraft:gray_wall_banner",
+        "minecraft:light_gray_wall_banner",
+        "minecraft:cyan_wall_banner",
+        "minecraft:purple_wall_banner",
+        "minecraft:blue_wall_banner",
+        "minecraft:brown_wall_banner",
+        "minecraft:green_wall_banner",
+        "minecraft:red_wall_banner",
+        "minecraft:black_wall_banner"
+      ]
+    },
+    "wall_sign": {
+      "java": "minecraft:oak_wall_sign"
+    },
+    "warped_button": {
+      "java": "minecraft:warped_button"
+    },
+    "warped_door": {
+      "java": "minecraft:warped_door"
+    },
+    "warped_fence": {
+      "java": "minecraft:warped_fence"
+    },
+    "warped_fence_gate": {
+      "java": "minecraft:warped_fence_gate"
+    },
+    "warped_hanging_sign": {
+      "java": "minecraft:warped_hanging_sign"
+    },
+    "warped_hyphae": {
+      "java": "minecraft:warped_hyphae"
+    },
+    "warped_nylium": {
+      "java": "minecraft:warped_nylium"
+    },
+    "warped_planks": {
+      "java": "minecraft:warped_planks"
+    },
+    "warped_pressure_plate": {
+      "java": "minecraft:warped_pressure_plate"
+    },
+    "warped_slab": {
+      "java": "minecraft:warped_slab"
+    },
+    "warped_stairs": {
+      "java": "minecraft:warped_stairs"
+    },
+    "warped_standing_sign": {
+      "java": "minecraft:warped_sign"
+    },
+    "warped_stem": {
+      "java": "minecraft:warped_stem"
+    },
+    "warped_trapdoor": {
+      "java": "minecraft:warped_trapdoor"
+    },
+    "warped_wall_sign": {
+      "java": "minecraft:warped_wall_sign"
+    },
+    "warped_wart_block": {
+      "java": "minecraft:warped_wart_block"
+    },
+    "water": {
+      "java": "minecraft:water"
+    },
+    "water_lily": {
+      "java": "minecraft:lily_pad"
+    },
+    "waterlily": {
+      "java": "minecraft:lily_pad"
+    },
+    "waxed_copper": {
+      "java": "minecraft:waxed_copper_block"
+    },
+    "waxed_copper_bulb": {
+      "java": "minecraft:waxed_copper_bulb"
+    },
+    "waxed_copper_grate": {
+      "java": "minecraft:waxed_copper_grate"
+    },
+    "waxed_cut_copper": {
+      "java": "minecraft:waxed_cut_copper"
+    },
+    "waxed_exposed_copper": {
+      "java": "minecraft:waxed_exposed_copper"
+    },
+    "waxed_exposed_copper_bulb": {
+      "java": "minecraft:waxed_exposed_copper_bulb"
+    },
+    "waxed_exposed_copper_grate": {
+      "java": "minecraft:waxed_exposed_copper_grate"
+    },
+    "waxed_exposed_cut_copper": {
+      "java": "minecraft:waxed_exposed_cut_copper"
+    },
+    "waxed_oxidized_copper": {
+      "java": "minecraft:waxed_oxidized_copper"
+    },
+    "waxed_oxidized_copper_bulb": {
+      "java": "minecraft:waxed_oxidized_copper_bulb"
+    },
+    "waxed_oxidized_copper_grate": {
+      "java": "minecraft:waxed_oxidized_copper_grate"
+    },
+    "waxed_oxidized_cut_copper": {
+      "java": "minecraft:waxed_oxidized_cut_copper"
+    },
+    "waxed_weathered_copper": {
+      "java": "minecraft:waxed_weathered_copper"
+    },
+    "waxed_weathered_copper_bulb": {
+      "java": "minecraft:waxed_weathered_copper_bulb"
+    },
+    "waxed_weathered_copper_grate": {
+      "java": "minecraft:waxed_weathered_copper_grate"
+    },
+    "waxed_weathered_cut_copper": {
+      "java": "minecraft:waxed_weathered_cut_copper"
+    },
+    "weathered_copper": {
+      "java": "minecraft:weathered_copper"
+    },
+    "weathered_copper_bulb": {
+      "java": "minecraft:weathered_copper_bulb"
+    },
+    "weathered_copper_grate": {
+      "java": "minecraft:weathered_copper_grate"
+    },
+    "weathered_cut_copper": {
+      "java": "minecraft:weathered_cut_copper"
+    },
+    "web": {
+      "java": "minecraft:cobweb"
+    },
+    "weeping_vines": {
+      "java": "minecraft:weeping_vines"
+    },
+    "wet_sponge": {
+      "java": "minecraft:wet_sponge"
+    },
+    "wheat": {
+      "java": "minecraft:wheat"
+    },
+    "white_candle": {
+      "java": "minecraft:white_candle"
+    },
+    "white_carpet": {
+      "java": "minecraft:white_carpet"
+    },
+    "white_concrete": {
+      "java": "minecraft:white_concrete"
+    },
+    "white_concrete_powder": {
+      "java": "minecraft:white_concrete_powder"
+    },
+    "white_glazed_terracotta": {
+      "java": "minecraft:white_glazed_terracotta"
+    },
+    "white_shulker_box": {
+      "java": "minecraft:white_shulker_box"
+    },
+    "white_stained_glass": {
+      "java": "minecraft:white_stained_glass"
+    },
+    "white_stained_glass_pane": {
+      "java": "minecraft:white_stained_glass_pane"
+    },
+    "white_terracotta": {
+      "java": "minecraft:white_terracotta"
+    },
+    "white_wool": {
+      "java": "minecraft:white_wool"
+    },
+    "wither_rose": {
+      "java": "minecraft:wither_rose"
+    },
+    "wooden_button": {
+      "java": "minecraft:oak_button",
+      "aliases": [
+        "minecraft:spruce_button",
+        "minecraft:birch_button",
+        "minecraft:jungle_button",
+        "minecraft:acacia_button",
+        "minecraft:dark_oak_button"
+      ]
+    },
+    "wooden_door": {
+      "java": "minecraft:oak_door"
+    },
+    "wooden_pressure_plate": {
+      "java": "minecraft:oak_pressure_plate"
+    },
+    "yellow_candle": {
+      "java": "minecraft:yellow_candle"
+    },
+    "yellow_carpet": {
+      "java": "minecraft:yellow_carpet"
+    },
+    "yellow_concrete": {
+      "java": "minecraft:yellow_concrete"
+    },
+    "yellow_concrete_powder": {
+      "java": "minecraft:yellow_concrete_powder"
+    },
+    "yellow_flower": {
+      "java": "minecraft:dandelion"
+    },
+    "yellow_glazed_terracotta": {
+      "java": "minecraft:yellow_glazed_terracotta"
+    },
+    "yellow_shulker_box": {
+      "java": "minecraft:yellow_shulker_box"
+    },
+    "yellow_stained_glass": {
+      "java": "minecraft:yellow_stained_glass"
+    },
+    "yellow_stained_glass_pane": {
+      "java": "minecraft:yellow_stained_glass_pane"
+    },
+    "yellow_terracotta": {
+      "java": "minecraft:yellow_terracotta"
+    },
+    "yellow_wool": {
+      "java": "minecraft:yellow_wool"
+    }
+  }
+}

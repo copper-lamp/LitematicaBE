@@ -1,246 +1,78 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [4.0.0] - 2026-11-25
 
-## [3.1.1] - 2026-11-16
-
-### Added
-
-- **插件新增 i18n 模块（聊天栏 + 全部 UI 表单）** — 新增 `src/i18n/` 国际化模块：`I18n.js`（唯一入口，零日志）+ `lang/zh_CN.json`、`lang/en_US.json`（各 369 键，键集与占位符结构一一对应）。
-
-  调用结构：`t(player,key,...args)` 返回按玩家语言的翻译串（UI 表单用），`tell(player,key,...args)` 翻译并发送聊天消息，`tr(key,...)` 默认语言（zh_CN），`zh(key,...)` 强制中文
-  原文（测试断言/日志步骤）。查找优先级：本地语言表（按 `pl.langCode` 归一选择）→ LSE 全局 `i18n.trl` 兜底 → 本地 zh 原文（永不显示键名）。
-  
-  覆盖模块：`UIManager`（全部表单标题/内容/按钮/下拉/输入 + 聊天提示）、`ProjectionRenderer`、`MegaProjectionRenderer`、`GhostRenderer`、`GhostSelfCheck`、`EasyPlaceManager`、`BlockVerifier`、`MaterialCounter`、`MegaSchematicManager`、`SelectionTool`。`logger.*` 控制台日志按约定不国际化。
-  
-  语言切换：按每个玩家 `pl.langCode` 实时取译（`en_us/en_GB/en_AU/en_CA/en_NZ/en→en_US`、`zh_cn/zh→zh_CN`、`zh_HK→zh_TW`），玩家改语言后重开表单/触发消息即生效。
-  键命名 `ns.sub.name`、占位符 `{}`/`{0}` 与 `§` 色码保留在值里、中英双文件同步、新表单判取消、§7 键一致性校验。
-
-### Fixed
-
-- **上传站地址展示不跟随 `web.publicUrl`** — `/litematica:web url` 的「访问地址」直接硬拼 `http://${host}:${port}/`，完全绕过了 `summary().url`，导致配置了 `web.publicUrl`（反向代理对外地址）后该命令仍显示 `http://0.0.0.0:8080/`；`status` / `start` / `token` 三处的带令牌访问地址同样硬拼 `host:port`，走反向代理时会把连不通的 `0.0.0.0:8080` 地址发给玩家。
-  修复：四处地址展示统一改用 `summary().url`（=`publicUrl || http://host:port/`）：
-  | 位置 | 命令 | 修改 |
-  |---|---|---|
-  | `index.js` `buildWebCommand` `url` case | `/litematica:web url` | `http://${s.host}:${s.port}/` → `${s.url}` |
-  | `index.js` `sendWebStatus` | `/litematica:web status`（「访问」行） | `http://${s.host}:${s.port}/?token=` → `${s.url}?token=` |
-  | `index.js` `buildWebCommand` `start` case | `/litematica:web start`（「带令牌地址」） | `http://${s.host}:${s.port}/?token=` → `${s.url}?token=` |
-  | `index.js` `buildWebCommand` `token` case | `/litematica:web token`（「访问」行） | `http://${wc.host}:${wc.port}/?token=` → `${s.url}?token=` |
-  说明：`/litematica:web status` 的「监听」行**仍显示** `host:port`（如 `0.0.0.0:8080`）——那是实际的 socket 监听地址，本就不该由 `publicUrl` 改变；只有「公共地址 / 访问地址」跟随 `web.publicUrl`。未配置 `publicUrl` 时回退逻辑不变（`http://host:port/`）。
-
-  验证：`/litematica:config get web.publicUrl` 与 `/litematica:web url` 显示一致；`publicUrl` 生效后全部地址展示均为对外地址。纯展示逻辑，不影响监听，无需重启上传站。
-
-- **部分日志静默** — `registerCommands()` 的命令注册汇总日志（`[LitematicaBE] 命令注册(load/serverStarted): N 条可用 [...]`）原本无条件打印，每次启动（加载期 + `onServerStarted` 兜底重试）都会刷一条，属启动噪音。
-
-  修复：该汇总改为与 `setupCommand` 内的单条注册日志共用同一门控——`misc.verboseCommandLog` / `misc.verboseStartupLog` 任一为 `true` 才输出，默认（两者皆 `false`）静默。排查命令注册问题时把 `misc.verboseCommandLog` 改 `true`，即可恢复这条汇总与逐条注册结果；`warn`/`error`（注册失败）始终保留。
-
-- **上传站 404 日志降级与 favicon 静默** — 兜底路由 `_notFound`（`src/web/WebUploadServer.js`）把「未匹配的路径」从 `logger.warn` 降为 `_debug`（仅写 `data/web_debug.log`，不再刷控制台 WARN）；前端 `src/web/upload.html` 增加 `<link rel="icon" href="data:,">`，浏览器打开上传页不再自动请求 `/favicon.ico`。
-
-  两者消除公网暴露后常见的日志噪音：浏览器自动请求的 `/favicon.ico`，以及互联网扫描器对 `/phpinfo`、`/SDK/*` 等路径的常规探测。这些请求命中兜底路由后仅返回 `404 {"ok":false,"error":"not found"}`，无执行风险；降级后想看谁在探测时翻 `data/web_debug.log` 即可。纯日志/前端优化，不影响路由、鉴权与上传功能。
-
-- **`misc.debugLog` 诊断日志开关（默认关闭）** — `WebUploadServer._debug()`（写 `data/web_debug.log` 的诊断日志：404 未匹配路径、框架错误、handler 异常、自检、启动信息等）原先**无条件**写文件；新增 `misc.debugLog` 配置项（默认 `false`）统一控制，关闭时所有诊断日志完全静默、不写文件。
-
-  为调试而开启：把 `config.json` 的 `misc.debugLog` 设 `true` 并重载配置（`/litematica:config reload`）或重启服务端，诊断日志落到 `data/web_debug.log`。开关放 `misc` 而非 `web`，后续其它模块的 debug 日志可复用同一开关。纯日志开关，不影响任何功能路径。
-
-  同一开关扩到的启动期日志（`misc.debugLog=true` 才打印，默认静默）：
-
-  - `index.js`：`[LitematicaBE] zlib module loaded successfully!`、`[LitematicaBE] fs module loaded successfully!`——模块加载发生在 `configManager` 创建**之前**，无法在 require 处门控，改为 configManager 就绪后按开关补打；加载失败仍走 `warn`（始终保留）。
-  - `ConfigManager`：`[ConfigManager] 配置文件加载成功: <路径>`（加载失败 `error` 始终保留）。
-  - `DataManager`：`Loaded N projections`、`Loaded data for N players`。
-
-  为让 `DataManager` 等实例构造期（早于统一 global 导出处）能读该开关，`index.js` 把 `global.configManager` 的赋值**提前**到 `configManager` 创建之后（原在 `global.*` 统一导出块，晚于 `DataManager` 构造）。`warn`/`error` 类日志不受开关影响，始终输出。
-
-### Security
-
-- **内置上传站防御缺口收口** — `allowIps` 白名单从「只拦上传 init」上提为全局闸门：新增统一入口 `_gate()`，**令牌 + IP 白名单 + 全局限流**一次校验，`list` / `download` / `delete` / `init` / `chunk` / `finish` / `abort` 七个受保护路由全部过闸；此前白名单只作用于 `init`，即使配置了白名单，公网任意 IP 仍可列目录、下载、删除投影（`src/web/WebUploadServer.js`）。
-- **新增 `readOnly` 只读模式** — `true` 时上传 / 删除 / 中止一律返回 403，仅保留列出与下载，配合 `allowIps` 作为「只下载、不收文件」场景的一档防护；对应 `config.json` 的 `web.readOnly`。
-- **新增 `maxRequestsPerMinute` 全局限流** — 每 IP 每分钟所有受保护 API 请求数上限（默认 60），覆盖此前完全不限流的下载 / 删除 / 列表，堵住刷量与带宽滥用；对应 `config.json` 的 `web.maxRequestsPerMinute`。
-- **新增 `downloadMaxMB` 下载体积上限** — 单文件下载超过阈值（默认 8 MB，`0` = 不限制）拒绝 base64 直传并提示走服务器文件，避免大文件一次性读入内存造成放大；对应 `config.json` 的 `web.downloadMaxMB`。
-- **`/api/health` 信息泄漏收敛** — 未带令牌只返回 `ok` / `plugin` / `running` 最小字段；带令牌才返回 `chunkKB` / `maxFileMB` / `allowExt` / `files`，不再把上传站内部参数与文件数暴露给扫描者。
-- **404 兜底日志补记来源** — `未匹配的路径` 诊断日志（`data/web_debug.log`，受 `misc.debugLog` 控制）现在追加请求来源 `remoteAddr`，公网扫描器探测时可据此溯源扫描源 IP。
-- **回归测试** — `tests/test_web_upload.js` 新增 6 个断言（白名单全局生效、全局限流 429、只读模式、下载上限 413、health 精简字段、404 记录来源 IP），离线回归 547 → 553 断言全绿。
-
-## [3.1.0] - 2026-11-14
+从 LSE Node.js 插件（3.1.1）迁移为 LeviLamina 原生模组，使用 C++ 重构。
 
 ### Added
 
-- **内置文件上传站** - 加入内置 http 服务器，调用 ll 网络接口，插件启动时自动拉起上传站；允许任何持有 TOKEN 密钥玩家访问服务器并上传投影 / 结构文件至插件；热上传即时生效，无需重启服务端。
-- **`.mcstructure` 读写双向支持** — 加载走 `McstructureLoader`（独立小端 NBT 解析，与 `.litematic` 按扩展名分流）；保存新增 `LittleEndianNBTWriter` / `McstructureWriter` / `LSENbtTree`，选区保存表单加「导出格式」下拉（`.litematic` / `.mcstructure` / 两者），基岩版结构文件大小超出`maxVolume`（默认 100 万格）则在读取前截停。
-- **同一玩家多投影并存** — ghost 会话身份升维为 `xuid::projectionId`，每份投影各有独立的会话、快照与撤销账本；新增 `setPrimaryProjection()` 只切木剑控制目标而不重铺不撤会话、`/litematica select`、菜单「选择木剑控制的投影 / 卸载某个投影」，`loadedProjections` 与逐投影层号持久化，旧存档自动迁移。MEGA 同一图纸放两份时按 `stateIdFor` 隔离注入状态。
-- **`/litematica:ghost sweep` 兜底清理** — 快照与期望都丢失时按坐标扫描世界，把 `lit:g_*` 写回空气：默认以自身为中心 5×5 区块、纵向 ±32 层，支持 `sweep N`、`box x1 y1 z1 x2 y2 z2` 与 `dry` 演练；只碰 ghost、跳过活跃会话的格、区块未加载则不盲写。
-- **启动时检查新版本发布** — `src/net/UpdateChecker.js`，取数顺序为官方 API `releases/latest` → 官方网页 302 `location` → 自定义 `updateCheck.mirror`；`enabled=false` 时不注册调度任务、不联网。异步回调内只写纯数据（无 EngineScope），日志由一次性 `update-check` 任务在主线程打印。
-- **新增 ghost 模型（addon更新）**
-  - **活塞伸出态**：按原版 `pistonArm` 尺寸重建 `lit_piston_extended` / `lit_piston_head`，普通与黏性拆成独立 identifier；新增 `PistonStateInfer`，在 `.mcstructure` 本体不带 `extended_bit` 时按前方是否为活塞头推断。
-  - **半砖 / 阳光传感器**：`lit_slab` / `lit_slab_top` / `lit_daylight_detector`，103 个半砖 × bottom/top/double 三件套，按面拆材质；状态全丢（MEGA 分块重载）时回落下半砖。
-  - **楼梯 / 活板门 / 门**：形态改由 identifier 承载（新增 348 个 BP 定义），倒置楼梯、开合活板门、上半门各有独立模型与贴图。
-  - **草与交叉板**：`geometry.lit_cross` 覆盖全部 66 个 `cross_texture` 方块 + 乘法染色贴图，草方块按面分材质，旧基岩别名（`grass` / `tallgrass` / `doubleplant`）按状态还原。
+**投影显示与加载**
+- 命令：`/lit list`、`/lit reload`（热重载映射表并清空状态解析缓存）、`/lit load <file> <x> <y> <z>`（控制台可用，发给所有在线玩家；无玩家时回报「已编码 N 包，未发送」）、`/lit info <file>`、`/lit unload`、`/lit layer <from> [to]`、`/lit rotate`（顺时针 90°，以 load 原点为锚，四次回原位）、`/lit resend`、`/lit probe`、`/lit diag`。
+- 解析：`.litematic`（大端 NBT、多区域、`BlockStatePalette`、连续位流跨 long、跳过空气与结构空位）与 `.mcstructure`（小端 NBT、主层+液体层的 `block_indices`、状态键去 `minecraft:`、`flowing_water → water` 归一化），按扩展名自动分派。
+- 显示通道：状态串 → `Block::mNetworkId`（BDS 注册表 + 进程内缓存）；16³ 子区块分组、单包 ≤1024 条，调用 `holo_core.dll` 的 C ABI 编码；varint 包头 + `NetworkPeer::sendPacket(Reliable, Compressible)`。
+- 表面剔除：`core/schematic/OcclusionTable` + `resources/data/occlusion.json`（1160 个 Java 方块中 712 个不遮挡），不完整方块入表后其相邻面不再被判为被遮挡；`ghost/SurfaceCull` 去掉六邻居全遮挡的内部方块；`ghost/DispatchQueue` 按 tick 预算发包（默认 8 包/tick）。
+- 多投影：`ProjectionManager` / `ProjectionSession`（`#id` + label，支持 `/lit projects`、`/lit select <id>`、`/lit remove <id>`）；显示层镜像（每玩家已收坐标集合）+ 编码缓存实现零开销重发；重发调度用 `ServerThreadExecutor::executeAfter` 1 秒轮询，以 `isDead()` 翻转判重生、位移 >64 格判传送，心跳 5 分钟兜底。
+- 数据驱动方块映射 `mapping/GhostMap`：状态树 + `{state}` 模板 + `set` 覆盖，迁入旧表 1160 个方块 / 256 条状态树，C++ 不含方块硬编码。
+- HologramLib 封装 `hologram/HologramFacade`：编译期直链 + 运行期能力分级（`batch-encoder` / `per-cell-override` / `none`），缺失时降级而非崩溃。
+
+**放置**
+- `/lit place [from] [to]`：覆盖式直接放置（目标位置已有非空气方块也照样写），按 y→x→z 自下而上，`setBlockAndRetainCompatibleBlockActor` 写入 + 区块补载 + 收尾抽样回读校验。
+- 使用门槛 `config/place.json`：`requireAdmin`（需要管理员 / OP，默认关）、`requireCreative`（需要创造模式，默认开），由 `core::place::checkAccess` 在执行时判定，控制台不受限，改完 `/lit reload` 热重载。
+- 候选链 `mapping::PlaceResolve`（原样 → `java_bedrock.json` → 规则变形 → 候选池近似 → 默认状态）+ Java 属性别名多套尝试 + 三级精度（原样 / 改名 / 仅默认状态），按状态串缓存；`mapping::BlockStateText` 与 `BlockStateResolve` 共用。
+- 上限配置化 `config/projection.json`：`maxLoadBlocks`（`/lit load` 收集上限，默认 400000）、`maxPlaceBlocks`（`/lit place` 单次写入上限，默认 200000），缺字段补默认、`0` 与负数回落默认，`/lit reload` 一起热重载并回显当前两值。
+
+**选区与保存**
+- 手势：主手木剑右键方块两次定选区（500 ms 冷却、同维度校验，完成后报范围/尺寸/体积），潜行 + 右键清空，选区按玩家记录、下线清理；线框走 HologramLib `createBox`（六参 = 两角点，取 `min` 与 `max+1`），可配置关闭；与轻松放置共用同一个 `Item::useOn` hook（`easyplace::setUseOnInterceptor` 在 `origin()` 前拦截，不重复挂钩）。
+- 命令：`/lit sel`、`/lit sel clear`、`/lit save stru|lite|both <名字>`（格式必须显式给，配置里没有默认格式）、`/lit saveat [stru|lite|both] <名字> <x1> <y1> <z1> <x2> <y2> <z2>`（控制台可用，默认带回读自检，省略格式按 `stru`）、`/lit savediag`、`/lit saveinfo`。
+- 写入侧：`core/nbt/NbtWriter`（大端/小端序列化 + gzip，deflate 走 miniz）、`LitematicWriter`（大端 + gzip、位打包、`Region.Position = 0`、Metadata 全套）、`McstructureWriter`（小端、两层 int32 网格、调色板 0 号 air、`structure_world_origin` = 选区最小角、方块实体写 `block_position_data`）、`PaletteBits`（读写共用位宽规则）、`core/save/RegionScan`（主动拉区块、按 `BlockType`+`mData` 缓存状态提取）；`both` 只遍历一次世界。
+- 状态提取：`BlockState::toNBT` 让引擎给出带类型的值（Byte/Int/String 保真），拿不到时退回整型并计入 `stateFallback`。
+- 基岩 → Java：`mapping::BedrockToJava` + `resources/data/export_map.json`（楼梯/台阶/门/活板门/按钮/拉杆/铁轨/活塞/红石等族规则，活塞与按钮的水平四向按旧项目实测口径处理），表由 `tools/lit_tools/exportmap.py` 生成。
+- 配置 `config/save.json`：两份体积上限、是否含方块实体、是否写液体层、`blockVersion` / `dataVersion`、同名不覆盖（默认报错）、`requireOp`（默认不要求）、选区线框开关与样式（`box` / `lines`）。
+- 回读自检：写出的文件用本项目解析器读回，逐格比 `mSerializationIdHash`，输出一致率与首条不一致样例。
+
+**材料清单导出**
+- `/lit material`（别名 `mat` / `materials`）：把**当前选中**投影的方块按材料聚合，导出 `<模组目录>/exports/材料清单_<投影名>.xlsx`（同名覆盖）。
+- 工作簿两张表：`材料清单`（序号 / 方块名 / 变体 / 数量 / 占比 / 可放置 / 状态串样例，首行冻结 + 自动筛选 + 末行合计）与 `投影信息`（投影名、文件、会话、方块总数、材料种类、状态数、层范围、当前显示层、旋转、导出时间、插件版本、统计口径）。
+- 口径：统计整份投影（`mBlocks`），与当前显示层无关，空气在解析阶段已跳过；按「名字 + 材质变体」合并（`color` / `wood_type` / `stone_type` / `sand_type` / `dirt_type` 分开，朝向与开关不拆行）；`可放置` 取自会话加载时的 `mPaletteBlocks`，`投影信息` 同时给出不可放置格数。
+- 新增 `core/report/XlsxWriter`（极简 OOXML：inlineStr + styles + 列宽 + 冻结窗格 + 自动筛选 + docProps，zip 用 miniz 在**内存**打包后按宽字符路径落盘）与 `core/report/MaterialCounter`（纯数据聚合，可脱离游戏回归）。
+
+**投影打印机**
+- `/lit printer`：以玩家为球心、半径 = `config/printer.json` 的 `range`（默认 5 格）按节拍把当前选中会话显示层的投影方块写进世界，写成功才扣料（生存 1 格 / 创造默认豁免），一轮一次背包同步，放完即 `markFilled` 让 ghost 层让位；不挂 hook，可与轻松放置同时开启。
+- `respectPlayerBreaks` / `playerBreakCooldownMs`（默认开、3 s）：玩家刚挖掉的格在冷却期内不补回，避免「挖掉 → 秒补回 → 反复触发 ghost 补发」，也避免拆不掉打印区。
+- `core/place/PlaceGuard`：轻松放置与打印机共用的程序化放置闸门（方块实体 / 多格 / 流体判定、方块↔物品匹配、可替换方块表），按 `BlockType` 指针缓存。
+
+**可见性共享与木剑面板**
+- `/lit share [on|off]`：每名玩家自选投影是否对他人可见，**默认全体共享**；判定集中在发包点（`ProjectionSession::visibleTo`），切成私有当场收回旁人屏幕上的 ghost 并丢掉他们排队未发的包（`DispatchQueue::dropPlayer`），切回共享立刻补发全体，无需重新 `load`；偏好按玩家名存 `config/share.json` 的 `private` 名单；控制台建的会话恒共享；私有会话不画包围盒线框。
+- 木剑控制面板（`ui/`）：木剑**只作为投影控制器**，手持木剑**左键**（潜行与否都算）唤出多级表单，**右键功能完全不变**（选点 / 潜行右键清空），命令全部保留。
+- 两条触发链路同时启用，靠 400 ms 冷却去重：`$handle(AnimatePacket)` 与 `easyplace` 的 `Player::useItem` 观察点（「右键空气」兜底）；动作推迟 50 ms 到下一拍执行。
+- 面板 12 页：主菜单 / 投影管理 / 投影操作 / 新的投影 / 辅助功能 / 选区保存 / 保存设置 / 坐标选区 / 外观显示 / 分层显示 / 显示特定层 / 关于。
+- 自证与回显：`triggerStats()` 把「收到的 Swing 包数」与「真正触发面板数」暴露到诊断页，首次真正触发写日志 `wooden sword gesture fired (via animate|useitem)`；`ui/ActionSink` 收集 `CommandOutput`，把「上次结果」排版进页顶，动作函数本身未改。
+- 配套接口：`ProjectionManager::forEachSession(fn)`、`easyplace::setUseItemObserver()` / `hasUseItemObserver()`；「重新加载」只重发该会话当前显示层给本人（`ProjectionSession::sendCachedTo`）；左键切层已移除，层控制改走面板按钮。
+
+**上传页与工具链**
+- 内置 HTTP 上传页（`127.0.0.1:8686`，token 鉴权，拖拽上传到 `schematics/`，只落盘不自动加载）。
+- `tools/build.ps1`（探测 MSVC 工具集，缺 v143 ATL 时借用同实例其它工具集的 `atlmfc`）、`tools/deploy.ps1`（备份 → 部署插件与 BP/RP → 校验 HologramLib 与 `holo_core.dll` → 检查世界包引用）、`tools/verify-stage-a.ps1`（自动启服 + `/lit probe` + 收日志 + 停服）。
+- 离线回归：`tools/parse-check/`（合成最小 `.litematic` 逐方块对拍）、`tools/write-check/`（合成区域 → 写两种格式 → 读回逐格比对，696 项检查全通过）、`tools/xlsx-check/`（C++ 断言聚合口径 + openpyxl 逐格校验生成文件）、`tools/lit_tools/`（`mapgen.py` / `fixture.py` / `exportmap.py`）；环境变量 `LITEMATICABE_SELF_TEST` 无人值守自检写 `data/selftest.log`。
+- 版本真源 `src/LitematicaBE/Version.h`（`kVersion` / `kTargetBaseline`），打包器 `modName` / `modVersion` / `modPlatform` 走 extraconf 显式给出并与四处真源一起由 `lit-tools version` 校验。
+- 资源包 `resources/addon/`：沿用已验证的 `lit:g_*` 假方块定义（1277 个）及贴图/模型/粒子。
 
 ### Changed
 
-- **配置与日志可运维化** — `config.json` 的 `logCleaner` 段真正生效（`scanInterval` / `patterns` / `backupEnabled` / `maxBackupFiles` 直通，能匹配空串的正则直接丢弃）；命令注册与 LogCleaner 启动期 INFO 默认静默，由 `misc.verboseCommandLog` / `misc.verboseStartupLog` 控制，`warn` / `error` 不受影响；保存选区的逐格日志改由 `schematicSave.verboseScan` 控制。
-- **坐标与数值输入统一收口** — 新增 `src/utils/coordText.js`，放置/保存表单的坐标输入框前置为前三个控件，与 label 数量彻底解耦；`/lit placeat` 支持 `~ ~5 ~-3` 相对坐标。
-- **版本一致性收口** — `ll.registerPlugin` 的版本三元组改为从 `PLUGIN_VERSION` 派生（LSE 会把三元组回写进 `manifest.json`），`check-version.mjs` 一次性校验插件四处版本、三元组、CHANGELOG 段落与 addon 五处版本 + 描述文本 + uuid。
-- **形态选择定论** — 在 permutation 使用 `minecraft:geometry` 在 BDS 上不生效，形态一律由 identifier 承载，permutation 保留 `minecraft:transformation` 做旋转。
+- 构建体系：xmake 目标由模板的 `my-mod` 改为 `LitematicaBE`，只保留 server 变体；`lip.toml` 从双变体收敛为单 `server` 变体。
+- 目标基线固定为 BDS 1.21.132.x / LeviLamina 1.9.9 / HologramLib 21.132.1。
+- 依赖 HologramLib 的方式从 lrca 运行期 `ll.import` 改为编译期头文件 + 导入库直链；`manifest.json` 声明依赖，避免加载顺序导致符号解析失败。
+- `/lit replace` 改名为 `/lit place`，旧的「只填空位」`/lit place` 删除，直接放置语义固定为覆盖式。
+- `[wireframe] lines built: (x1,y1,z1)-(x2,y2,z2)` 从 INFO 降为 DEBUG（设 `LITEMATICABE_WIREFRAME_LOG=1` 恢复 INFO），README 补上 `/lit box` 与 `LITEMATICABE_NO_WIREFRAME` / `LITEMATICABE_WIREFRAME_LOG` 的说明。
+- 路径输出统一走 UTF-8。
 
 ### Fixed
 
-- **保存 / 加载**：`includes('air')` 把整类 `*_stairs` 当空气丢掉；同名 `.litematic` / `.mcstructure` 永远只加载前者；`.litematic` 状态键带 `minecraft:` 前缀导致观察者朝向漏进 Java 调色板。
-- **放置**：半砖永远放下半砖（`type` → `vertical_half` 归一化 + 双半砖三种命名排法）、倒置楼梯不带 `upside_down_bit` 被判定状态错误、方向族（dispenser / dropper / hopper / crafter / furnace…）水平朝向整体反 180°、`.mcstructure` 直接放置后观察者朝向丢失（改用 `rawState` 保留原始键名）。
-- **渲染**：不完整方块（红石粉、火把、地毯、压力板、花草…）不再参与六面遮挡导致投影出洞；观察者 ghost 去掉重合顶面，消除 z-fighting 引起的顶面贴图抖动。
-- **删除投影不动世界** — `purgeProjection()` 三层兜底（活跃会话 → 孤儿快照按投影哈希/包围盒认亲 → 期望账本兜底），并先停 MEGA 注入；清不干净就不删记录，提示"靠近投影再删"。
+- **面板一点按钮服务端就崩（0xC0000005，`_List_node_emplace_op2`）**：表单回调来自网络线程，`summon()` 走主线程，两边同时在 `MenuState::mStates` 插入写坏了 MSVC `unordered_map` 的 list 节点指针。现在表单回调（含四个 CustomForm）一律投递回 `ServerThreadExecutor` 再执行；`AnimatePacket` hook 完全不碰玩家对象，只把 `runtimeId` 带到主线程再解析实体；`MenuState` 的插入/删除加 `std::mutex` 兜底；删掉只写不读的死字段 `showing`。
+- **木剑面板进不了二级菜单、此后主菜单也唤不出**：`SimpleForm` 点按钮客户端会立即关闭表单再回响应，`sendUpdate` 在这套交互里不成立。现在回调第一件事 `showing = false`，并一律 `sendTo`。
+- **木剑面板第一版的 `Actor::swing` hook 会让服务端启动后崩溃（0xC0000005）**：`&::Actor::$swing` 能解析到符号但签名与 LL 头文件不符，`origin()` 按错误调用约定读参数（崩在 `detour+0x23`）。改用 `easyplace` 已跑稳的 `Player::useItem` hook 加只读观察点，手势改为「手持木剑右键空气」。
+- **打印出的方块被挖掉后出现「客户端 ghost + 服务端真方块」叠加态**：挖掉触发的 ghost 补发有 150 ms 延迟，打印机的 100 ms 节拍会在窗口内把该格重新填成真方块。现在补发前先看该格是否已重新填充（`isFilled`）并按玩家自己的维度确认该格仍是空气，不满足就不发；`requestRepaint` 同时记下破坏时间戳。
+- **`.litematic` 按大端 NBT 解析**：Litematica 是 Java 工具、NBT 为大端，此前按小端读导致「缺少 Regions」；解析器现支持两种字节序（`.mcstructure` 的小端入口已预留）。
+- **中文投影名「未找到该文件」**：`std::filesystem::path{std::string}` 按 CP_ACP 解释入参会抛 `std::system_error`；改为按 UTF-8 / 936 / 1252 多代码页解释 + Latin-1 双跳还原，并加目录扫描兜底（忽略大小写、可省略扩展名）。新增 `core/util/TextEncoding`（`toUtf8` / `fromUtf8` / `fromAcp` / `sanitizeUtf8`，失败返回空 path 不抛异常），`/lit` 回调统一 `guard()` 把异常转成聊天栏错误 `§c内部错误§r：<原因>`。
+- 上传页对 `.NET HttpClient` 的 `filename=x`（不带引号）解析失败，现在带引号与不带引号两种 multipart 都能识别。
+- 含中文路径时 `path.string()` 会抛异常，日志、映射表/遮挡表/NBT 错误信息、上传列表统一改 UTF-8 输出。
 
-
-## [3.0.2] - 2026-11-1
-
-### Fixed
-- **投影打印机恢复** — ghost 重构后修改打印机部分逻辑，现在其功能可用。
-- **mega 大型投影功能恢复** — 允许大型投影放置，并具有与普通投影同样功能。60w 方块已实测可用。
-- **删除无用代码** `src/easyplace/FastEasyPlace.js`（零引用，且用 `setInterval` 违反约定）。
-
-### Added
-- `config.json` / `ConfigManager` 新增 `easyPlace.printer`：`radius`、`maxPerCycle`、`budgetMs`、`placeDelayMs`、`overwriteReplaceable`、`debug`，实时读取、热改生效。
-- `tests/test_printer_placement.js`（16 断言）+ `test_ghost_renderer.js` 的 2 条 `markSatisfied` 用例；`npm test` 共 21 脚本 / 276 断言。
-
-## [3.0.1] - 2026-10-31
-
-### Added
-- **lip 安装支持** — 新增 `tooth.json`，服务端执行 `lip install github.com/copper-lamp/LitematicaBE` 即可安装插件与 BP/RP；客户端使用 `#client` 变体安装 BP/RP
-- **自动发布** — 新增 CI 校验与 tag → Release 工作流，推送 `v*` tag 自动构建并上传产物
-- **产物结构** — 统一为服务端 zip（插件 + BP/RP）、客户端 zip（BP/RP）、手动安装 zip、`.mcaddon` 与 `SHA256SUMS.txt`
-- **README 双语** — `README.md`（中文）与 `README_EN.md`
-
-### Fixed
-- **大型投影回退** — Mega 渲染未启用或加载失败时不再丢弃整个投影：改为走标准加载与普通 ghost 渲染，避免超大投影加载后完全不可见
-- **addon 版本一致性** — 把 BP/RP manifest 的 `header.version` 统一为 `1.1.8`，与 `ghost_index.json` / `addon_expected.json` 对齐，修复安装后 `server-bp-version-mismatch` 导致 ghost 写入被禁用的问题；构建时对三处版本做一致性校验
-- **构建产物** — 修复 zip 中央目录中外部属性写入溢出导致的构建失败
-
-## [3.0.0] - 2026-10-31
-
-### Fixed
-- **命令注册修复**
-  - 修复 `/lit` 无法执行的问题（原缺少重载声明）；
-  - 修复 `/litematica` 主命令因双 RawText 参数被 BDS 拒收的问题；
-  - 修复 `/litematica:logclean`、`/litematica:config` 因缺少重载可能注册失败的问题。
-- **`debug` 子命令修复**
-  - 原 `args` 整串被当数组使用，`args[0]` 只取到第一个字符，所有 debug 子命令都失效；现已正确拆分
-- **维度 ID 修复**
-  - 修复 `player.dim` 恒为 `undefined` 的问题（LSE 中维度信息在 `pos.dimid`），跨维度选区校验、投影放置维度现在准确
-- **包围盒修复** — 修复了 minecraft:basic_particle 在基岩版不存在的问题，改为聊天栏显示投影名称、尺寸、高度与占地四角坐标
-
-### Added
-- **ghost 方块系统** — 新增完整的 ghost 方块体系（500 余种方块定义），投影方块以半透明幽灵方块形式呈现，与真实建筑视觉分离
-- **服务端重启自动恢复** — 服务器重启后自动清理上次异常退出留下的快照，并按期望集合补齐 ghost
-- **会话保活机制** — 玩家离线不再立即撤销投影，30 分钟内回归可直接恢复；超时自动撤销，避免无限占用内存与世界
-- **ghost 方块系统** — 新增一套完整的 ghost 方块体系（500 余种方块定义），投影方块以半透明幽灵方块形式呈现，与真实建筑视觉分离
-- **新增命令功能** — 新增一套完整的 ghost 方块体系（500 余种方块定义），投影方块以半透明幽灵方块形式呈现，与真实建筑视觉分离
-  - 注册`/litematica:ghost`：独立命令，含 `lay`（铺墙）、`undo`（撤销）、`info`（会话诊断）、`restore`（补齐期望）四个子动作
-  - 注册`/litematica selfcheck`：一键自检整条写世界链路（读原状 → 快照 → 写幽灵 → 读回 → 撤销），逐项显示 PASS/FAIL 并说明失败原因
-
-### Changed
-- **渲染逻辑重构** — 渲染逻辑由 LSE 生成贴图粒子全面转向自定义 ghost 方块，调用 ghost 子系统，并移除了旧版粒子相关功能
-- **统一 tick 调度器** — 全插件从多个独立 `onTick` / `setInterval` 收敛为单一调度器，带时间预算、优先级与启停管理。巨型投影优化，日志清理、FastPlace、actionBar 等任务统一排队执行
-- **生命周期重构** — 为新渲染逻辑完善了生命周期，包括保活、重写、校验等
-- **方块映射表升级** — 方块识别从"旧式容器 ID + 状态"升级为完整扁平化方块名，兼容新旧两套 ID（含 legacy 回退表），投影方块定位更精准
-- **资源包升级** — 现在需要在服务端与客户端分别安装随插件提供的 addon 扩展包以完整体验 LitematicaBE 。插件将会对 addon 进行版本一致性校验
-- **生命周期重构** — 为新渲染逻辑完善了生命周期，包括保活、重写、校验等
-- **功能迁移测试** — 重构后部分旧版功能不再支持，正在适配并测试中
-  - 实测通过：litematica 文件导入、原理图加载放置与卸载、分层显示投影等功能已确认可用
-  - 暂不支持：mega 功能、投影打印机等拓展功能暂不可用，后续将继续完善
-
-## [2.5.1] - 2026-06-07
-
-### Fixed
-- **Redstone block placement** — Fixed 6 missing Java→BE state conversions:
-  - `redstone_wire`: `power` → `redstone_signal`
-  - `observer`: `powered` → `powered_bit`
-  - `piston/sticky_piston`: `extended` → `extended_bit`
-  - `dispenser/dropper`: `triggered` → `triggered_bit`
-  - `hopper`: `enabled` → `toggle_bit` (inverted)
-  - `redstone_torch`: `lit=false` → BE block rename to `unlit_redstone_torch`
-- **EasyPlaceManager** — Added missing BlockStateConverters/BlockMappingRegistry pipeline to fast place flow
-- **Boolean NBT type** — `BidirectionalBlockConverter.buildBlockNbt` now uses `setByte` for boolean states
-- **Mega direct placement** — Refactored to stream chunks one-by-one (read→place→free memory), avoiding OOM
-- **Trapdoor/carpet mapping** — Fixed `open_bit`, `upside_down_bit`, carpet `color` state extraction
-- **Mega projection deletion** — `DataManager.removeProjection` now auto-deletes mega chunk files
-
-### Added
-- **PlacementLogger** — Detailed failure logging for fast/easy place operations
-  - Logs: Java name, BE name, original states, converted states, setblock command, failure reason
-  - Log file: `plugins/LitematicaBE/logs/placement_failures_YYYY-MM-DD.log`
-  - `/litematica failures` command to view in-game failure statistics (Top 20 by failure count)
-
-### Changed
-- **FastEasyPlace** — `placeBlockCreative`/`placeBlockSurvival` return `{success, error, cmd}` for detailed logging
-- **BlockVerifier** — Changed to synchronous execution with no block count limit
-- **setblock boolean states** — Added `extended_bit` to the binary-to-boolean conversion set
-
-## [2.5.0] - 2026-06-06
-
-### Added
-- **Bidirectional block mapping system** — Complete Java ↔ Bedrock bidirectional conversion
-  - `BlockMappingRegistry`: ~880 block name mappings with category/version/state metadata
-  - `BlockStateConverters`: Covers direction, rails, stairs, doors, trapdoors, beds, redstone, buttons, levers, etc.
-  - Round-trip test and coverage verification
-- **FastEasyPlace (Printer)** — Auto-place projection blocks within 5-block radius
-- **Raycaster** — Crosshair block targeting for projection
-- **BlockVerifier** — Detect wrong/missing/mismatched blocks
-- **MaterialCounter** — Material list statistics with Excel export
-
-## [2.4.0] - 2026-05-17
-
-### Added
-- **Schematic save** — Save Bedrock world blocks as Java-compatible `.litematic` files
-  - `SelectionTool`: Wooden sword right-click to select two corners
-  - `SchematicSaver`: Scan selection, build palette, encode BlockStates
-  - `NBTWriter`: Custom NBT serializer, fully compatible with Java Litematica format
-  - Full block name mapping (Bedrock→Java) and state auto-conversion
-- Fixed `LitematicLoader` Size parsing for `TAG_Int_Array` format
-
-## [2.3.2] - 2026-05-16
-
-### Fixed
-- Mega projection: no block data (player parameter passthrough)
-- Mega layer-by-layer rendering (use `updateBlocks` instead of `startRender`)
-- Mega easy place (added `megaManager` support)
-- Layer rendering starts at layer 0
-- Block placement direction anomaly (`filterDirectionStates`)
-- Liquid blocks filtered (water, lava)
-
-## [2.3.1] - 2026-05-16
-
-### Changed
-- `BinaryChunkStorage` v2.0 — Rewritten with palette + bit-packing + GZip (80-90% compression)
-- Chunk size changed from 16³ to 32³
-- Async loading with `setImmediate` yield, no game blocking
-- Render strategy: "render once, update on respawn"
-
-## [2.3.0] - 2026-04-26
-
-### Changed
-- Mega mode architecture refactor — rendering unified under `ProjectionRenderer`
-- Added `ProjectionRenderer.updateBlocks()` data source interface
-- Fixed `StreamingLitematicLoader` array type parsing
-
-## [2.2.0] - 2025-04-05
-
-### Added
-- Easy Place Module (`EasyPlaceManager`, `InventoryHelper`, `PositionConverter`, `BlockMatcher`)
-- Auto-select correct block in projection area
-- Shulker box item extraction
-- `/litematica easyplace` command
-
-## [2.0.0] - 2024-03-15
-
-### Added
-- Complete rewrite with modular architecture
-- GUI menu system (SimpleForm)
-- Three operation modes: Place, Rotate, Build
-- Wooden sword interaction system
-- Server-wide projection sharing
-
-## [1.0.0] - 2024-XX-XX
-
-### Added
-- Initial release
-- Basic schematic loading (.litematic and .json)
-- Basic projection display

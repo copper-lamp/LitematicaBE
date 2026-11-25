@@ -1,0 +1,25 @@
+format = 4
+id = "github.com/Shisizhou0706/LitematicaBE"
+version = "4.0.0"
+
+[info]
+name = "LitematicaBE"
+description = "Minecraft Bedrock 服务端投影插件：Litematica 投影以客户端假方块显示，世界零污染。"
+tags = ["minecraft-bedrock", "levilamina", "litematica", "projection", "schematic", "fake-block"]
+logo = "https://raw.githubusercontent.com/Shisizhou0706/LitematicaBE/main/resources/pack_icon.png"
+
+# 只有服务端变体：投影是服务端能力，客户端侧不需要任何产物。
+# 前置 HologramLib 不写进 deps —— 它的发布线按 BDS 版本切分，需要与底座基线严格一致，
+# 由部署方按 README 的说明放入 plugins/。本插件的 manifest.json 已声明对该插件的依赖。
+
+[[variants.""]]
+side = "server"
+platform = "win-x64"
+
+[variants."".deps]
+"github.com/LiteLDev/LeviLamina" = ">=1.9.9 <1.10.0"
+
+[[variants."".assets]]
+type = "zip"
+urls = ["https://{{id}}/releases/download/v{{version}}/LitematicaBE-server-windows-x64.zip"]
+place = [{ src = "LitematicaBE/", dest = "mods/LitematicaBE/" }]

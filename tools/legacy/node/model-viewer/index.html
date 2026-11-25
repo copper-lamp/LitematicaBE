@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LitematicaBE 模型查看器</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <h1>LitematicaBE 模型查看器</h1>
+        <div class="stats" id="stats">加载中…</div>
+      </div>
+
+      <div class="search-box">
+        <input type="text" id="search" placeholder="搜索模型 / 几何标识符…" autocomplete="off">
+      </div>
+
+      <ul id="model-list" class="model-list"></ul>
+    </aside>
+
+    <main id="main">
+      <div id="viewport"></div>
+
+      <div id="toolbar" class="toolbar">
+        <button id="btn-reload" title="重新加载 manifest">⟳ 刷新</button>
+        <button id="btn-wire" class="active" title="线框叠加">▦ 线框</button>
+        <button id="btn-doubleside" class="active" title="渲染背面">◐ 双面</button>
+        <button id="btn-bounds" title="可见包围盒">▣ 包围盒</button>
+        <button id="btn-axes" class="active" title="坐标轴">🧭 坐标轴</button>
+        <button id="btn-edit" title="可视化编辑模型与贴图">✎ 编辑</button>
+        <span class="sep"></span>
+        <span class="lbl">相机</span>
+        <button data-cam="front">前</button>
+        <button data-cam="top">顶</button>
+        <button data-cam="iso">等距</button>
+        <button id="btn-reset">重置</button>
+      </div>
+
+      <div id="panel" class="panel">
+        <div class="panel-row">
+          <div class="field">
+            <label>模型</label>
+            <input type="text" id="info-model" readonly>
+          </div>
+          <div class="field">
+            <label>几何标识符</label>
+            <input type="text" id="info-geo" readonly>
+          </div>
+        </div>
+
+        <div class="panel-row">
+          <div class="field">
+            <label>使用该模型的方块</label>
+            <select id="sel-block"></select>
+          </div>
+          <div class="field">
+            <label>纹理</label>
+            <select id="sel-texture"></select>
+          </div>
+        </div>
+
+        <div class="panel-row">
+          <div class="field">
+            <label>方块变换</label>
+            <select id="sel-transform"></select>
+          </div>
+          <div class="field">
+            <label>渲染方法</label>
+            <input type="text" id="info-render" readonly>
+          </div>
+        </div>
+
+        <div class="panel-row">
+          <div class="field wide">
+            <label>变体</label>
+            <div class="variant-nav">
+              <button id="btn-prev">◀ 上一个</button>
+              <span id="variant-label">—</span>
+              <button id="btn-next">下一个 ▶</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-row">
+          <div class="field wide">
+            <label>纹理预览</label>
+            <canvas id="tex-preview" width="128" height="128"></canvas>
+            <span id="tex-preview-name" class="muted"></span>
+          </div>
+        </div>
+
+        <div class="panel-row">
+          <div class="field wide">
+            <label>校验信息</label>
+            <pre id="validation" class="validation"></pre>
+          </div>
+        </div>
+      </div>
+
+      <div id="editor" class="editor hidden">
+        <div class="editor-head">
+          <span class="editor-title">✎ 模型编辑器</span>
+          <span class="muted" id="editor-status"></span>
+          <button id="ed-undo" class="editor-icon" title="撤销 (Ctrl+Z)">↶</button>
+          <button id="ed-redo" class="editor-icon" title="重做 (Ctrl+Y)">↷</button>
+          <button id="editor-close" class="editor-close" title="关闭编辑器">✕</button>
+        </div>
+
+        <div class="editor-scroll">
+          <div class="editor-section">
+            <div class="editor-section-title">模型</div>
+            <div class="ed-grid">
+              <label>标识符 <input id="ed-identifier" placeholder="geometry.lit_xxx"></label>
+              <label>图集 W <input id="ed-texw" type="number" min="1" step="1" value="16"></label>
+              <label>图集 H <input id="ed-texh" type="number" min="1" step="1" value="16"></label>
+            </div>
+            <div class="editor-actions">
+              <button id="ed-new" class="btn-mini">＋ 新建模型</button>
+              <button id="ed-load-current" class="btn-mini">从当前载入</button>
+            </div>
+          </div>
+
+          <div class="editor-section">
+            <div class="editor-section-title">方块（点 3D 面精确选中）</div>
+            <ul id="ed-cubes" class="ed-cubes"></ul>
+            <div class="editor-actions">
+              <button id="ed-add-cube" class="btn-mini">＋ 添加</button>
+              <button id="ed-dup-cube" class="btn-mini">⧉ 复制</button>
+              <button id="ed-del-cube" class="btn-mini danger">🗑 删除</button>
+            </div>
+          </div>
+
+          <div class="editor-section">
+            <div class="editor-section-title">选中方块（统一）</div>
+            <div id="ed-sel-body" class="muted">未选中方块</div>
+          </div>
+
+          <div class="editor-section">
+            <div class="editor-section-title">材质实例（贴图）</div>
+            <div id="ed-materials" class="ed-materials"></div>
+            <div class="editor-actions">
+              <label class="btn-mini">＋ 新实例
+                <input type="text" id="ed-new-inst" placeholder="实例名" class="mini-input">
+              </label>
+            </div>
+          </div>
+
+          <div class="editor-section">
+            <div class="editor-section-title">操作</div>
+            <div class="editor-actions">
+              <button id="ed-save" class="btn-primary">💾 保存</button>
+              <button id="ed-cancel" class="btn-mini danger">↩ 取消编辑</button>
+              <button id="ed-preview" class="btn-mini">👁 JSON</button>
+            </div>
+            <div class="ed-save-status" id="ed-save-status"></div>
+            <pre id="ed-json" class="validation hidden"></pre>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/vendor/three.min.js"></script>
+  <script src="/vendor/OrbitControls.js"></script>
+  <script src="/viewer.js"></script>
+</body>
+</html>

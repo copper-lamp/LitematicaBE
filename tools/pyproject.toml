@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lit-tools"
+version = "4.0.0"
+description = "LitematicaBE 离线工具链：版本校验、BP/RP 校验、假方块映射生成"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+lit-tools = "lit_tools.cli:main"
+
+[tool.setuptools]
+packages = ["lit_tools"]

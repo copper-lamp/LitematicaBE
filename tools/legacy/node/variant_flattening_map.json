@@ -1,0 +1,464 @@
+{
+  "$comment": "P2.0b 产物：变种多对一 -> 扁平化独立 ID 的逐条规则与证据。由 work/flatten_variants.js 生成，勿手改。",
+  "targetVersion": "bedrock-1.21.130",
+  "rule": "新 ID = Java 短名（扁平化后 BE 与 JE 同名）；legacy 字段写回 legacyBedrockId 供老版本 BDS 回退",
+  "dropStateKeys": [
+    "sand_stone_type",
+    "prismarine_block_type",
+    "chisel_type",
+    "dirt_type",
+    "sand_type",
+    "sponge_type",
+    "pillar_axis",
+    "stone_type",
+    "old_log_type",
+    "new_log_type",
+    "wood_type",
+    "color",
+    "coral_color",
+    "coral_hang_type_bit",
+    "monster_egg_stone_type",
+    "stone_brick_type",
+    "double_plant_type",
+    "tall_grass_type",
+    "sapling_type",
+    "deprecated"
+  ],
+  "unchanged": {
+    "minecraft:bricks": "BE 正式 identifier 仍是 brick_block（nameid=brickblock，无 aliasid）",
+    "minecraft:oak_button .. dark_oak_button": "BE 仍用数据值区分木种",
+    "minecraft:poppy .. lily_of_the_valley": "BE 仍用 red_flower + 数据值"
+  },
+  "entries": [
+    {
+      "java": "minecraft:dirt",
+      "from": "dirt",
+      "to": "dirt",
+      "legacy": null,
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:coarse_dirt",
+      "from": "coarse_dirt",
+      "to": "coarse_dirt",
+      "legacy": "dirt",
+      "since": "1.21.20",
+      "evidence": "https://minecraft.wiki/w/Coarse_Dirt",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:sand",
+      "from": "sand",
+      "to": "sand",
+      "legacy": null,
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:red_sand",
+      "from": "red_sand",
+      "to": "red_sand",
+      "legacy": "sand",
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/红沙",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:sandstone",
+      "from": "sandstone",
+      "to": "sandstone",
+      "legacy": null,
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:chiseled_sandstone",
+      "from": "chiseled_sandstone",
+      "to": "chiseled_sandstone",
+      "legacy": "sandstone",
+      "since": "1.21.20",
+      "evidence": "https://minecraft.wiki/w/Chiseled_Sandstone",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:cut_sandstone",
+      "from": "cut_sandstone",
+      "to": "cut_sandstone",
+      "legacy": "sandstone",
+      "since": "1.21.20",
+      "evidence": "https://minecraft.wiki/w/Cut_Sandstone",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:smooth_sandstone",
+      "from": "smooth_sandstone",
+      "to": "smooth_sandstone",
+      "legacy": "sandstone",
+      "since": "1.21.20",
+      "evidence": "https://minecraft.wiki/w/Smooth_Sandstone",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:red_sandstone",
+      "from": "red_sandstone",
+      "to": "red_sandstone",
+      "legacy": null,
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:chiseled_red_sandstone",
+      "from": "chiseled_red_sandstone",
+      "to": "chiseled_red_sandstone",
+      "legacy": "red_sandstone",
+      "since": "1.21.20",
+      "evidence": "https://minecraft.wiki/w/Chiseled_Red_Sandstone",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:cut_red_sandstone",
+      "from": "cut_red_sandstone",
+      "to": "cut_red_sandstone",
+      "legacy": "red_sandstone",
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:smooth_red_sandstone",
+      "from": "smooth_red_sandstone",
+      "to": "smooth_red_sandstone",
+      "legacy": "red_sandstone",
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:prismarine",
+      "from": "prismarine",
+      "to": "prismarine",
+      "legacy": null,
+      "since": "1.21.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:prismarine_bricks",
+      "from": "prismarine_bricks",
+      "to": "prismarine_bricks",
+      "legacy": "prismarine",
+      "since": "1.21.10",
+      "evidence": "https://minecraft.wiki/w/Prismarine_Bricks",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:dark_prismarine",
+      "from": "dark_prismarine",
+      "to": "dark_prismarine",
+      "legacy": "prismarine",
+      "since": "1.21.10",
+      "evidence": "https://minecraft.wiki/w/Dark_Prismarine",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:quartz_block",
+      "from": "quartz_block",
+      "to": "quartz_block",
+      "legacy": null,
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:chiseled_quartz_block",
+      "from": "chiseled_quartz_block",
+      "to": "chiseled_quartz_block",
+      "legacy": "quartz_block",
+      "since": "1.21.20",
+      "evidence": "https://minecraft.wiki/w/Chiseled_Quartz_Block",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:quartz_pillar",
+      "from": "quartz_pillar",
+      "to": "quartz_pillar",
+      "legacy": "quartz_block",
+      "since": "1.21.20",
+      "evidence": "https://minecraft.wiki/w/Quartz_Pillar",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:smooth_quartz",
+      "from": "smooth_quartz",
+      "to": "smooth_quartz",
+      "legacy": "quartz_block",
+      "since": "1.21.20",
+      "evidence": "https://minecraft.wiki/w/Smooth_Quartz_Block",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:purpur_block",
+      "from": "purpur_block",
+      "to": "purpur_block",
+      "legacy": null,
+      "since": "1.21.30",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:purpur_pillar",
+      "from": "purpur_pillar",
+      "to": "purpur_pillar",
+      "legacy": "purpur_block",
+      "since": "1.21.30",
+      "evidence": "https://minecraft.wiki/w/Purpur_Pillar",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:mushroom_stem",
+      "from": "brown_mushroom_block",
+      "to": "mushroom_stem",
+      "legacy": "brown_mushroom_block",
+      "since": "1.21.40",
+      "evidence": "https://zh.minecraft.wiki/w/蘑菇方块",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:anvil",
+      "from": "anvil",
+      "to": "anvil",
+      "legacy": null,
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/铁砧",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:chipped_anvil",
+      "from": "chipped_anvil",
+      "to": "chipped_anvil",
+      "legacy": "anvil",
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/铁砧",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:damaged_anvil",
+      "from": "damaged_anvil",
+      "to": "damaged_anvil",
+      "legacy": "anvil",
+      "since": "1.21.20",
+      "evidence": "https://zh.minecraft.wiki/w/铁砧",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:white_shulker_box",
+      "from": "shulker_box",
+      "to": "white_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": true
+    },
+    {
+      "java": "minecraft:orange_shulker_box",
+      "from": "shulker_box",
+      "to": "orange_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:magenta_shulker_box",
+      "from": "shulker_box",
+      "to": "magenta_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:light_blue_shulker_box",
+      "from": "shulker_box",
+      "to": "light_blue_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:yellow_shulker_box",
+      "from": "shulker_box",
+      "to": "yellow_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:lime_shulker_box",
+      "from": "shulker_box",
+      "to": "lime_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:pink_shulker_box",
+      "from": "shulker_box",
+      "to": "pink_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:gray_shulker_box",
+      "from": "shulker_box",
+      "to": "gray_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:light_gray_shulker_box",
+      "from": "shulker_box",
+      "to": "light_gray_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:cyan_shulker_box",
+      "from": "shulker_box",
+      "to": "cyan_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:purple_shulker_box",
+      "from": "shulker_box",
+      "to": "purple_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:blue_shulker_box",
+      "from": "shulker_box",
+      "to": "blue_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:brown_shulker_box",
+      "from": "shulker_box",
+      "to": "brown_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:green_shulker_box",
+      "from": "shulker_box",
+      "to": "green_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:red_shulker_box",
+      "from": "shulker_box",
+      "to": "red_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:black_shulker_box",
+      "from": "shulker_box",
+      "to": "black_shulker_box",
+      "legacy": "shulker_box",
+      "since": "1.20.10",
+      "evidence": "https://zh.minecraft.wiki/w/基岩版扁平化",
+      "changed": true,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:sponge",
+      "from": "sponge",
+      "to": "sponge",
+      "legacy": null,
+      "since": "1.21.30",
+      "evidence": "https://zh.minecraft.wiki/w/海绵",
+      "changed": false,
+      "stateDropped": false
+    },
+    {
+      "java": "minecraft:wet_sponge",
+      "from": "wet_sponge",
+      "to": "wet_sponge",
+      "legacy": "sponge",
+      "since": "1.21.30",
+      "evidence": "https://zh.minecraft.wiki/w/海绵",
+      "changed": false,
+      "stateDropped": false
+    }
+  ]
+}

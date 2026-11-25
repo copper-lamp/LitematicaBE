@@ -1,0 +1,150 @@
+{
+  "region": "main",
+  "position": [
+    0,
+    64,
+    0
+  ],
+  "size": [
+    3,
+    2,
+    3
+  ],
+  "palette": [
+    "minecraft:air",
+    "minecraft:stone",
+    "minecraft:glass",
+    "minecraft:oak_stairs"
+  ],
+  "bits": 2,
+  "longs": 1,
+  "blocks": [
+    {
+      "x": 1,
+      "y": 0,
+      "z": 0,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 0,
+      "name": "minecraft:oak_stairs",
+      "properties": {
+        "facing": "east",
+        "half": "bottom",
+        "shape": "straight"
+      }
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 1,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 1,
+      "name": "minecraft:oak_stairs",
+      "properties": {
+        "facing": "east",
+        "half": "bottom",
+        "shape": "straight"
+      }
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 1,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 1,
+      "y": 0,
+      "z": 2,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 2,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 0,
+      "name": "minecraft:glass",
+      "properties": {}
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 0,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 0,
+      "name": "minecraft:glass",
+      "properties": {}
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 1,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 1,
+      "name": "minecraft:glass",
+      "properties": {}
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 1,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 0,
+      "y": 1,
+      "z": 2,
+      "name": "minecraft:glass",
+      "properties": {}
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 2,
+      "name": "minecraft:stone",
+      "properties": {}
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 2,
+      "name": "minecraft:glass",
+      "properties": {}
+    }
+  ]
+}

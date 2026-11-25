@@ -1,277 +1,327 @@
 <div align="center">
   <img src="resources/pack_icon.png" alt="LitematicaBE icon" width="160">
   <h1>LitematicaBE</h1>
-  <p><strong>The Optimal Solution for One-Stop Projection Integration on Minecraft Bedrock Servers</strong></p>
-  <p>Compatible with both bedrock / java dual-version structure projection files, uses native geometry rendering, server-wide shared concurrency control, excellent version compatibility, and one-stop projection integration.</p>
+  <p><strong>The best solution for one-stop schematic integration on Minecraft Bedrock servers</strong></p>
 
   <p>
-    <img src="https://img.shields.io/badge/release-v3.1.0-4c8bf5?style=flat-square" alt="LitematicaBE v3.1.0">
-    <img src="https://img.shields.io/badge/Minecraft%20Bedrock-1.21.70%2B-62b47a?style=flat-square" alt="Minecraft Bedrock 1.21.70+">
-    <img src="https://img.shields.io/badge/LeviLamina-1.2.0%2B-7b68ee?style=flat-square" alt="LeviLamina 1.2.0+">
-    <img src="https://img.shields.io/badge/LegacyScriptEngine-nodejs%200.11.1+-ffb300?style=flat-square" alt="LegacyScriptEngine nodejs 0.11.1+">
+    <img src="https://img.shields.io/badge/release-v4.0.0-4c8bf5?style=flat-square" alt="LitematicaBE v4.0.0">
+    <img src="https://img.shields.io/badge/Minecraft%20Bedrock-1.21.132-62b47a?style=flat-square" alt="Minecraft Bedrock 1.21.132">
+    <img src="https://img.shields.io/badge/LeviLamina-1.9.9-7b68ee?style=flat-square" alt="LeviLamina 1.9.9">
+    <img src="https://img.shields.io/badge/HologramLib-21.132.1-ffb300?style=flat-square" alt="HologramLib 21.132.1">
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL 3.0-blue?style=flat-square" alt="AGPL-3.0 license"></a>
   </p>
 
   <p>
     <a href="#quick-start">Quick Start</a>
     ·
-    <a href="https://github.com/copper-lamp/LitematicaBE/releases">Downloads</a>
+    <a href="#compatibility">Compatibility</a>
     ·
-    <a href="CHANGELOG.md">Changelog</a>
+    <a href="#features">Features</a>
     ·
-    <a href="https://github.com/copper-lamp/LitematicaBE/issues">Report an issue</a>
+    <a href="#commands">Commands</a>
+    ·
+    <a href="#usage-guide">Usage Guide</a>
+    ·
+    <a href="#building-from-source">Building from Source</a>
     ·
     <a href="#contributing">Contributing</a>
     ·
-    <a href="README.md">简体中文</a>
+    <a href="README.md">中文</a>
   </p>
 </div>
 
-LitematicaBE is a projection integration plugin for Bedrock Edition (BDS + LeviLamina) servers: cross-version compatibility that works with most servers. It reads both `.litematic` and `.mcstructure` formats. Projections are written with native geometry custom blocks, and it supports very large files, layer-by-layer viewing, a projection printer, one-click placement, and schematic/structure file export. It aims to provide one-stop projection services for Bedrock servers.
+LitematicaBE is a schematic integration add-on for Bedrock Dedicated Server (BDS + LeviLamina), built to deliver a one-stop schematic service for Bedrock servers.
+
+![show](https://img.cdn1.vip/i/6b06e442af890_1795613762.webp)
 
 ## Quick Start
 
 > [!IMPORTANT]
-> LitematicaBE consists of a server plugin plus BP/RP addon packs. Everything is loaded on the LLBDS server, and the resource pack is automatically pushed to players when they join.
+> LitematicaBE is made of a **server-side add-on plus BP/RP add-on packs** — everything is loaded on the LLBDS server, and the resource pack is pushed to players as soon as they join. The project depends on the [HologramLib](https://github.com/Ieckseyr/HologramLib) library, so install the matching version alongside LitematicaBE.
 
-1. Install lip (skip if already installed):
+1. Install the dependency and runtime:
 
-   ```shell
-   npm install -g @levimc/lip
-   ```
+   - **HologramLib** (required);
+   - **lip** (skip if already installed):
 
-2. **Server**: run this from the BDS root directory:
+    ```shell
+    npm install -g @levimc/lip
+    ```
 
-   ```shell
-   lip install github.com/copper-lamp/LitematicaBE
-   ```
+2. **Server**: run this in the BDS root directory:
 
-   The plugin is installed to `plugins/LitematicaBE/`; the BP and RP are installed to `behavior_packs/` and `resource_packs/` respectively.
+    ```shell
+    lip install github.com/copper-lamp/LitematicaBE
+    ```
 
-3. **Enable the packs**: write the BP/RP `pack_id` and `version` into `worlds/<world name>/world_behavior_packs.json` and `world_resource_packs.json` (or enable them in the world and upload the world to the server), then restart the server.
+    The add-on installs to `plugins/LitematicaBE/`, and the BP/RP install to `behavior_packs/` and `resource_packs/` respectively.
 
-   ```json
-   [
-     { "pack_id": "<header.uuid of the BP>", "version": [1, 1, 8] }
-   ]
-   ```
+3. **Enable the add-on packs**: write the `pack_id` and `version` from the BP/RP headers into `worlds/<world name>/world_behavior_packs.json` and `world_resource_packs.json` (or enable them in a world on the client and upload that world to the server), then restart the server.
 
-4. Upload the structure or projection file:
-- Server administrators: manually place the files to load into `plugins/LitematicaBE/schematics/`
-- Regular players: visit the plugin's server upload station and upload your files (see the Usage guide below)
+    ```json
+    [
+      { "pack_id": "<BP header.uuid>", "version": [1, 1, 89] }
+    ]
+    ```
 
-Install a specific version (recommended to pin a version):
+4. Upload schematics or structure files:
+
+   - Server admins: drop the files you want to load into `plugins/LitematicaBE/schematics/` manually
+   - Regular players: open the upload site this add-on provides and upload your files (see [Uploading schematic/structure files through the web](#uploading-schematicstructure-files-through-the-web))
+
+Install a specific version (pinning is recommended):
 
 ```shell
-lip install github.com/copper-lamp/LitematicaBE@3.1.0
+lip install github.com/copper-lamp/LitematicaBE@4.0.0
 ```
 
-Upgrade with `lip update github.com/copper-lamp/LitematicaBE`.
+To upgrade, run `lip update github.com/copper-lamp/LitematicaBE`.
 
 ## Compatibility
 
 | Component | Version |
-| --------- | ------- |
-| Minecraft Bedrock Server | 1.21.70+ |
-| LeviLamina | 1.2.0+ |
-| LegacyScriptEngine (nodejs variant) | 0.11.0+ |
-| LitematicaBE plugin / addon | Published together with each release |
-- Note: this plugin is not sensitive to the server version; the above is the theoretical compatibility range. Please report any compatibility issues you find.
+| ---- | ---- |
+| Minecraft Bedrock Server | 1.21.13X |
+| LeviLamina | 1.9.9 |
+| HologramLib | 21.132.1 |
+
+- Version support is being actively expanded. If you run into a compatibility problem, tell us your server's game version and we will prioritise it.
 
 ## Features
 
 | Feature | Description |
-| ------- | ----------- |
-| Schematic loading | Load Java Edition `.litematic` or Bedrock `.mcstructure` files |
-| Schematic saving | Save a selection as `.litematic` (interoperable with the Java Edition Litematica mod) or Bedrock `.mcstructure` (loadable directly with structure blocks); the format is chosen at export, or you can export both at once |
-| Projection placement | Rendered with native geometry blocks, translucent display, closest to the vanilla look |
-| Layer-by-layer building | Right-click with a wooden sword to switch the display; look up for the upper layer, down for the lower layer |
-| Easy place | Aim at the projection with materials in hand to place precisely |
-| Projection printer | When enabled, automatically prints the projection in range; rate-limited and layer-aware |
-| Direct placement | OP + Creative writes the projection directly into the world (NBT placement) |
-| Projection management | Store multiple projections at once, visible to all players on the server, freely switch control, material list export |
-| Mega projection | Chunked storage, streaming load, supports up to million-block ultra-large projections |
-| HTTP upload station | Built-in HTTP server that lets all players upload projection files themselves, effective without a restart |
-| Update check | Automatically checks the repository when the plugin is activated and notifies of a new version (can be disabled in config) |
-
-### Controls
-
-| Action | Description |
-| ------ | ----------- |
-| Wooden sword + sneak + click | Open the main menu |
-| Look up / down + sword right-click | Switch the displayed layer in build mode |
-| Look straight + sword click | Show all layers |
-| `/lit` / `/litematica` | Command entry points |
+| ---- | ---- |
+| Wooden Sword Panel | Swing a wooden sword to bring up the control panel — every feature has a visual, user-friendly UI |
+| Schematic Loading | Load Java Edition `.litematic` or Bedrock Edition `.mcstructure` files |
+| Schematic Export | Select an area and save it as a Java Edition `.litematic` or Bedrock Edition `.mcstructure` file |
+| Schematic Placement | Natively rendered `geometry` ghost blocks; place and rotate them freely; handles builds with millions of blocks (raise the cap in the config yourself) |
+| Layer-by-Layer Building | Pick any layer range of a schematic and switch layers with a single click |
+| Easy Place | Once enabled, automatically corrects the block type and block states of whatever you place |
+| Schematic Printer | Once enabled, automatically places the schematic blocks within your reach distance, with no manual input |
+| Direct Place | Reads the NBT data and writes it straight into the world, generating the build instantly (must be enabled in the config) |
+| Schematic Management | Multiple schematics live in independent sessions that you can switch between freely, with schematic sharing |
+| Material List | One click to tally the selected schematic's materials and export them to an `.xlsx` sheet for easy checking |
+| HTTP Upload Site | A built-in HTTP server lets all players upload schematic files themselves, taking effect without a restart |
 
 ## Commands
-- The commands below can also be operated visually through the wooden sword main menu
+
+- This project offers two entry points — the wooden sword control panel and commands. The command table is listed here as a fallback.
 
 ```shell
-# Core commands
-/litematica menu          # open the main menu
-/litematica load <file>   # load a schematic
-/litematica place <file>  # load and place a projection at your feet
-/litematica placeat X Y Z # place a projection at the given coordinates
-/litematica easyplace     # toggle easy place
-/litematica printer       # toggle the projection printer (also `/lit printer`)
-/litematica verify        # verify block placement correctness
-/litematica materials     # generate the material list Excel
-/litematica save          # save a schematic (selection mode)
-/litematica build         # switch to build (layer) mode
-/litematica rotate        # switch to rotate mode
-/litematica list          # list all projections
-/litematica clear         # clear the current projection display
-/litematica info          # show projection details
-/litematica debug <sub>   # debug commands (mega/stats/config)
-/litematica selfcheck     # self-check the projection generation pipeline
+# Basic commands
+/lit                           # schematic status summary
+/lit load <file> <x> <y> <z>   # load at the given origin (defaults to the block under the player)
+/lit unload                    # unload the currently displayed schematic
+/lit list                      # list the available schematic/structure files
+/lit info <file>               # parse a schematic/structure file
+/lit box                       # toggle the bounding box wireframe
+/lit share                     # toggle schematic sharing
 
-# Utility commands
-/litematica:logclean status|clean|config   # log cleaner
-/litematica:config reload|reset|get <key>  # configuration
-/litematica:web status|start|stop|restart  # web upload station
-/litematica:web token|url                  # view/regenerate the upload token and access URL
+# Sessions and layers
+/lit projects                  # list the loaded schematic sessions
+/lit select <id>               # switch the currently selected schematic
+/lit remove <id>               # remove and delete a schematic session
+/lit layer <from> [to]         # show only the given layer range
+/lit rotate                    # rotate 90° clockwise
+/lit resend                    # re-send the current layer to all online players
+/lit reload                    # hot-reload the mapping table and printer config
+/lit material                  # tally the selected schematic's materials and export an .xlsx
+
+# Placing and building
+/lit place [from] [to]         # direct place (writes NBT straight in, must be enabled server-side)
+/lit easyplace                 # toggle Easy Place
+/lit printer                   # toggle the schematic printer
+
+# Selection and saving
+/lit sel                       # selection status (right-click two blocks with the wooden sword to set the corners; sneak + right-click to clear)
+/lit sel clear                 # clear the selection and remove the wireframe
+/lit save stru <name>          # save the selection as .mcstructure (Bedrock structure file)
+/lit save lite <name>          # save the selection as .litematic (Java Edition schematic file)
+/lit save both <name>          # save both formats
+/lit saveat <stru|lite|both> <name> <x1> <y1> <z1> <x2> <y2> <z2>  # save by coordinates
+/lit saveinfo                  # print the save settings
+
+# Credentials and diagnostics
+/lit savediag                  # diagnose the block below: block name, state keys/values, NBT types, Java-side mapping
+/lit diag                      # end-to-end self-test on a representative block (state conversion + whether it applies + hash comparison)
+/lit probe                     # capability matrix probe
 ```
 
-## Usage
+## Usage Guide
 
-### Loading and placing a projection
+### Loading and Placing Schematics
 
-1. Put the `.litematic` or `.mcstructure` file into `plugins/LitematicaBE/schematics/`.
-2. Sneak and click with a wooden sword to open the LitematicaBE main menu, click **Load projection**, and pick a file.
-3. Adjust the coordinates in the placement panel; after submitting, the projection appears at the target position.
+1. Put the `.litematic` or `.mcstructure` files into `plugins/LitematicaBE/schematics/` (the folder is created automatically on first launch).
+2. Run `/lit load <file name>` in game (the extension can be omitted; case-insensitive).
 
-### Uploading projection files via the web
+```text
+/lit load my_project
+```
 
-The plugin starts a lightweight HTTP upload station when the server starts.
+### Uploading schematic/structure files through the web
 
-1. Set the server's public IP in `config.json` and open the corresponding port (default 8080) (NAT networks need a reverse proxy);
-2. After the server starts, the console prints: `[Web] Upload station started at http://<address>:8080/`;
-3. If token authentication is enabled: the token is auto-generated on first use and written to `plugins/LitematicaBE/data/web_token.txt`; you can also use `/litematica:web token` to regenerate it (the old address stops working immediately);
-4. Open the address in a browser, choose to upload a `.litematic` / `.mcstructure`, and the file is automatically placed into `plugins/LitematicaBE/schematics/`, usable in-game immediately with no restart.
-5. Upload uses chunked + base64 transfer, with a per-file limit of `web.maxFileMB` (default 64MB) and resumable upload support.
+On server startup the add-on spins up a lightweight HTTP upload page at `127.0.0.1:8686`:
 
-See `config.json` for the upload station configuration.
+1. Open `http://<server IP>:8686/` (servers without a public IP need a reverse proxy set up yourself);
+2. The token is stored in `token` in `plugins/LitematicaBE/config/upload.json` (generated automatically on first launch);
+3. Open the address in a browser and select the `.litematic` / `.mcstructure` file to upload — it is written to `plugins/LitematicaBE/schematics/` automatically;
+4. Go back in game and load the schematic;
+5. The default per-file limit is 64 MB (`maxSizeMb` is adjustable).
 
-### Layer-by-layer building
+> Enabling the upload site exposes your server to the public internet. Set up your own firewall and security measures to avoid possible damage to the server.
 
-1. Enable **layer display** in the projection actions panel.
-2. Sword right-click: look **up** for the next layer, look **down** for the previous layer, look straight ahead to return to all layers.
+### Wooden Sword Panel
 
-### Easy place
+- With the add-on enabled, hold a wooden sword in game and swing it (left-click) to open the LitematicaBE control panel.
+- Right-click blocks to make a selection.
+- Sneak + right-click to clear the whole selection.
 
-1. Enable **easy place** in the projection actions panel, then aim at the projection with materials in hand to place precisely.
-2. It also has the **projection printer** feature (`/litematica printer` or `/lit printer`); click the menu again to disable it.
-3. The printer only fills ghost / air / replaceable blocks such as grass, flowers, snow, and water; it will **never overwrite other blocks**; in layer mode it only places the current layer.
+```text
+Main Menu
+│
+├─ Schematic Management
+│   ├─ Schematic Actions
+│   │   ├─ Unload Schematic
+│   │   ├─ Remove Schematic
+│   │   ├─ Select as Current
+│   │   ├─ Export Material List
+│   │   └─ Reload
+│   └─ Load New Schematic
+│
+├─ Utilities
+│   ├─ Easy Place
+│   ├─ Schematic Printer
+│   └─ Direct Place
+│
+├─ Save Selection
+│   ├─ Save as .litematic
+│   ├─ Save as .mcstructure
+│   ├─ Save Both Formats
+│   ├─ Save by Coordinates
+│   └─ Clear Selection
+│
+├─ Display
+│   ├─ Schematic Sharing
+│   ├─ Bounding Box
+│   ├─ Rotate Schematic
+│   └─ Layer View
+│       ├─ Previous Layer
+│       ├─ Next Layer
+│       ├─ Show Specific Layer
+│       └─ Show All Layers
+│
+└─ About
+```
+![show](https://img.cdn1.vip/i/6b06e5299769f_1795613993.webp)
+Some feature settings live in `config`.
+The control panel offers the same functionality as the commands.
 
-See `config.json` for the printer configuration.
+## Building from Source
 
-### Direct placement (administrators)
+### Prerequisites
 
-1. Requires **OP** and **Creative** mode;
-2. In **Projection management**, choose the placed projection, open its details, and click **Place all blocks directly**.
+1. **LeviLamina build environment**: xmake builds the `levilamina` package from source, which requires:
 
-### Saving a schematic
+   - VS 2022 Build Tools + the v143 toolset
+   - C++ ATL
 
-1. Open the menu, click **Save projection**, click **Start selection**, and mark two opposite corners with a wooden sword right-click;
-2. After selecting, first choose the **export format** at the top of the form: `.litematic` (Java Edition projection file) / `.mcstructure` (Bedrock structure file) / export both;
-3. Then enter a name and an optional description to save.
+2. **HologramLib**: put the headers and import libraries matching the baseline into `hologramlib/` at the repo root:
 
-### Verification
+    ```text
+    hologramlib/
+      include/hologramlib/HologramLib.h
+      include/hologramlib/AbiCompat.h
+      lib/HologramLib.lib
+      holo_core.dll
+      HologramLib.dll
+    ```
 
-After placing a projection, click **Verify projection** in the projection actions panel; the system reports matching / differing / missing / wrong blocks.
+    The directory is ignored by `.gitignore`. A missing copy does not block compilation — the add-on then builds in a "no display channel" form.
 
-### Version update check
+### Build
 
-When the server starts and the plugin is activated, it checks GitHub Releases over the network for version updates.
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\update.ps1 -ServerRoot '<server root>'
+# or
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\update.ps1 -ServerRoot '<server root>' -Reconfigure   # after changing xmake.lua/dependencies
+```
 
-See `config.json` for the update check configuration.
+### Deployment
 
-## Manual installation
+Handled by `tools/deploy.ps1` (called automatically by `update.ps1`):
 
-When not using lip, download `LitematicaBE-<version>.zip` from the release:
+| Contents | Destination | Overwrite policy |
+| ---- | ---- | ---- |
+| `bin/LitematicaBE/*` | `plugins/LitematicaBE/` | Overwritten in place, `config/` and `data/` preserved |
+| `resources/addon/LitematicaBE_BP` | `behavior_packs/LitematicaBE_BP/` | Wiped and rewritten |
+| `resources/addon/LitematicaBE_RP` | `resource_packs/LitematicaBE_RP/` | Wiped and rewritten |
+| HologramLib add-on (dependency) | `plugins/HologramLib/` | Not included — install it yourself |
 
-1. Extract `plugins/LitematicaBE/` into the BDS `plugins/` directory;
-2. Place `LitematicaBE-server-BP/` and `LitematicaBE-server-RP/` into the BDS `behavior_packs/` and `resource_packs/` respectively;
-3. Enable the packs in the world as described in Quick Start step 4, then restart the server.
-
-## Repository layout
+## Repository Layout
 
 ```text
 LitematicaBE/
-├── index.js                        # plugin entry point
-├── manifest.json                   # LSE plugin manifest
-├── tooth.json                      # lip package manifest (v3)
-├── config.json                     # user configuration
-├── package.json                    # runtime dependency (xlsx only)
-├── src/
-│   ├── core/                       # feature core
-│   ├── render/                     # rendering scheduling
-│   ├── ghost/                      # ghost block registration/guard/validation, addon version consistency check
-│   ├── easyplace/                  # easy place: ray, inventory, placement validation
-│   ├── mappings/                   # Java ↔ Bedrock block/state mappings
-│   ├── net/                        # update check
-│   ├── ui/                         # form UI
-│   ├── utils/                      # material stats and other utilities
-│   ├── data/                       # save data, world snapshots
-│   ├── world/                      # world-related modules
-│   └── web/                        # built-in HTTP upload station
+├── src/LitematicaBE/         # mod entry point and modules
+│   ├── LitematicaBE.h/.cpp   # lifecycle (load / enable / disable)
+│   ├── Version.h             # single source of truth for the version
+│   └── hologram/             # HologramLib dependency wrapper
 ├── resources/
-│   ├── pack_icon.png               # project icon
-│   ├── addon/                      # BP / RP source files (LitematicaBE_BP, _RP)
-│   └── data/                       # runtime index: ghost_index.json, addon_expected.json
-├── tools/                          # build tools
-├── tests/                          # offline regression tests
-└── .github/workflows/              # ci.yml (push/PR validation + tests + build), release.yml (tag → Release)
+│   ├── pack_icon.png         # project icon
+│   ├── addon/                # BP / RP (ghost block models and textures)
+│   └── data/                 # mapping and rule tables (generated by tools/)
+├── tools/                    # offline Python toolchain
+│   └── legacy/               # generation scripts from the old repo, reference only
+└── .github/workflows/        # build.yml (push/PR checks), release.yml (tag → Release)
 ```
 
-## Build from source
+## Offline Toolchain
 
-Node.js 20+ is required. Artifacts are written to `build/`:
+`tools/` holds host-agnostic Python tooling that only handles resource generation, consistency checks and packaging:
 
-```shell
-npm ci
-node tools/check-version.mjs
-npm run build
+```bash
+python -m lit_tools version     # check that Version.h / xmake.lua / lip.toml / CHANGELOG agree
+python -m lit_tools addon       # check the BP/RP manifests, block definitions and resource references
+python -m lit_tools mapping     # enumerate ghost blocks from the BP → resources/data/generated/ghost_blocks.json
+python -m lit_tools mapgen      # legacy mapping index → runtime ghost_map.json, checking every ghost name exists in the BP
+python -m lit_tools fixture     # generate minimal .litematic parsing fixtures under tests/fixtures
 ```
 
-Artifacts include:
+## Coming Soon
 
-| File | Purpose |
-| ---- | ------- |
-| `LitematicaBE-<version>.zip` | Manual installation package (contains the plugin and resource packs) |
-| `SHA256SUMS.txt` | Checksums |
+- More practical features in development (schematic verification, schematic editing, etc.).
+- Endstone server support.
 
 ## FAQ
 
-**Q: Why do I find some features problematic?**
-A: The third-generation LitematicaBE is still being refactored; some features have not been widely and strictly tested yet. If you find an issue, please report it to the developer.
+**Q: Why are some features broken?**
+A: The fourth-generation LitematicaBE is a native C++ rewrite, and some features have not yet been rigorously tested at scale. If you find a problem, report it to the developer.
 
-**Q: The projection shows unknown or wrong textures.**
-A: Usually a block mapping issue. Java and Bedrock blocks differ significantly; if you run into this, submit an Issue with the block name and a screenshot.
+**Q: Why does a schematic show up as unknown or wrong materials?**
+A: Java and Bedrock Edition differ a lot, and this class of problem comes from errors in the mapping table. If you hit it, open an issue with the block name and a screenshot.
 
-**Q: Ghost writes are disabled / a version mismatch is reported?**
-A: The plugin and the server addon (BP/RP) must be from the same batch version. Re-run `/litematica selfcheck` to see the specific items, and confirm the world has the corresponding packs enabled.
+**Q: Why do large schematics cause lag when loading?**
+A: This is a Bedrock limitation — framerate depends on the player client's rendering power, and a server-side add-on cannot solve it directly. For huge million-block schematics, split them up first or use layer view. When loading large schematics, make sure the block count stays under the single-load cap set in the config.
 
-**Q: Large projections lag when loading?**
-A: Due to Bedrock limitations, the frame rate depends on the player client's rendering capability; the server plugin cannot directly solve this. For ultra-large projections of hundreds of thousands of blocks, split them first or use layer-by-layer display. (Optimizations will be released later.)
-
-**Q: Can saved schematics be opened in Java Edition?**
-A: Exports in `.litematic` format are compatible with Java Edition Litematica and can be used directly.
+**Q: Why does schematic display stop working after startup?**
+A: Check that HologramLib is installed and that its version matches your current server version; `/lit probe` prints the dependency module, encoder source and packetId, and the `/lit` summary shows the current display channel. Without `holo_core.dll` it falls back to per-block overriding.
 
 ## Contributing
 
 Issues and pull requests are welcome.
 QQ group: 861900673
-GitHub: <https://github.com/copper-lamp/LitematicaBE>
+GitHub repositories:
+- <https://github.com/copper-lamp/LitematicaBE> (team repo, official releases)
+- <https://github.com/Shisizhou0706/LitematicaBE-beta> (development repo, latest code)
 
-## Acknowledgements
+## Credits
 
-- [Litematica](https://github.com/maruohon/litematica) — the Java Edition schematic mod, which has had a profound impact on the Minecraft projection ecosystem
-- [LeviDev](https://github.com/LiteLDev) — LeviLamina and LegacyScriptEngine developed by LeviMC provide the foundation for this project's features
-- [EasyPlace](https://github.com/wyl-gq/EasyPlace) — some feature implementations are borrowed from it
-- And all the developers who have contributed to LitematicaBE
+- [Litematica](https://github.com/maruohon/litematica) — the Java Edition schematic mod that shaped Minecraft's schematic ecosystem
+- [LeviDev](https://github.com/LiteLDev) — LeviLamina by LeviMC, the foundation this project's features are built on
+- [HologramLib](https://github.com/Ieckseyr/HologramLib) — native protocol-level rendering library used for schematic and bounding box display
+- [EasyPlace](https://github.com/wyl-gq/EasyPlace) — its Easy Place and printer approach inspired our implementation
+- And every developer who has contributed to LitematicaBE
 
 ## License
 
-- The LitematicaBE project is licensed under AGPL-3.0.
-- Modified versions that are distributed or used to provide a service must remain under AGPL-3.0 and provide the corresponding source code.
+- LitematicaBE is licensed under AGPL-3.0.
+- Modified versions that are distributed or used to provide a service must stay under AGPL-3.0 and publish their source code. Config-file changes are not covered by this.

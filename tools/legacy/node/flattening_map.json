@@ -1,0 +1,1435 @@
+{
+  "$comment": "P2.0 产物：legacy 容器 ID -> 1.21 扁平化 ID 的展开规则与逐条结果。由 work/flatten_mapping.js 生成，勿手改。",
+  "targetVersion": "bedrock-1.21.130",
+  "rule": "新 ID = Java 短名；特例见 special",
+  "special": {
+    "minecraft:grass": "short_grass"
+  },
+  "rules": {
+    "wool": {
+      "expand": "<color>_wool",
+      "since": "1.19.70",
+      "evidence": "https://minecraft.wiki/w/Wool"
+    },
+    "concrete": {
+      "expand": "<color>_concrete",
+      "since": "1.20.10",
+      "evidence": "https://minecraft.wiki/w/Concrete"
+    },
+    "stained_glass": {
+      "expand": "<color>_stained_glass",
+      "since": "1.20.20",
+      "evidence": "https://minecraft.wiki/w/Stained_Glass"
+    },
+    "stained_glass_pane": {
+      "expand": "<color>_stained_glass_pane",
+      "since": "1.20.20",
+      "evidence": "https://minecraft.wiki/w/Stained_Glass_Pane"
+    },
+    "stained_hardened_clay": {
+      "expand": "<color>_terracotta",
+      "since": "1.20.30",
+      "evidence": "https://minecraft.wiki/w/Terracotta"
+    },
+    "hardened_clay": {
+      "expand": "terracotta",
+      "since": "1.20.30",
+      "evidence": "https://minecraft.wiki/w/Terracotta"
+    },
+    "carpet": {
+      "expand": "<color>_carpet",
+      "since": "1.20.0",
+      "evidence": "https://minecraft.wiki/w/Carpet"
+    },
+    "planks": {
+      "expand": "<wood>_planks",
+      "since": "1.20.50",
+      "evidence": "https://minecraft.wiki/w/Planks"
+    },
+    "wooden_slab": {
+      "expand": "<wood>_slab",
+      "since": "1.20.70",
+      "evidence": "https://minecraft.wiki/w/Slab"
+    },
+    "sapling": {
+      "expand": "<wood>_sapling",
+      "since": "1.20.80",
+      "evidence": "https://minecraft.wiki/w/Sapling"
+    },
+    "log": {
+      "expand": "<wood>_log",
+      "since": "1.20.0",
+      "evidence": "https://minecraft.wiki/w/Log"
+    },
+    "log2": {
+      "expand": "<wood>_log",
+      "since": "1.20.0",
+      "evidence": "https://minecraft.wiki/w/Log"
+    },
+    "leaves": {
+      "expand": "<wood>_leaves",
+      "since": "1.20.70",
+      "evidence": "https://minecraft.wiki/w/Leaves"
+    },
+    "leaves2": {
+      "expand": "<wood>_leaves",
+      "since": "1.20.70",
+      "evidence": "https://minecraft.wiki/w/Leaves"
+    },
+    "stonebrick": {
+      "expand": "stone_bricks / mossy_* / cracked_* / chiseled_*",
+      "since": "已拆分",
+      "evidence": "https://minecraft.wiki/w/Stone_Bricks"
+    },
+    "stone": {
+      "expand": "stone / granite / diorite / andesite / polished_*",
+      "since": "1.20.50",
+      "evidence": "https://minecraft.wiki/w/Stone"
+    },
+    "tallgrass": {
+      "expand": "short_grass / fern",
+      "since": "1.21.0",
+      "evidence": "https://minecraft.wiki/w/Short_Grass"
+    },
+    "double_plant": {
+      "expand": "sunflower / lilac / rose_bush / peony / tall_grass / large_fern",
+      "since": "1.21.0",
+      "evidence": "https://minecraft.wiki/w/Sunflower"
+    },
+    "monster_egg": {
+      "expand": "infested_*",
+      "since": "1.21.0",
+      "evidence": "https://minecraft.wiki/w/Infested_Block"
+    },
+    "coral_block": {
+      "expand": "<type>_coral_block",
+      "since": "1.20.0",
+      "evidence": "https://minecraft.wiki/w/Coral_Block"
+    },
+    "coral": {
+      "expand": "<type>_coral",
+      "since": "1.20.0",
+      "evidence": "https://minecraft.wiki/w/Coral"
+    },
+    "coral_fan": {
+      "expand": "<type>_coral_fan",
+      "since": "1.20.80",
+      "evidence": "https://minecraft.wiki/w/Coral_Fan"
+    },
+    "concretepowder": {
+      "expand": "<color>_concrete_powder",
+      "since": "1.20.30",
+      "evidence": "https://minecraft.wiki/w/Concrete_Powder"
+    },
+    "fence": {
+      "expand": "<wood>_fence",
+      "since": "1.19.80",
+      "evidence": "https://minecraft.wiki/w/Wooden_Fence"
+    },
+    "wood": {
+      "expand": "<wood>_wood / stripped_<wood>_wood",
+      "since": "1.20.70",
+      "evidence": "https://minecraft.wiki/w/Wood"
+    }
+  },
+  "legacyAlias": {
+    "minecraft:stone": "stone",
+    "minecraft:granite": "stone",
+    "minecraft:polished_granite": "stone",
+    "minecraft:diorite": "stone",
+    "minecraft:polished_diorite": "stone",
+    "minecraft:andesite": "stone",
+    "minecraft:polished_andesite": "stone",
+    "minecraft:terracotta": "hardened_clay",
+    "minecraft:white_terracotta": "stained_hardened_clay",
+    "minecraft:orange_terracotta": "stained_hardened_clay",
+    "minecraft:magenta_terracotta": "stained_hardened_clay",
+    "minecraft:light_blue_terracotta": "stained_hardened_clay",
+    "minecraft:yellow_terracotta": "stained_hardened_clay",
+    "minecraft:lime_terracotta": "stained_hardened_clay",
+    "minecraft:pink_terracotta": "stained_hardened_clay",
+    "minecraft:gray_terracotta": "stained_hardened_clay",
+    "minecraft:light_gray_terracotta": "stained_hardened_clay",
+    "minecraft:cyan_terracotta": "stained_hardened_clay",
+    "minecraft:purple_terracotta": "stained_hardened_clay",
+    "minecraft:blue_terracotta": "stained_hardened_clay",
+    "minecraft:brown_terracotta": "stained_hardened_clay",
+    "minecraft:green_terracotta": "stained_hardened_clay",
+    "minecraft:red_terracotta": "stained_hardened_clay",
+    "minecraft:black_terracotta": "stained_hardened_clay",
+    "minecraft:white_concrete": "concrete",
+    "minecraft:orange_concrete": "concrete",
+    "minecraft:magenta_concrete": "concrete",
+    "minecraft:light_blue_concrete": "concrete",
+    "minecraft:yellow_concrete": "concrete",
+    "minecraft:lime_concrete": "concrete",
+    "minecraft:pink_concrete": "concrete",
+    "minecraft:gray_concrete": "concrete",
+    "minecraft:light_gray_concrete": "concrete",
+    "minecraft:cyan_concrete": "concrete",
+    "minecraft:purple_concrete": "concrete",
+    "minecraft:blue_concrete": "concrete",
+    "minecraft:brown_concrete": "concrete",
+    "minecraft:green_concrete": "concrete",
+    "minecraft:red_concrete": "concrete",
+    "minecraft:black_concrete": "concrete",
+    "minecraft:white_concrete_powder": "concretepowder",
+    "minecraft:orange_concrete_powder": "concretepowder",
+    "minecraft:magenta_concrete_powder": "concretepowder",
+    "minecraft:light_blue_concrete_powder": "concretepowder",
+    "minecraft:yellow_concrete_powder": "concretepowder",
+    "minecraft:lime_concrete_powder": "concretepowder",
+    "minecraft:pink_concrete_powder": "concretepowder",
+    "minecraft:gray_concrete_powder": "concretepowder",
+    "minecraft:light_gray_concrete_powder": "concretepowder",
+    "minecraft:cyan_concrete_powder": "concretepowder",
+    "minecraft:purple_concrete_powder": "concretepowder",
+    "minecraft:blue_concrete_powder": "concretepowder",
+    "minecraft:brown_concrete_powder": "concretepowder",
+    "minecraft:green_concrete_powder": "concretepowder",
+    "minecraft:red_concrete_powder": "concretepowder",
+    "minecraft:black_concrete_powder": "concretepowder",
+    "minecraft:stone_bricks": "stonebrick",
+    "minecraft:mossy_stone_bricks": "stonebrick",
+    "minecraft:cracked_stone_bricks": "stonebrick",
+    "minecraft:chiseled_stone_bricks": "stonebrick",
+    "minecraft:oak_log": "log",
+    "minecraft:spruce_log": "log",
+    "minecraft:birch_log": "log",
+    "minecraft:jungle_log": "log",
+    "minecraft:acacia_log": "log2",
+    "minecraft:dark_oak_log": "log2",
+    "minecraft:oak_wood": "wood",
+    "minecraft:spruce_wood": "wood",
+    "minecraft:birch_wood": "wood",
+    "minecraft:jungle_wood": "wood",
+    "minecraft:acacia_wood": "wood",
+    "minecraft:dark_oak_wood": "wood",
+    "minecraft:stripped_oak_wood": "wood",
+    "minecraft:stripped_spruce_wood": "wood",
+    "minecraft:stripped_birch_wood": "wood",
+    "minecraft:stripped_jungle_wood": "wood",
+    "minecraft:stripped_acacia_wood": "wood",
+    "minecraft:stripped_dark_oak_wood": "wood",
+    "minecraft:oak_planks": "planks",
+    "minecraft:spruce_planks": "planks",
+    "minecraft:birch_planks": "planks",
+    "minecraft:jungle_planks": "planks",
+    "minecraft:acacia_planks": "planks",
+    "minecraft:dark_oak_planks": "planks",
+    "minecraft:oak_slab": "wooden_slab",
+    "minecraft:spruce_slab": "wooden_slab",
+    "minecraft:birch_slab": "wooden_slab",
+    "minecraft:jungle_slab": "wooden_slab",
+    "minecraft:acacia_slab": "wooden_slab",
+    "minecraft:dark_oak_slab": "wooden_slab",
+    "minecraft:oak_fence": "fence",
+    "minecraft:spruce_fence": "fence",
+    "minecraft:birch_fence": "fence",
+    "minecraft:jungle_fence": "fence",
+    "minecraft:acacia_fence": "fence",
+    "minecraft:dark_oak_fence": "fence",
+    "minecraft:oak_leaves": "leaves",
+    "minecraft:spruce_leaves": "leaves",
+    "minecraft:birch_leaves": "leaves",
+    "minecraft:jungle_leaves": "leaves",
+    "minecraft:acacia_leaves": "leaves2",
+    "minecraft:dark_oak_leaves": "leaves2",
+    "minecraft:oak_sapling": "sapling",
+    "minecraft:spruce_sapling": "sapling",
+    "minecraft:birch_sapling": "sapling",
+    "minecraft:jungle_sapling": "sapling",
+    "minecraft:acacia_sapling": "sapling",
+    "minecraft:dark_oak_sapling": "sapling",
+    "minecraft:white_stained_glass": "stained_glass",
+    "minecraft:orange_stained_glass": "stained_glass",
+    "minecraft:magenta_stained_glass": "stained_glass",
+    "minecraft:light_blue_stained_glass": "stained_glass",
+    "minecraft:yellow_stained_glass": "stained_glass",
+    "minecraft:lime_stained_glass": "stained_glass",
+    "minecraft:pink_stained_glass": "stained_glass",
+    "minecraft:gray_stained_glass": "stained_glass",
+    "minecraft:light_gray_stained_glass": "stained_glass",
+    "minecraft:cyan_stained_glass": "stained_glass",
+    "minecraft:purple_stained_glass": "stained_glass",
+    "minecraft:blue_stained_glass": "stained_glass",
+    "minecraft:brown_stained_glass": "stained_glass",
+    "minecraft:green_stained_glass": "stained_glass",
+    "minecraft:red_stained_glass": "stained_glass",
+    "minecraft:black_stained_glass": "stained_glass",
+    "minecraft:white_stained_glass_pane": "stained_glass_pane",
+    "minecraft:orange_stained_glass_pane": "stained_glass_pane",
+    "minecraft:magenta_stained_glass_pane": "stained_glass_pane",
+    "minecraft:light_blue_stained_glass_pane": "stained_glass_pane",
+    "minecraft:yellow_stained_glass_pane": "stained_glass_pane",
+    "minecraft:lime_stained_glass_pane": "stained_glass_pane",
+    "minecraft:pink_stained_glass_pane": "stained_glass_pane",
+    "minecraft:gray_stained_glass_pane": "stained_glass_pane",
+    "minecraft:light_gray_stained_glass_pane": "stained_glass_pane",
+    "minecraft:cyan_stained_glass_pane": "stained_glass_pane",
+    "minecraft:purple_stained_glass_pane": "stained_glass_pane",
+    "minecraft:blue_stained_glass_pane": "stained_glass_pane",
+    "minecraft:brown_stained_glass_pane": "stained_glass_pane",
+    "minecraft:green_stained_glass_pane": "stained_glass_pane",
+    "minecraft:red_stained_glass_pane": "stained_glass_pane",
+    "minecraft:black_stained_glass_pane": "stained_glass_pane",
+    "minecraft:white_wool": "wool",
+    "minecraft:orange_wool": "wool",
+    "minecraft:magenta_wool": "wool",
+    "minecraft:light_blue_wool": "wool",
+    "minecraft:yellow_wool": "wool",
+    "minecraft:lime_wool": "wool",
+    "minecraft:pink_wool": "wool",
+    "minecraft:gray_wool": "wool",
+    "minecraft:light_gray_wool": "wool",
+    "minecraft:cyan_wool": "wool",
+    "minecraft:purple_wool": "wool",
+    "minecraft:blue_wool": "wool",
+    "minecraft:brown_wool": "wool",
+    "minecraft:green_wool": "wool",
+    "minecraft:red_wool": "wool",
+    "minecraft:black_wool": "wool",
+    "minecraft:white_carpet": "carpet",
+    "minecraft:orange_carpet": "carpet",
+    "minecraft:magenta_carpet": "carpet",
+    "minecraft:light_blue_carpet": "carpet",
+    "minecraft:yellow_carpet": "carpet",
+    "minecraft:lime_carpet": "carpet",
+    "minecraft:pink_carpet": "carpet",
+    "minecraft:gray_carpet": "carpet",
+    "minecraft:light_gray_carpet": "carpet",
+    "minecraft:cyan_carpet": "carpet",
+    "minecraft:purple_carpet": "carpet",
+    "minecraft:blue_carpet": "carpet",
+    "minecraft:brown_carpet": "carpet",
+    "minecraft:green_carpet": "carpet",
+    "minecraft:red_carpet": "carpet",
+    "minecraft:black_carpet": "carpet",
+    "minecraft:grass": "tallgrass",
+    "minecraft:fern": "tallgrass",
+    "minecraft:tall_grass": "double_plant",
+    "minecraft:large_fern": "double_plant",
+    "minecraft:sunflower": "double_plant",
+    "minecraft:lilac": "double_plant",
+    "minecraft:rose_bush": "double_plant",
+    "minecraft:peony": "double_plant",
+    "minecraft:infested_stone": "monster_egg",
+    "minecraft:infested_cobblestone": "monster_egg",
+    "minecraft:infested_stone_bricks": "monster_egg",
+    "minecraft:infested_mossy_stone_bricks": "monster_egg",
+    "minecraft:infested_cracked_stone_bricks": "monster_egg",
+    "minecraft:infested_chiseled_stone_bricks": "monster_egg",
+    "minecraft:tube_coral_block": "coral_block",
+    "minecraft:brain_coral_block": "coral_block",
+    "minecraft:bubble_coral_block": "coral_block",
+    "minecraft:fire_coral_block": "coral_block",
+    "minecraft:horn_coral_block": "coral_block",
+    "minecraft:dead_tube_coral_block": "coral_block",
+    "minecraft:dead_brain_coral_block": "coral_block",
+    "minecraft:dead_bubble_coral_block": "coral_block",
+    "minecraft:dead_fire_coral_block": "coral_block",
+    "minecraft:dead_horn_coral_block": "coral_block",
+    "minecraft:tube_coral": "coral",
+    "minecraft:brain_coral": "coral",
+    "minecraft:bubble_coral": "coral",
+    "minecraft:fire_coral": "coral",
+    "minecraft:horn_coral": "coral",
+    "minecraft:dead_tube_coral": "coral",
+    "minecraft:dead_brain_coral": "coral",
+    "minecraft:dead_bubble_coral": "coral",
+    "minecraft:dead_fire_coral": "coral",
+    "minecraft:dead_horn_coral": "coral",
+    "minecraft:tube_coral_fan": "coral_fan",
+    "minecraft:brain_coral_fan": "coral_fan",
+    "minecraft:bubble_coral_fan": "coral_fan",
+    "minecraft:fire_coral_fan": "coral_fan",
+    "minecraft:horn_coral_fan": "coral_fan",
+    "minecraft:dead_tube_coral_fan": "coral_fan",
+    "minecraft:dead_brain_coral_fan": "coral_fan",
+    "minecraft:dead_bubble_coral_fan": "coral_fan",
+    "minecraft:dead_fire_coral_fan": "coral_fan",
+    "minecraft:dead_horn_coral_fan": "coral_fan"
+  },
+  "entries": [
+    {
+      "java": "minecraft:stone",
+      "from": "stone",
+      "to": "stone"
+    },
+    {
+      "java": "minecraft:granite",
+      "from": "stone",
+      "to": "granite"
+    },
+    {
+      "java": "minecraft:polished_granite",
+      "from": "stone",
+      "to": "polished_granite"
+    },
+    {
+      "java": "minecraft:diorite",
+      "from": "stone",
+      "to": "diorite"
+    },
+    {
+      "java": "minecraft:polished_diorite",
+      "from": "stone",
+      "to": "polished_diorite"
+    },
+    {
+      "java": "minecraft:andesite",
+      "from": "stone",
+      "to": "andesite"
+    },
+    {
+      "java": "minecraft:polished_andesite",
+      "from": "stone",
+      "to": "polished_andesite"
+    },
+    {
+      "java": "minecraft:terracotta",
+      "from": "hardened_clay",
+      "to": "terracotta"
+    },
+    {
+      "java": "minecraft:white_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "white_terracotta"
+    },
+    {
+      "java": "minecraft:orange_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "orange_terracotta"
+    },
+    {
+      "java": "minecraft:magenta_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "magenta_terracotta"
+    },
+    {
+      "java": "minecraft:light_blue_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "light_blue_terracotta"
+    },
+    {
+      "java": "minecraft:yellow_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "yellow_terracotta"
+    },
+    {
+      "java": "minecraft:lime_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "lime_terracotta"
+    },
+    {
+      "java": "minecraft:pink_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "pink_terracotta"
+    },
+    {
+      "java": "minecraft:gray_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "gray_terracotta"
+    },
+    {
+      "java": "minecraft:light_gray_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "light_gray_terracotta"
+    },
+    {
+      "java": "minecraft:cyan_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "cyan_terracotta"
+    },
+    {
+      "java": "minecraft:purple_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "purple_terracotta"
+    },
+    {
+      "java": "minecraft:blue_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "blue_terracotta"
+    },
+    {
+      "java": "minecraft:brown_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "brown_terracotta"
+    },
+    {
+      "java": "minecraft:green_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "green_terracotta"
+    },
+    {
+      "java": "minecraft:red_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "red_terracotta"
+    },
+    {
+      "java": "minecraft:black_terracotta",
+      "from": "stained_hardened_clay",
+      "to": "black_terracotta"
+    },
+    {
+      "java": "minecraft:white_concrete",
+      "from": "concrete",
+      "to": "white_concrete"
+    },
+    {
+      "java": "minecraft:orange_concrete",
+      "from": "concrete",
+      "to": "orange_concrete"
+    },
+    {
+      "java": "minecraft:magenta_concrete",
+      "from": "concrete",
+      "to": "magenta_concrete"
+    },
+    {
+      "java": "minecraft:light_blue_concrete",
+      "from": "concrete",
+      "to": "light_blue_concrete"
+    },
+    {
+      "java": "minecraft:yellow_concrete",
+      "from": "concrete",
+      "to": "yellow_concrete"
+    },
+    {
+      "java": "minecraft:lime_concrete",
+      "from": "concrete",
+      "to": "lime_concrete"
+    },
+    {
+      "java": "minecraft:pink_concrete",
+      "from": "concrete",
+      "to": "pink_concrete"
+    },
+    {
+      "java": "minecraft:gray_concrete",
+      "from": "concrete",
+      "to": "gray_concrete"
+    },
+    {
+      "java": "minecraft:light_gray_concrete",
+      "from": "concrete",
+      "to": "light_gray_concrete"
+    },
+    {
+      "java": "minecraft:cyan_concrete",
+      "from": "concrete",
+      "to": "cyan_concrete"
+    },
+    {
+      "java": "minecraft:purple_concrete",
+      "from": "concrete",
+      "to": "purple_concrete"
+    },
+    {
+      "java": "minecraft:blue_concrete",
+      "from": "concrete",
+      "to": "blue_concrete"
+    },
+    {
+      "java": "minecraft:brown_concrete",
+      "from": "concrete",
+      "to": "brown_concrete"
+    },
+    {
+      "java": "minecraft:green_concrete",
+      "from": "concrete",
+      "to": "green_concrete"
+    },
+    {
+      "java": "minecraft:red_concrete",
+      "from": "concrete",
+      "to": "red_concrete"
+    },
+    {
+      "java": "minecraft:black_concrete",
+      "from": "concrete",
+      "to": "black_concrete"
+    },
+    {
+      "java": "minecraft:white_concrete_powder",
+      "from": "concretepowder",
+      "to": "white_concrete_powder"
+    },
+    {
+      "java": "minecraft:orange_concrete_powder",
+      "from": "concretepowder",
+      "to": "orange_concrete_powder"
+    },
+    {
+      "java": "minecraft:magenta_concrete_powder",
+      "from": "concretepowder",
+      "to": "magenta_concrete_powder"
+    },
+    {
+      "java": "minecraft:light_blue_concrete_powder",
+      "from": "concretepowder",
+      "to": "light_blue_concrete_powder"
+    },
+    {
+      "java": "minecraft:yellow_concrete_powder",
+      "from": "concretepowder",
+      "to": "yellow_concrete_powder"
+    },
+    {
+      "java": "minecraft:lime_concrete_powder",
+      "from": "concretepowder",
+      "to": "lime_concrete_powder"
+    },
+    {
+      "java": "minecraft:pink_concrete_powder",
+      "from": "concretepowder",
+      "to": "pink_concrete_powder"
+    },
+    {
+      "java": "minecraft:gray_concrete_powder",
+      "from": "concretepowder",
+      "to": "gray_concrete_powder"
+    },
+    {
+      "java": "minecraft:light_gray_concrete_powder",
+      "from": "concretepowder",
+      "to": "light_gray_concrete_powder"
+    },
+    {
+      "java": "minecraft:cyan_concrete_powder",
+      "from": "concretepowder",
+      "to": "cyan_concrete_powder"
+    },
+    {
+      "java": "minecraft:purple_concrete_powder",
+      "from": "concretepowder",
+      "to": "purple_concrete_powder"
+    },
+    {
+      "java": "minecraft:blue_concrete_powder",
+      "from": "concretepowder",
+      "to": "blue_concrete_powder"
+    },
+    {
+      "java": "minecraft:brown_concrete_powder",
+      "from": "concretepowder",
+      "to": "brown_concrete_powder"
+    },
+    {
+      "java": "minecraft:green_concrete_powder",
+      "from": "concretepowder",
+      "to": "green_concrete_powder"
+    },
+    {
+      "java": "minecraft:red_concrete_powder",
+      "from": "concretepowder",
+      "to": "red_concrete_powder"
+    },
+    {
+      "java": "minecraft:black_concrete_powder",
+      "from": "concretepowder",
+      "to": "black_concrete_powder"
+    },
+    {
+      "java": "minecraft:stone_bricks",
+      "from": "stonebrick",
+      "to": "stone_bricks"
+    },
+    {
+      "java": "minecraft:mossy_stone_bricks",
+      "from": "stonebrick",
+      "to": "mossy_stone_bricks"
+    },
+    {
+      "java": "minecraft:cracked_stone_bricks",
+      "from": "stonebrick",
+      "to": "cracked_stone_bricks"
+    },
+    {
+      "java": "minecraft:chiseled_stone_bricks",
+      "from": "stonebrick",
+      "to": "chiseled_stone_bricks"
+    },
+    {
+      "java": "minecraft:oak_log",
+      "from": "log",
+      "to": "oak_log"
+    },
+    {
+      "java": "minecraft:spruce_log",
+      "from": "log",
+      "to": "spruce_log"
+    },
+    {
+      "java": "minecraft:birch_log",
+      "from": "log",
+      "to": "birch_log"
+    },
+    {
+      "java": "minecraft:jungle_log",
+      "from": "log",
+      "to": "jungle_log"
+    },
+    {
+      "java": "minecraft:acacia_log",
+      "from": "log2",
+      "to": "acacia_log"
+    },
+    {
+      "java": "minecraft:dark_oak_log",
+      "from": "log2",
+      "to": "dark_oak_log"
+    },
+    {
+      "java": "minecraft:oak_wood",
+      "from": "wood",
+      "to": "oak_wood"
+    },
+    {
+      "java": "minecraft:spruce_wood",
+      "from": "wood",
+      "to": "spruce_wood"
+    },
+    {
+      "java": "minecraft:birch_wood",
+      "from": "wood",
+      "to": "birch_wood"
+    },
+    {
+      "java": "minecraft:jungle_wood",
+      "from": "wood",
+      "to": "jungle_wood"
+    },
+    {
+      "java": "minecraft:acacia_wood",
+      "from": "wood",
+      "to": "acacia_wood"
+    },
+    {
+      "java": "minecraft:dark_oak_wood",
+      "from": "wood",
+      "to": "dark_oak_wood"
+    },
+    {
+      "java": "minecraft:stripped_oak_wood",
+      "from": "wood",
+      "to": "stripped_oak_wood"
+    },
+    {
+      "java": "minecraft:stripped_spruce_wood",
+      "from": "wood",
+      "to": "stripped_spruce_wood"
+    },
+    {
+      "java": "minecraft:stripped_birch_wood",
+      "from": "wood",
+      "to": "stripped_birch_wood"
+    },
+    {
+      "java": "minecraft:stripped_jungle_wood",
+      "from": "wood",
+      "to": "stripped_jungle_wood"
+    },
+    {
+      "java": "minecraft:stripped_acacia_wood",
+      "from": "wood",
+      "to": "stripped_acacia_wood"
+    },
+    {
+      "java": "minecraft:stripped_dark_oak_wood",
+      "from": "wood",
+      "to": "stripped_dark_oak_wood"
+    },
+    {
+      "java": "minecraft:oak_planks",
+      "from": "planks",
+      "to": "oak_planks"
+    },
+    {
+      "java": "minecraft:spruce_planks",
+      "from": "planks",
+      "to": "spruce_planks"
+    },
+    {
+      "java": "minecraft:birch_planks",
+      "from": "planks",
+      "to": "birch_planks"
+    },
+    {
+      "java": "minecraft:jungle_planks",
+      "from": "planks",
+      "to": "jungle_planks"
+    },
+    {
+      "java": "minecraft:acacia_planks",
+      "from": "planks",
+      "to": "acacia_planks"
+    },
+    {
+      "java": "minecraft:dark_oak_planks",
+      "from": "planks",
+      "to": "dark_oak_planks"
+    },
+    {
+      "java": "minecraft:oak_slab",
+      "from": "wooden_slab",
+      "to": "oak_slab"
+    },
+    {
+      "java": "minecraft:spruce_slab",
+      "from": "wooden_slab",
+      "to": "spruce_slab"
+    },
+    {
+      "java": "minecraft:birch_slab",
+      "from": "wooden_slab",
+      "to": "birch_slab"
+    },
+    {
+      "java": "minecraft:jungle_slab",
+      "from": "wooden_slab",
+      "to": "jungle_slab"
+    },
+    {
+      "java": "minecraft:acacia_slab",
+      "from": "wooden_slab",
+      "to": "acacia_slab"
+    },
+    {
+      "java": "minecraft:dark_oak_slab",
+      "from": "wooden_slab",
+      "to": "dark_oak_slab"
+    },
+    {
+      "java": "minecraft:oak_fence",
+      "from": "fence",
+      "to": "oak_fence"
+    },
+    {
+      "java": "minecraft:spruce_fence",
+      "from": "fence",
+      "to": "spruce_fence"
+    },
+    {
+      "java": "minecraft:birch_fence",
+      "from": "fence",
+      "to": "birch_fence"
+    },
+    {
+      "java": "minecraft:jungle_fence",
+      "from": "fence",
+      "to": "jungle_fence"
+    },
+    {
+      "java": "minecraft:acacia_fence",
+      "from": "fence",
+      "to": "acacia_fence"
+    },
+    {
+      "java": "minecraft:dark_oak_fence",
+      "from": "fence",
+      "to": "dark_oak_fence"
+    },
+    {
+      "java": "minecraft:oak_leaves",
+      "from": "leaves",
+      "to": "oak_leaves"
+    },
+    {
+      "java": "minecraft:spruce_leaves",
+      "from": "leaves",
+      "to": "spruce_leaves"
+    },
+    {
+      "java": "minecraft:birch_leaves",
+      "from": "leaves",
+      "to": "birch_leaves"
+    },
+    {
+      "java": "minecraft:jungle_leaves",
+      "from": "leaves",
+      "to": "jungle_leaves"
+    },
+    {
+      "java": "minecraft:acacia_leaves",
+      "from": "leaves2",
+      "to": "acacia_leaves"
+    },
+    {
+      "java": "minecraft:dark_oak_leaves",
+      "from": "leaves2",
+      "to": "dark_oak_leaves"
+    },
+    {
+      "java": "minecraft:oak_sapling",
+      "from": "sapling",
+      "to": "oak_sapling"
+    },
+    {
+      "java": "minecraft:spruce_sapling",
+      "from": "sapling",
+      "to": "spruce_sapling"
+    },
+    {
+      "java": "minecraft:birch_sapling",
+      "from": "sapling",
+      "to": "birch_sapling"
+    },
+    {
+      "java": "minecraft:jungle_sapling",
+      "from": "sapling",
+      "to": "jungle_sapling"
+    },
+    {
+      "java": "minecraft:acacia_sapling",
+      "from": "sapling",
+      "to": "acacia_sapling"
+    },
+    {
+      "java": "minecraft:dark_oak_sapling",
+      "from": "sapling",
+      "to": "dark_oak_sapling"
+    },
+    {
+      "java": "minecraft:white_stained_glass",
+      "from": "stained_glass",
+      "to": "white_stained_glass"
+    },
+    {
+      "java": "minecraft:orange_stained_glass",
+      "from": "stained_glass",
+      "to": "orange_stained_glass"
+    },
+    {
+      "java": "minecraft:magenta_stained_glass",
+      "from": "stained_glass",
+      "to": "magenta_stained_glass"
+    },
+    {
+      "java": "minecraft:light_blue_stained_glass",
+      "from": "stained_glass",
+      "to": "light_blue_stained_glass"
+    },
+    {
+      "java": "minecraft:yellow_stained_glass",
+      "from": "stained_glass",
+      "to": "yellow_stained_glass"
+    },
+    {
+      "java": "minecraft:lime_stained_glass",
+      "from": "stained_glass",
+      "to": "lime_stained_glass"
+    },
+    {
+      "java": "minecraft:pink_stained_glass",
+      "from": "stained_glass",
+      "to": "pink_stained_glass"
+    },
+    {
+      "java": "minecraft:gray_stained_glass",
+      "from": "stained_glass",
+      "to": "gray_stained_glass"
+    },
+    {
+      "java": "minecraft:light_gray_stained_glass",
+      "from": "stained_glass",
+      "to": "light_gray_stained_glass"
+    },
+    {
+      "java": "minecraft:cyan_stained_glass",
+      "from": "stained_glass",
+      "to": "cyan_stained_glass"
+    },
+    {
+      "java": "minecraft:purple_stained_glass",
+      "from": "stained_glass",
+      "to": "purple_stained_glass"
+    },
+    {
+      "java": "minecraft:blue_stained_glass",
+      "from": "stained_glass",
+      "to": "blue_stained_glass"
+    },
+    {
+      "java": "minecraft:brown_stained_glass",
+      "from": "stained_glass",
+      "to": "brown_stained_glass"
+    },
+    {
+      "java": "minecraft:green_stained_glass",
+      "from": "stained_glass",
+      "to": "green_stained_glass"
+    },
+    {
+      "java": "minecraft:red_stained_glass",
+      "from": "stained_glass",
+      "to": "red_stained_glass"
+    },
+    {
+      "java": "minecraft:black_stained_glass",
+      "from": "stained_glass",
+      "to": "black_stained_glass"
+    },
+    {
+      "java": "minecraft:white_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "white_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:orange_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "orange_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:magenta_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "magenta_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:light_blue_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "light_blue_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:yellow_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "yellow_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:lime_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "lime_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:pink_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "pink_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:gray_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "gray_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:light_gray_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "light_gray_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:cyan_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "cyan_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:purple_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "purple_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:blue_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "blue_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:brown_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "brown_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:green_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "green_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:red_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "red_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:black_stained_glass_pane",
+      "from": "stained_glass_pane",
+      "to": "black_stained_glass_pane"
+    },
+    {
+      "java": "minecraft:white_wool",
+      "from": "wool",
+      "to": "white_wool"
+    },
+    {
+      "java": "minecraft:orange_wool",
+      "from": "wool",
+      "to": "orange_wool"
+    },
+    {
+      "java": "minecraft:magenta_wool",
+      "from": "wool",
+      "to": "magenta_wool"
+    },
+    {
+      "java": "minecraft:light_blue_wool",
+      "from": "wool",
+      "to": "light_blue_wool"
+    },
+    {
+      "java": "minecraft:yellow_wool",
+      "from": "wool",
+      "to": "yellow_wool"
+    },
+    {
+      "java": "minecraft:lime_wool",
+      "from": "wool",
+      "to": "lime_wool"
+    },
+    {
+      "java": "minecraft:pink_wool",
+      "from": "wool",
+      "to": "pink_wool"
+    },
+    {
+      "java": "minecraft:gray_wool",
+      "from": "wool",
+      "to": "gray_wool"
+    },
+    {
+      "java": "minecraft:light_gray_wool",
+      "from": "wool",
+      "to": "light_gray_wool"
+    },
+    {
+      "java": "minecraft:cyan_wool",
+      "from": "wool",
+      "to": "cyan_wool"
+    },
+    {
+      "java": "minecraft:purple_wool",
+      "from": "wool",
+      "to": "purple_wool"
+    },
+    {
+      "java": "minecraft:blue_wool",
+      "from": "wool",
+      "to": "blue_wool"
+    },
+    {
+      "java": "minecraft:brown_wool",
+      "from": "wool",
+      "to": "brown_wool"
+    },
+    {
+      "java": "minecraft:green_wool",
+      "from": "wool",
+      "to": "green_wool"
+    },
+    {
+      "java": "minecraft:red_wool",
+      "from": "wool",
+      "to": "red_wool"
+    },
+    {
+      "java": "minecraft:black_wool",
+      "from": "wool",
+      "to": "black_wool"
+    },
+    {
+      "java": "minecraft:white_carpet",
+      "from": "carpet",
+      "to": "white_carpet"
+    },
+    {
+      "java": "minecraft:orange_carpet",
+      "from": "carpet",
+      "to": "orange_carpet"
+    },
+    {
+      "java": "minecraft:magenta_carpet",
+      "from": "carpet",
+      "to": "magenta_carpet"
+    },
+    {
+      "java": "minecraft:light_blue_carpet",
+      "from": "carpet",
+      "to": "light_blue_carpet"
+    },
+    {
+      "java": "minecraft:yellow_carpet",
+      "from": "carpet",
+      "to": "yellow_carpet"
+    },
+    {
+      "java": "minecraft:lime_carpet",
+      "from": "carpet",
+      "to": "lime_carpet"
+    },
+    {
+      "java": "minecraft:pink_carpet",
+      "from": "carpet",
+      "to": "pink_carpet"
+    },
+    {
+      "java": "minecraft:gray_carpet",
+      "from": "carpet",
+      "to": "gray_carpet"
+    },
+    {
+      "java": "minecraft:light_gray_carpet",
+      "from": "carpet",
+      "to": "light_gray_carpet"
+    },
+    {
+      "java": "minecraft:cyan_carpet",
+      "from": "carpet",
+      "to": "cyan_carpet"
+    },
+    {
+      "java": "minecraft:purple_carpet",
+      "from": "carpet",
+      "to": "purple_carpet"
+    },
+    {
+      "java": "minecraft:blue_carpet",
+      "from": "carpet",
+      "to": "blue_carpet"
+    },
+    {
+      "java": "minecraft:brown_carpet",
+      "from": "carpet",
+      "to": "brown_carpet"
+    },
+    {
+      "java": "minecraft:green_carpet",
+      "from": "carpet",
+      "to": "green_carpet"
+    },
+    {
+      "java": "minecraft:red_carpet",
+      "from": "carpet",
+      "to": "red_carpet"
+    },
+    {
+      "java": "minecraft:black_carpet",
+      "from": "carpet",
+      "to": "black_carpet"
+    },
+    {
+      "java": "minecraft:grass",
+      "from": "tallgrass",
+      "to": "short_grass"
+    },
+    {
+      "java": "minecraft:fern",
+      "from": "tallgrass",
+      "to": "fern"
+    },
+    {
+      "java": "minecraft:tall_grass",
+      "from": "double_plant",
+      "to": "tall_grass"
+    },
+    {
+      "java": "minecraft:large_fern",
+      "from": "double_plant",
+      "to": "large_fern"
+    },
+    {
+      "java": "minecraft:sunflower",
+      "from": "double_plant",
+      "to": "sunflower"
+    },
+    {
+      "java": "minecraft:lilac",
+      "from": "double_plant",
+      "to": "lilac"
+    },
+    {
+      "java": "minecraft:rose_bush",
+      "from": "double_plant",
+      "to": "rose_bush"
+    },
+    {
+      "java": "minecraft:peony",
+      "from": "double_plant",
+      "to": "peony"
+    },
+    {
+      "java": "minecraft:infested_stone",
+      "from": "monster_egg",
+      "to": "infested_stone"
+    },
+    {
+      "java": "minecraft:infested_cobblestone",
+      "from": "monster_egg",
+      "to": "infested_cobblestone"
+    },
+    {
+      "java": "minecraft:infested_stone_bricks",
+      "from": "monster_egg",
+      "to": "infested_stone_bricks"
+    },
+    {
+      "java": "minecraft:infested_mossy_stone_bricks",
+      "from": "monster_egg",
+      "to": "infested_mossy_stone_bricks"
+    },
+    {
+      "java": "minecraft:infested_cracked_stone_bricks",
+      "from": "monster_egg",
+      "to": "infested_cracked_stone_bricks"
+    },
+    {
+      "java": "minecraft:infested_chiseled_stone_bricks",
+      "from": "monster_egg",
+      "to": "infested_chiseled_stone_bricks"
+    },
+    {
+      "java": "minecraft:tube_coral_block",
+      "from": "coral_block",
+      "to": "tube_coral_block"
+    },
+    {
+      "java": "minecraft:brain_coral_block",
+      "from": "coral_block",
+      "to": "brain_coral_block"
+    },
+    {
+      "java": "minecraft:bubble_coral_block",
+      "from": "coral_block",
+      "to": "bubble_coral_block"
+    },
+    {
+      "java": "minecraft:fire_coral_block",
+      "from": "coral_block",
+      "to": "fire_coral_block"
+    },
+    {
+      "java": "minecraft:horn_coral_block",
+      "from": "coral_block",
+      "to": "horn_coral_block"
+    },
+    {
+      "java": "minecraft:dead_tube_coral_block",
+      "from": "coral_block",
+      "to": "dead_tube_coral_block"
+    },
+    {
+      "java": "minecraft:dead_brain_coral_block",
+      "from": "coral_block",
+      "to": "dead_brain_coral_block"
+    },
+    {
+      "java": "minecraft:dead_bubble_coral_block",
+      "from": "coral_block",
+      "to": "dead_bubble_coral_block"
+    },
+    {
+      "java": "minecraft:dead_fire_coral_block",
+      "from": "coral_block",
+      "to": "dead_fire_coral_block"
+    },
+    {
+      "java": "minecraft:dead_horn_coral_block",
+      "from": "coral_block",
+      "to": "dead_horn_coral_block"
+    },
+    {
+      "java": "minecraft:tube_coral",
+      "from": "coral",
+      "to": "tube_coral"
+    },
+    {
+      "java": "minecraft:brain_coral",
+      "from": "coral",
+      "to": "brain_coral"
+    },
+    {
+      "java": "minecraft:bubble_coral",
+      "from": "coral",
+      "to": "bubble_coral"
+    },
+    {
+      "java": "minecraft:fire_coral",
+      "from": "coral",
+      "to": "fire_coral"
+    },
+    {
+      "java": "minecraft:horn_coral",
+      "from": "coral",
+      "to": "horn_coral"
+    },
+    {
+      "java": "minecraft:dead_tube_coral",
+      "from": "coral",
+      "to": "dead_tube_coral"
+    },
+    {
+      "java": "minecraft:dead_brain_coral",
+      "from": "coral",
+      "to": "dead_brain_coral"
+    },
+    {
+      "java": "minecraft:dead_bubble_coral",
+      "from": "coral",
+      "to": "dead_bubble_coral"
+    },
+    {
+      "java": "minecraft:dead_fire_coral",
+      "from": "coral",
+      "to": "dead_fire_coral"
+    },
+    {
+      "java": "minecraft:dead_horn_coral",
+      "from": "coral",
+      "to": "dead_horn_coral"
+    },
+    {
+      "java": "minecraft:tube_coral_fan",
+      "from": "coral_fan",
+      "to": "tube_coral_fan"
+    },
+    {
+      "java": "minecraft:brain_coral_fan",
+      "from": "coral_fan",
+      "to": "brain_coral_fan"
+    },
+    {
+      "java": "minecraft:bubble_coral_fan",
+      "from": "coral_fan",
+      "to": "bubble_coral_fan"
+    },
+    {
+      "java": "minecraft:fire_coral_fan",
+      "from": "coral_fan",
+      "to": "fire_coral_fan"
+    },
+    {
+      "java": "minecraft:horn_coral_fan",
+      "from": "coral_fan",
+      "to": "horn_coral_fan"
+    },
+    {
+      "java": "minecraft:dead_tube_coral_fan",
+      "from": "coral_fan",
+      "to": "dead_tube_coral_fan"
+    },
+    {
+      "java": "minecraft:dead_brain_coral_fan",
+      "from": "coral_fan",
+      "to": "dead_brain_coral_fan"
+    },
+    {
+      "java": "minecraft:dead_bubble_coral_fan",
+      "from": "coral_fan",
+      "to": "dead_bubble_coral_fan"
+    },
+    {
+      "java": "minecraft:dead_fire_coral_fan",
+      "from": "coral_fan",
+      "to": "dead_fire_coral_fan"
+    },
+    {
+      "java": "minecraft:dead_horn_coral_fan",
+      "from": "coral_fan",
+      "to": "dead_horn_coral_fan"
+    }
+  ]
+}

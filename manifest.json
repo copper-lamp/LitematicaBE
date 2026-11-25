@@ -1,14 +1,14 @@
 {
-    "entry": "index.js",
-    "name": "LitematicaBE",
-    "type": "lse-nodejs",
-    "version": "3.1.1",
+    "name": "${modName}",
+    "entry": "${modFile}",
+    "version": "${modVersion}",
+    "type": "native",
+    "platform": "${modPlatform}",
     "author": "LitematicaBE",
-    "description": "The Optimal Solution for All-in-One Projection Integration on Minecraft Bedrock Servers",
-    "extraInfo": {},
+    "description": "Server-side Litematica projection for Minecraft Bedrock: renders schematics as client-side fake blocks, leaving the world untouched.",
     "dependencies": [
         {
-            "name": "legacy-script-engine-nodejs"
+            "name": "HologramLib"
         }
     ]
 }
