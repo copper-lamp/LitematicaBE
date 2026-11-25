@@ -83,7 +83,18 @@ jobs:
       - id: extract-release-notes
         uses: ffurrer2/extract-release-notes@v3
 
+      # 抽取结果只留档到 Actions 的 job summary，绝不写回 Release 说明。
+      - name: Archive extracted notes to job summary
+        env:
+          NOTES: ${{ steps.extract-release-notes.outputs.release_notes }}
+        run: |
+          printf '### CHANGELOG extracted notes (archive only, not written to the release)\n\n%s\n' "$NOTES" >> "$GITHUB_STEP_SUMMARY"
+
+      # 只在 Release 说明为空时用 CHANGELOG 兜底：body 未显式提供时该 action 会保留
+      # 已有 release 的 name/body，所以手动写好的正文不会再被 CHANGELOG 覆盖。
+      # 需要把抽取结果留档时，看 job summary（下方 run 一步）。
       - uses: softprops/action-gh-release@v3
+        if: ${{ !github.event.release.body }}
         with:
           body: |
             ${{ steps.extract-release-notes.outputs.release_notes }}
