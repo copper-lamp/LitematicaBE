@@ -1,171 +1,116 @@
-name: Release
-
-# 发布是**手动**动作：push tag 不再触发任何工作流。
-# 流程：本地打 tag 并推送（只作版本标记）→ Actions 页面选 "Release" → Run workflow → 填 tag。
-#
-# 想彻底掌握发布条目（标题/说明/资产全自己来）时：
-#   verify = relaxed（跳过 tag↔版本 与 CHANGELOG 段落校验）
-#   sync_notes = false（不覆盖你手写的标题与说明，只覆盖同名资产）
-#   publish = false（连资产都不动，只构建并留 artifact，自己下载上传）
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: '要发布的 tag（必须已存在，例如 v3.1.0）'
-        required: true
-        type: string
-      prerelease:
-        description: '标记为 pre-release'
-        required: false
-        type: boolean
-        default: false
-      publish:
-        description: '创建/更新 GitHub Release（关闭则只构建并保留 artifact 供下载）'
-        required: false
-        type: boolean
-        default: true
-      verify:
-        description: '发布前校验：strict = tag↔版本 + gitignore 漂移 + CHANGELOG 段落；relaxed = 全部跳过（构建内的清单版本校验仍会执行）'
-        required: false
-        type: choice
-        options:
-          - strict
-          - relaxed
-        default: strict
-      sync_notes:
-        description: '用 CHANGELOG 覆盖 Release 标题与说明（手动写好的 notes 请选 false，只覆盖同名资产）'
-        required: false
-        type: boolean
-        default: true
-
-permissions:
-  contents: write
-
-# 同一个 tag 的发布不并发，避免两次上传互相覆盖
-concurrency:
-  group: release-${{ inputs.tag }}
-  cancel-in-progress: false
+  release:
+    types:
+      - published
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    env:
-      TAG: ${{ inputs.tag }}
-      PRERELEASE: ${{ inputs.prerelease }}
-      VERIFY: ${{ inputs.verify }}
-      SYNC_NOTES: ${{ inputs.sync_notes }}
+  build:
+    runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        # with:
+        #   xmake-version: branch@master
+
+      - uses: actions/cache@v6
         with:
-          ref: ${{ inputs.tag }}
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - run: npm ci
-
-      # ── 可跳过的校验（verify = relaxed 时整段不走） ────────────────────
-      - name: Tracked files check (.gitignore drift)
-        if: ${{ inputs.verify == 'strict' }}
-        run: node tools/check-tracked.mjs
-
-      - name: Validate version (tag ↔ 代码版本)
-        if: ${{ inputs.verify == 'strict' }}
-        run: node tools/check-version.mjs "$TAG"
-
-      # npm run build 内部仍会校验清单四处版本与 addon 五处——
-      # 那是产物本身的一致性，跳过了会打出装不上的包，relaxed 也不跳过。
-      - name: Build release artifacts
-        run: npm run build
-
-      - name: Extract release notes
-        if: ${{ inputs.sync_notes == true }}
-        run: |
-          set -euo pipefail
-          version="${TAG#v}"
-          body=$(awk -v v="$version" '
-            $0 ~ "^## \\[" v "\\]" { found = 1; next }
-            found && /^## \[/ { exit }
-            found { print }
-          ' CHANGELOG.md)
-          { echo "## LitematicaBE ${TAG}"; echo; printf '%s\n' "$body"; } > release-notes.md
-          if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
-            if [ "$VERIFY" = "strict" ]; then
-              echo "::error::CHANGELOG.md 里没有 ## [${version}] 段落（verify=strict）；relaxed 可跳过"
-              exit 1
-            fi
-            echo "::warning::CHANGELOG.md 里没有 ## [${version}] 段落，release notes 只有标题（verify=relaxed）"
-          fi
-
-      # 关掉 publish 时也留一份产物，方便手动上传或本地复核
-      - uses: actions/upload-artifact@v4
-        with:
-          name: LitematicaBE-${{ inputs.tag }}
           path: |
-            build/*.zip
-            build/SHA256SUMS.txt
-          if-no-files-found: error
+            ~/AppData/Local/.xmake
+          key: xmake-${{ hashFiles('xmake.lua') }}
+          restore-keys: |
+            xmake-
 
-      - name: Publish release
-        if: ${{ inputs.publish == true }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Setup LLVM
+        uses: Zhongruoyu/setup-llvm@v0
+        with:
+          llvm-version: 22
+
+      - run: |
+          xmake repo -u
+
+      # 同 build.yml：预装 zlib 1.3.1，修复 libcurl 源码构建对 libssh2 预编译 ABI 的依赖
+      - name: Warm zlib 1.3.1 (libcurl/libssh2 ABI)
+        shell: pwsh
         run: |
-          set -euo pipefail
+          $probe = Join-Path $env:RUNNER_TEMP 'zlib-warm'
+          New-Item -ItemType Directory -Force -Path $probe | Out-Null
+          'add_requires("zlib 1.3.1")', 'target("zlib_probe")', '    set_kind("static")', '    add_files("dummy.cpp")', '    add_packages("zlib")' |
+            Set-Content -Path (Join-Path $probe 'xmake.lua') -Encoding UTF8
+          'int dummy() { return 0; }' | Set-Content -Path (Join-Path $probe 'dummy.cpp') -Encoding UTF8
+          Push-Location $probe
+          xmake f -y -p windows -a x64 -m release
+          xmake -y
+          Pop-Location
 
-          prerelease="$PRERELEASE"
-          case "$TAG" in *-*) prerelease=true ;; esac   # v3.2.0-beta.1 自动按预发布处理
-          flags=()
-          if [ "$prerelease" = "true" ]; then flags+=(--prerelease); fi
+      - run: |
+          xmake f -c -a x64 -m release -p windows -y --levilamina_version=1.9.9
 
-          shopt -s nullglob
-          files=(build/*.zip build/SHA256SUMS.txt)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "::error::build/ 下没有可发布的产物"
-            exit 1
-          fi
+      # 同 build.yml：rapidjson 1.1.0 的 const 成员赋值在 clang 22 下报错
+      - name: Patch rapidjson const-assign (clang 22)
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:USERPROFILE 'AppData\Local\.xmake\packages\r\rapidjson'
+          $orig = 'GenericStringRef& operator=(const GenericStringRef& rhs) { s = rhs.s; length = rhs.length; }'
+          $patched = $false
+          Get-ChildItem $root -Recurse -Filter 'document.h' -ErrorAction SilentlyContinue | ForEach-Object {
+            $t = Get-Content $_.FullName -Raw
+            if ($t.Contains($orig)) {
+              $t = $t.Replace($orig, 'GenericStringRef& operator=(const GenericStringRef& rhs) { (void)rhs; return *this; }')
+              Set-Content -Path $_.FullName -Value $t -NoNewline -Encoding utf8
+              $patched = $true
+              Write-Host "patched: $($_.FullName)"
+            }
+          }
+          if (-not $patched) { Write-Host 'rapidjson: no unpatched document.h found (already patched?)' }
 
-          # 产物名由 PLUGIN_VERSION 决定，tag 由输入决定；relaxed 时二者可能不同，lip 的
-          # URL 模板是 LitematicaBE-<tooth.version>.zip，名字对不上会 404 —— 提前吼一声。
-          expected="LitematicaBE-${TAG#v}.zip"
-          if [ ! -f "build/$expected" ]; then
-            echo "::warning::没有 build/${expected}，上传的是 $(basename "${files[0]}")；请确认与 tooth.json 的 version 拼出的资产名一致"
-          fi
+      - run: |
+          xmake -w -y
 
-          # 幂等：Release 已手动建过 / 工作流重跑，都走覆盖上传而不是 create。
-          # `gh release create` 在 Release 已存在时会以 "a release with the same tag name
-          # already exists" 退出 1（2026-11-14 实际踩到）。
-          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" >/dev/null 2>&1; then
-            echo "release $TAG 已存在 → 覆盖同名资产（--clobber）"
-            gh release upload "$TAG" "${files[@]}" --clobber
-            if [ "$SYNC_NOTES" = "true" ]; then
-              echo "sync_notes=true → 同步标题与说明"
-              gh release edit "$TAG" \
-                --title "LitematicaBE $TAG" \
-                --notes-file release-notes.md \
-                "${flags[@]}"
-            else
-              echo "sync_notes=false → 保留你手写的标题与说明，只更新资产与预发布标记"
-              if [ "$prerelease" = "true" ]; then
-                gh release edit "$TAG" --prerelease
-              fi
-            fi
-          else
-            echo "release $TAG 不存在 → 新建"
-            if [ "$SYNC_NOTES" = "true" ]; then
-              gh release create "$TAG" \
-                --title "LitematicaBE $TAG" \
-                --notes-file release-notes.md \
-                "${files[@]}" \
-                "${flags[@]}"
-            else
-              gh release create "$TAG" \
-                --title "LitematicaBE $TAG" \
-                "${files[@]}" \
-                "${flags[@]}"
-            fi
-          fi
-          echo "== done: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG =="
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ github.event.repository.name }}-${{ github.sha }}-server-windows-x64
+          path: |
+            bin/
+
+  update-release-notes:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: extract-release-notes
+        uses: ffurrer2/extract-release-notes@v3
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          body: |
+            ${{ steps.extract-release-notes.outputs.release_notes }}
+
+  upload-to-release:
+    needs:
+      - build
+      - update-release-notes
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ github.event.repository.name }}-${{ github.sha }}-server-windows-x64
+          path: artifact
+
+      - run: |
+          cp CHANGELOG.md LICENSE README.md artifact/
+
+      - run: |
+          zip -r ../${{ github.event.repository.name }}-server-windows-x64.zip *
+        working-directory: artifact
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            ${{ github.event.repository.name }}-server-windows-x64.zip

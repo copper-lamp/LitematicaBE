@@ -1,0 +1,98 @@
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        # with:
+        #   xmake-version: branch@master
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/AppData/Local/.xmake
+          key: xmake-${{ hashFiles('xmake.lua') }}
+          restore-keys: |
+            xmake-
+
+      - name: Setup LLVM
+        uses: ZhongRuoyu/setup-llvm@v0
+        with:
+          llvm-version: 22
+
+      - run: |
+          xmake repo -u
+
+      # libcurl 8.21.0 源码构建时，libssh2(预编译,vc14.42) 链接的是 zlib 1.3.1，
+      # 但 libcurl 的 zlib 依赖被解析成 latest(1.4)，导致 ninja 引用「未安装的
+      # zlib 1.3.1 路径」(packages/z/zlib/v1.3.1/95786712.../lib/zlib.lib) 而失败。
+      # 本地能过是因为缓存里有 zlib 1.3.1；CI 全新缓存没有。这里预装一份
+      # zlib 1.3.1(默认 config)，使 libcurl 构建时该路径真实存在。
+      - name: Warm zlib 1.3.1 (libcurl/libssh2 ABI)
+        shell: pwsh
+        run: |
+          $probe = Join-Path $env:RUNNER_TEMP 'zlib-warm'
+          New-Item -ItemType Directory -Force -Path $probe | Out-Null
+          'add_requires("zlib 1.3.1")', 'target("zlib_probe")', '    set_kind("static")', '    add_files("dummy.cpp")', '    add_packages("zlib")' |
+            Set-Content -Path (Join-Path $probe 'xmake.lua') -Encoding UTF8
+          'int dummy() { return 0; }' | Set-Content -Path (Join-Path $probe 'dummy.cpp') -Encoding UTF8
+          Push-Location $probe
+          xmake f -y -p windows -a x64 -m release
+          xmake -y
+          Pop-Location
+          # libcurl 源码构建时 ninja 硬引用 zlib 1.3.1 的 95786712 实例路径。
+          # 若 xmake 把 zlib 1.3.1 装到了别的 hash 实例（默认 config 一致时应相同），
+          # 这里把产物填充到 95786712 路径，确保该路径一定存在。
+          $z131 = Join-Path $env:USERPROFILE 'AppData\Local\.xmake\packages\z\zlib\v1.3.1'
+          $target = Join-Path $z131 '95786712bac941e795afa187a68143a4'
+          if (-not (Test-Path (Join-Path $target 'lib\zlib.lib'))) {
+            $src = Get-ChildItem $z131 -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'lib\zlib.lib') } | Select-Object -First 1
+            if (-not $src) { throw 'zlib 1.3.1 安装失败：未找到 zlib.lib' }
+            New-Item -ItemType Directory -Force -Path $target | Out-Null
+            Copy-Item (Join-Path $src.FullName 'lib') -Destination (Join-Path $target 'lib') -Recurse -Force
+            Copy-Item (Join-Path $src.FullName 'include') -Destination (Join-Path $target 'include') -Recurse -Force
+            Write-Host "已填充 zlib 1.3.1 产物到 95786712 路径（来自 $($src.Name)）"
+          } else {
+            Write-Host 'zlib 1.3.1 的 95786712 实例已存在'
+          }
+
+      - name: Configure
+        run: |
+          xmake f -c -a x64 -m release -p windows -v -y --levilamina_version=1.9.9
+
+      # rapidjson 1.1.0 的 GenericStringRef::operator= 给 const 成员 length 赋值，
+      # clang 22 直接报 "cannot assign to non-static data member 'length'"。
+      # MSVC 因模板延迟诊断不报（本地 MSVC 通过），CI 用 clang-cl 必现。
+      # 这里把该 operator= 替换为空实现（与本地缓存中的补丁一致）。
+      - name: Patch rapidjson const-assign (clang 22)
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:USERPROFILE 'AppData\Local\.xmake\packages\r\rapidjson'
+          $orig = 'GenericStringRef& operator=(const GenericStringRef& rhs) { s = rhs.s; length = rhs.length; }'
+          $patched = $false
+          Get-ChildItem $root -Recurse -Filter 'document.h' -ErrorAction SilentlyContinue | ForEach-Object {
+            $t = Get-Content $_.FullName -Raw
+            if ($t.Contains($orig)) {
+              $t = $t.Replace($orig, 'GenericStringRef& operator=(const GenericStringRef& rhs) { (void)rhs; return *this; }')
+              Set-Content -Path $_.FullName -Value $t -NoNewline -Encoding utf8
+              $patched = $true
+              Write-Host "patched: $($_.FullName)"
+            }
+          }
+          if (-not $patched) { Write-Host 'rapidjson: no unpatched document.h found (already patched?)' }
+
+      - name: Build
+        run: |
+          xmake -v -y
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ github.event.repository.name }}-${{ github.sha }}-server-windows-x64
+          path: |
+            bin/
